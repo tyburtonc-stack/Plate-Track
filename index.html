@@ -98,6 +98,32 @@ select{background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/20
 .alloc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .alloc-pot{background:#0a1628;border-radius:8px;padding:10px;text-align:center;border:1px solid #1e293b}
 .alloc-pot-icon{font-size:18px;margin-bottom:4px}.alloc-pot-val{font-size:16px;font-weight:700}.alloc-pot-lbl{font-size:11px;color:#64748b;margin-top:2px}
+/* Search */
+.search-wrap{position:relative;margin-bottom:10px}
+.search-wrap input{padding-left:34px;background:#0a1628;border-color:#1e293b}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#475569;font-size:15px;pointer-events:none}
+.search-clear{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#475569;font-size:16px;cursor:pointer;padding:0;line-height:1}
+/* Data warning */
+.data-warning{background:#1a1200;border:1px solid #92400e;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#fcd34d;display:flex;align-items:center;gap:8px}
+/* Alloc modal */
+.alloc-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:150;display:none;align-items:center;justify-content:center;padding:20px}
+.alloc-modal{background:#0d1b2e;border:1px solid #1e3a5f;border-radius:14px;padding:22px 18px;width:100%;max-width:340px}
+.alloc-modal h3{font-size:17px;font-weight:800;color:#f1f5f9;margin-bottom:16px}
+.alloc-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.alloc-row label{font-size:13px;color:#94a3b8;width:80px;flex-shrink:0}
+.alloc-row input{flex:1;text-align:right}
+.alloc-row span{font-size:13px;color:#475569;width:14px}
+.alloc-total{font-size:12px;color:#94a3b8;margin:10px 0;text-align:right}
+.alloc-save{background:#1d4ed8;color:#fff;border:none;padding:11px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;width:100%;margin-top:4px}
+.alloc-cancel{background:#1e293b;color:#94a3b8;border:none;padding:11px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;width:100%;margin-top:8px}
+/* Payslip placeholder */
+.payslip-placeholder{background:#0a1628;border:1px dashed #1e3a5f;border-radius:8px;padding:14px;text-align:center;color:#475569;font-size:13px;margin-bottom:8px}
+/* bonus type */
+.type-bonus{background:#2a1f00;color:#fbbf24}
+/* reg tag */
+.reg-tag{font-size:10px;background:#1e2a1e;color:#4ade80;padding:2px 7px;border-radius:4px;font-weight:700;font-family:monospace;letter-spacing:.05em}
+/* postcode route */
+.route-line{font-size:11px;color:#64748b;font-family:monospace}
 </style>
 </head>
 <body>
@@ -139,6 +165,20 @@ select{background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/20
 
 <div class="toast" id="toast"></div>
 <input type="file" id="impfile" accept=".json" style="display:none">
+<input type="file" id="payslipfile" accept="image/*,application/pdf" style="display:none">
+
+<!-- Allocation Settings Modal -->
+
+<div class="alloc-modal-overlay" id="allocModal" onclick="closeAllocModal(event)">
+  <div class="alloc-modal">
+    <h3>&#x2699;&#xFE0F; Edit Money Allocation</h3>
+    <div class="alloc-row"><label>Invest</label><input type="number" id="al_invest" min="0" max="90" step="1"><span>%</span></div>
+    <div class="alloc-row"><label>Bills</label><input type="number" id="al_bills" min="0" max="90" step="1"><span>%</span></div>
+    <div class="alloc-total" id="al_total_display">Tax is calculated automatically. Remainder = Spendable.</div>
+    <button class="alloc-save" onclick="saveAlloc()">Save</button>
+    <button class="alloc-cancel" onclick="document.getElementById('allocModal').style.display='none'">Cancel</button>
+  </div>
+</div>
 
 <div class="fab-menu" id="fabmenu">
   <div class="fab-item" onclick="closeFab();openSheet('income','')">
@@ -158,12 +198,15 @@ var COCLR={'BCA':'#f59e0b','Engineius':'#38bdf8','DriiveMe':'#4ade80'};
 var COTXT={'BCA':'amber','Engineius':'sky','DriiveMe':'lime'};
 var COCLS={'BCA':'bca','Engineius':'eng','DriiveMe':'drv'};
 var CATS=['Fuel (Reimbursed)','Travel (Not Reimbursed)','Travel (Reimbursed)','EV Charging (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Tolls (Reimbursed)','Other'];
-var INCOME_TYPES=['Delivery','Waiting Time','Charging Time'];
+var INCOME_TYPES=['Delivery','Waiting Time','Charging Time','Bonus'];
 var REIMBURSED_CATS=['Fuel (Reimbursed)','Travel (Reimbursed)','EV Charging (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Tolls (Reimbursed)'];
 var ALLOC={invest:20,bills:10};
 
 var DB={income:[],expenses:[]};
 var FYR='All',FCO='All',FDFROM='',FDTO='',CTAB=0,EID=null,ETYP=null,FAB_OPEN=false,CHART_VIEW='monthly';
+var SEARCH_INCOME='',SEARCH_EXP='';
+// Payslip store: {image:'', manualTotal:'', status:''}
+var PAYSLIP={image:'',manualTotal:'',status:''};
 
 function loadDB(){
   var raw=null;
@@ -285,6 +328,73 @@ function sortedJobRefs(date,company){
 
 function getWeekKey(ds){var d=new Date(ds),day=d.getDay(),mon=new Date(d);mon.setDate(d.getDate()-((day+6)%7));return mon.toISOString().split('T')[0];}
 
+// ── Search helpers ────────────────────────────────────────────
+function matchesSearch(x, q) {
+  if(!q) return true;
+  q = q.toLowerCase();
+  var fields = [x.jobRef, x.company, x.description, x.registration, x.startPostcode, x.endPostcode, x.receipt, x.category];
+  for(var i=0;i<fields.length;i++) { if(fields[i]&&fields[i].toLowerCase().indexOf(q)>=0) return true; }
+  return false;
+}
+
+// ── Allocation modal ──────────────────────────────────────────
+function openAllocModal() {
+  document.getElementById('al_invest').value = ALLOC.invest;
+  document.getElementById('al_bills').value  = ALLOC.bills;
+  document.getElementById('allocModal').style.display='flex';
+  updateAllocDisplay();
+}
+function updateAllocDisplay() {
+  var inv=parseInt(document.getElementById('al_invest').value)||0;
+  var bil=parseInt(document.getElementById('al_bills').value)||0;
+  document.getElementById('al_total_display').textContent='Invest '+inv+'% + Bills '+bil+'% = '+(inv+bil)+'% — remainder is Spendable after Tax.';
+}
+function saveAlloc() {
+  var inv=parseInt(document.getElementById('al_invest').value)||0;
+  var bil=parseInt(document.getElementById('al_bills').value)||0;
+  if(inv+bil>95){alert('Invest + Bills cannot exceed 95%');return;}
+  ALLOC.invest=inv; ALLOC.bills=bil;
+  try{localStorage.setItem('pt_alloc',JSON.stringify(ALLOC));}catch(e){}
+  document.getElementById('allocModal').style.display='none';
+  if(CTAB===0) rDash();
+  showToast('Allocation updated!');
+}
+function closeAllocModal(e){if(e.target===document.getElementById('allocModal'))document.getElementById('allocModal').style.display='none';}
+function loadAlloc(){try{var a=localStorage.getItem('pt_alloc');if(a){var p=JSON.parse(a);ALLOC.invest=p.invest||20;ALLOC.bills=p.bills||10;}}catch(e){}}
+loadAlloc();
+
+// ── Payslip (structure ready for OCR) ────────────────────────
+document.getElementById('payslipfile').onchange=function(e){
+  var f=e.target.files[0]; if(!f) return;
+  var r=new FileReader();
+  r.onload=function(ev){
+    PAYSLIP.image=ev.target.result;
+    // Future: send to OCR API here
+    // For now: prompt manual entry
+    var manual=prompt('Payslip uploaded. Enter total pay shown on payslip (e.g. 450.00):');
+    if(manual){PAYSLIP.manualTotal=manual;}
+    try{localStorage.setItem('pt_payslip',JSON.stringify(PAYSLIP));}catch(e){}
+    if(CTAB===3) rSummary();
+    showToast('Payslip saved!');
+  };
+  r.readAsDataURL(f); e.target.value='';
+};
+// Load saved payslip on startup
+try{var ps=localStorage.getItem('pt_payslip');if(ps)PAYSLIP=JSON.parse(ps);}catch(e){}
+
+// ── Delete receipt image ──────────────────────────────────────
+function deleteReceiptImage(expId) {
+  for(var i=0;i<DB.expenses.length;i++){
+    if(String(DB.expenses[i].id)===String(expId)){
+      DB.expenses[i].receiptImage='';
+      saveDB();
+      render(CTAB);
+      showToast('Receipt image removed');
+      return;
+    }
+  }
+}
+
 function rDash(){
   var t=calcs(),fi=getIncome(),fe=getExp();
   var byC={BCA:0,Engineius:0,DriiveMe:0};
@@ -296,7 +406,7 @@ function rDash(){
   var hrByC={BCA:{mins:0,inc:0},Engineius:{mins:0,inc:0},DriiveMe:{mins:0,inc:0}};
   for(var i=0;i<fi.length;i++){var x=fi[i],c=x.company,m=parseDuration(x.startTime,x.endTime);if(m>0&&hrByC[c]){hrByC[c].mins+=m;hrByC[c].inc+=parseFloat(x.amount||0);}}
 
-  var byType={Delivery:0,'Waiting Time':0,'Charging Time':0};
+  var byType={Delivery:0,'Waiting Time':0,'Charging Time':0,Bonus:0};
   for(var i=0;i<fi.length;i++){var tp=fi[i].incomeType||'Delivery';if(byType[tp]!==undefined)byType[tp]+=parseFloat(fi[i].amount||0);}
 
   var cats={};
@@ -329,7 +439,7 @@ function rDash(){
   if(catArr.length>0){topHTML='<div class="card"><div class="ct">Top Deductible Expenses</div>';for(var i=0;i<catArr.length;i++)topHTML+='<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #0f172a;font-size:13px"><span style="color:#94a3b8">'+catArr[i][0]+'</span><span class="orange" style="font-weight:700">'+money(catArr[i][1])+'</span></div>';topHTML+='</div>';}
 
   var taxRate=t.inc>0?(t.tax+t.ni)/t.inc:0,alloc=allocate(t.inc,taxRate);
-  var allocHTML='<div class="card"><div class="ct">&#x1F4B0; Money Allocation</div><p style="font-size:12px;color:#475569;margin-bottom:10px">Based on your earnings of '+money(t.inc)+'</p><div class="alloc-grid"><div class="alloc-pot"><div class="alloc-pot-icon">&#x1F3DB;&#xFE0F;</div><div class="alloc-pot-val red">'+money(alloc.tax)+'</div><div class="alloc-pot-lbl">Tax Pot</div></div><div class="alloc-pot"><div class="alloc-pot-icon">&#x1F4C8;</div><div class="alloc-pot-val green">'+money(alloc.invest)+'</div><div class="alloc-pot-lbl">Invest ('+ALLOC.invest+'%)</div></div><div class="alloc-pot"><div class="alloc-pot-icon">&#x1F4B3;</div><div class="alloc-pot-val amber">'+money(alloc.bills)+'</div><div class="alloc-pot-lbl">Bills ('+ALLOC.bills+'%)</div></div><div class="alloc-pot"><div class="alloc-pot-icon">&#x1F44D;</div><div class="alloc-pot-val sky">'+money(alloc.spend)+'</div><div class="alloc-pot-lbl">Spendable</div></div></div></div>';
+  var allocHTML='<div class="card"><div class="ct">&#x1F4B0; Money Allocation <button onclick="openAllocModal()" style="background:#1e3a5f;color:#38bdf8;border:none;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;float:right">&#x2699;&#xFE0F; Edit</button></div><p style="font-size:12px;color:#475569;margin-bottom:10px">Based on your earnings of '+money(t.inc)+'</p><div class="alloc-grid"><div class="alloc-pot"><div class="alloc-pot-icon">&#x1F3DB;&#xFE0F;</div><div class="alloc-pot-val red">'+money(alloc.tax)+'</div><div class="alloc-pot-lbl">Tax Pot</div></div><div class="alloc-pot"><div class="alloc-pot-icon">&#x1F4C8;</div><div class="alloc-pot-val green">'+money(alloc.invest)+'</div><div class="alloc-pot-lbl">Invest ('+ALLOC.invest+'%)</div></div><div class="alloc-pot"><div class="alloc-pot-icon">&#x1F4B3;</div><div class="alloc-pot-val amber">'+money(alloc.bills)+'</div><div class="alloc-pot-lbl">Bills ('+ALLOC.bills+'%)</div></div><div class="alloc-pot"><div class="alloc-pot-icon">&#x1F44D;</div><div class="alloc-pot-val sky">'+money(alloc.spend)+'</div><div class="alloc-pot-lbl">Spendable</div></div></div></div>';
 
   var rangeLabel=(FDFROM||FDTO)?((FDFROM||'start')+' \u2192 '+(FDTO||'today')):(FYR==='All'?'All time':FYR);
   var insightHTML='<div class="insight-banner">In <strong>'+rangeLabel+'</strong> you earned <strong>'+money(t.inc)+'</strong> with <strong class="'+(t.profit>=0?'green':'red')+'">'+money(t.profit)+'</strong> net profit.'+(t.reimb>0?' <span style="color:#6ee7b7">'+money(t.reimb)+' reimbursed (not taxed).</span>':'')+'</div>';
@@ -356,7 +466,8 @@ function rDash(){
     +'<div class="card"><div class="ct">Income by Type</div>'
     +'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #0f172a;font-size:13px"><span style="color:#94a3b8">&#x1F697; Driving</span><span class="sky" style="font-weight:700">'+money(byType.Delivery)+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #0f172a;font-size:13px"><span style="color:#94a3b8">&#x23F1; Waiting</span><span class="lime" style="font-weight:700">'+money(byType['Waiting Time'])+'</span></div>'
-    +'<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px"><span style="color:#94a3b8">&#x26A1; Charging</span><span class="purple" style="font-weight:700">'+money(byType['Charging Time'])+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #0f172a;font-size:13px"><span style="color:#94a3b8">&#x26A1; Charging</span><span class="purple" style="font-weight:700">'+money(byType['Charging Time'])+'</span></div>'
+    +(byType.Bonus>0?'<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px"><span style="color:#94a3b8">&#x1F4B0; Bonus</span><span class="amber" style="font-weight:700">'+money(byType.Bonus)+'</span></div>':'')
     +'</div>'
     +(totalMiles>0?'<div class="card"><div class="ct">Mileage Insights (Analytics Only)</div><div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #0f172a;font-size:13px"><span style="color:#94a3b8">Total Miles</span><span style="font-weight:700">'+totalMiles.toLocaleString()+' mi</span></div><div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #0f172a;font-size:13px"><span style="color:#94a3b8">&#xA3; per mile</span><span class="amber" style="font-weight:700">'+money(ppm)+'/mi</span></div><div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px"><span style="color:#94a3b8">Profit per mile</span><span class="'+(profPM>=0?'green':'red')+'" style="font-weight:700">'+money(profPM)+'/mi</span></div><div class="disc">Mileage is not used for tax deductions for trade plate drivers.</div></div>':'')
     +topHTML
@@ -370,7 +481,8 @@ function rDash(){
 }
 
 function rIncome(){
-  var items=getIncome().slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var allItems=getIncome().slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_INCOME);});
   var groups={},groupOrder=[];
   for(var i=0;i<items.length;i++){var x=items[i],key=x.jobRef||('__'+x.id);if(!groups[key]){groups[key]={ref:x.jobRef||'',company:x.company,date:x.date,items:[]};groupOrder.push(key);}groups[key].items.push(x);}
   var html='';
@@ -384,22 +496,30 @@ function rIncome(){
       var rph=totalMins>0?jobPft/(totalMins/60):null;
       if(g.items.length===1&&!g.ref){
         var x=g.items[0],mins=parseDuration(x.startTime,x.endTime),xrph=mins>0?parseFloat(x.amount||0)/(mins/60):null;
-        html+='<div class="li"><div class="ll"><div class="lm">'+cobadge(x.company)+' '+typebadge(x.incomeType||'Delivery')+'</div>'
+        var regTag=x.registration?'<span class="reg-tag">'+x.registration+'</span> ':'';
+        var routeTag=(x.startPostcode||x.endPostcode)?'<div class="route-line">'+((x.startPostcode||'?')+' &#x2192; '+(x.endPostcode||'?'))+'</div>':'';
+        html+='<div class="li"><div class="ll"><div class="lm">'+cobadge(x.company)+' '+typebadge(x.incomeType||'Delivery')+' '+regTag+'</div>'
+          +routeTag
           +'<div class="ls">'+fdate(x.date)+(x.miles?' &middot; '+x.miles+' mi':'')+(x.description?' &middot; '+x.description:'')+'</div>'
           +(mins>0?'<div class="ls">&#x23F1; '+fmtHours(mins)+(xrph?' &middot; <span class="purple" style="font-weight:700">'+money(xrph)+'/hr</span>':'')+'</div>':'')
           +'</div><div class="lr"><div class="la green">'+money(x.amount)+'</div><button class="eb" onclick="openSheet(\'income\',\''+x.id+'\')">&#x270F;&#xFE0F; Edit</button></div></div>';
       } else {
-        html+='<div class="job-group"><div class="job-group-hdr"><div style="font-size:14px;font-weight:700;color:#e2e8f0">'+cobadge(g.company)+(g.ref?' '+g.ref:'')+(linkedExpCount>0?'<span class="linked-tag">'+linkedExpCount+' exp</span>':'')+(rph?'<span class="rate-tag" style="margin-left:6px">'+money(rph)+'/hr</span>':'')+'</div><div style="font-size:15px;font-weight:700;color:#22c55e">'+money(totalInc)+'</div></div>';
+        var gReg=g.items[0]&&g.items[0].registration?'<span class="reg-tag">'+g.items[0].registration+'</span> ':'';
+        var gRoute=(g.items[0]&&(g.items[0].startPostcode||g.items[0].endPostcode))?'<div class="route-line" style="font-size:10px;margin-top:2px">'+((g.items[0].startPostcode||'?')+' → '+(g.items[0].endPostcode||'?'))+'</div>':'';
+        html+='<div class="job-group"><div class="job-group-hdr"><div style="font-size:14px;font-weight:700;color:#e2e8f0">'+cobadge(g.company)+(g.ref?' '+g.ref:'')+' '+gReg+(linkedExpCount>0?'<span class="linked-tag">'+linkedExpCount+' exp</span>':'')+(rph?'<span class="rate-tag" style="margin-left:6px">'+money(rph)+'/hr</span>':'')+'</div><div style="text-align:right"><div style="font-size:15px;font-weight:700;color:#22c55e">'+money(totalInc)+'</div>'+gRoute+'</div></div>';
         for(var i=0;i<g.items.length;i++){var x=g.items[i],mins=parseDuration(x.startTime,x.endTime);html+='<div class="job-group-item"><div><div style="font-size:13px;color:#e2e8f0">'+typebadge(x.incomeType||'Delivery')+' '+money(x.amount)+'</div><div style="font-size:11px;color:#64748b">'+fdate(x.date)+(mins>0?' &middot; '+fmtHours(mins):'')+(x.miles?' &middot; '+x.miles+' mi':'')+'</div></div><button class="eb" style="margin-top:0" onclick="openSheet(\'income\',\''+x.id+'\')">&#x270F;&#xFE0F;</button></div>';}
         html+='</div>';
       }
     }
   }
-  document.getElementById('pg1').innerHTML=filtersHTML()+'<div class="th"><span class="tt">Income</span><button class="addbtn" onclick="openSheet(\'income\',\'\')">+ Add</button></div>'+html;
+  var searchBar='<div class="search-wrap"><span class="search-icon">&#x1F50D;</span><input type="text" placeholder="Search job ref, reg, postcode..." value="'+SEARCH_INCOME+'" oninput="SEARCH_INCOME=this.value;rIncome()" style="padding-left:34px">'+(SEARCH_INCOME?'<button class="search-clear" onclick="SEARCH_INCOME=\'\';rIncome()">&#x2715;</button>':'')+'</div>';
+  var warning='<div class="data-warning">&#x26A0;&#xFE0F; Data stored locally on this device. Export backups regularly.</div>';
+  document.getElementById('pg1').innerHTML=filtersHTML()+warning+searchBar+'<div class="th"><span class="tt">Income</span><button class="addbtn" onclick="openSheet(\'income\',\'\')">+ Add</button></div>'+(SEARCH_INCOME&&items.length===0?'<div class="empty">No results for &quot;'+SEARCH_INCOME+'&quot;</div>':html);
 }
 
 function rExpenses(){
-  var items=getExp().slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var allExpItems=getExp().slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var items=allExpItems.filter(function(x){return matchesSearch(x,SEARCH_EXP);});
   var html='';
   if(items.length===0){html='<div class="empty">No expenses yet.<br>Tap + to log a receipt.</div>';}
   else{
@@ -418,7 +538,8 @@ function rExpenses(){
         +'<div class="lr"><div class="la '+amtCls+'">'+money(x.amount)+'</div><button class="eb" onclick="openSheet(\'expense\',\''+x.id+'\')">&#x270F;&#xFE0F; Edit</button></div></div>';
     }
   }
-  document.getElementById('pg2').innerHTML=filtersHTML()+'<div class="th"><span class="tt">Expenses</span><button class="addbtn" onclick="openSheet(\'expense\',\'\')">+ Add</button></div>'+html;
+  var expSearch='<div class="search-wrap"><span class="search-icon">&#x1F50D;</span><input type="text" placeholder="Search category, job ref, description..." value="'+SEARCH_EXP+'" oninput="SEARCH_EXP=this.value;rExpenses()" style="padding-left:34px">'+(SEARCH_EXP?'<button class="search-clear" onclick="SEARCH_EXP=\'\';rExpenses()">&#x2715;</button>':'')+'</div>';
+  document.getElementById('pg2').innerHTML=filtersHTML()+expSearch+'<div class="th"><span class="tt">Expenses</span><button class="addbtn" onclick="openSheet(\'expense\',\'\')">+ Add</button></div>'+(SEARCH_EXP&&items.length===0?'<div class="empty">No results for &quot;'+SEARCH_EXP+'&quot;</div>':html);
 }
 
 function rSummary(){
@@ -450,7 +571,28 @@ function rSummary(){
     +'<button class="expbtn" onclick="doExport()">&#x2B07;&#xFE0F; Download Backup</button>'
     +'<button class="impbtn" onclick="document.getElementById(\'impfile\').click()">&#x2B06;&#xFE0F; Restore from Backup</button>'
     +'<button class="rptbtn" onclick="generateReport()">&#x1F4C4; Download SA Report (.txt)</button>'
-    +'</div>';
+    +'</div>'
+    +(function(){
+      var pHTML='<div class="card"><div class="ct">&#x1F4C4; Payslip Cross-Check</div>';
+      if(!PAYSLIP.image&&!PAYSLIP.manualTotal){
+        pHTML+='<div class="payslip-placeholder">&#x1F4C4; No payslip uploaded yet.<br>Upload to cross-check against your logged income.</div>';
+        pHTML+='<button style="background:#1e3a5f;color:#93c5fd;border:none;padding:11px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;width:100%" onclick="document.getElementById(\'payslipfile\').click()">&#x2B06;&#xFE0F; Upload Payslip</button>';
+      } else {
+        var logged=calcs().inc;
+        var slip=parseFloat(PAYSLIP.manualTotal||0);
+        var diff=logged-slip;
+        var statusColor=Math.abs(diff)<0.01?'#22c55e':diff>0?'#f97316':'#ef4444';
+        var statusText=Math.abs(diff)<0.01?'&#x2705; Income matches payslip':(diff>0?'&#x26A0;&#xFE0F; You logged more than payslip shows':'&#x26A0;&#xFE0F; Payslip shows more than logged');
+        if(PAYSLIP.image) pHTML+='<img src="'+PAYSLIP.image+'" style="width:100%;max-height:200px;object-fit:contain;border-radius:8px;margin-bottom:10px;cursor:pointer" onclick="viewReceipt(\''+PAYSLIP.image+'\')" alt="Payslip">';
+        pHTML+='<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #0f172a;font-size:13px"><span style="color:#94a3b8">Logged Income</span><span style="font-weight:700;color:#22c55e">'+money(logged)+'</span></div>';
+        pHTML+='<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #0f172a;font-size:13px"><span style="color:#94a3b8">Payslip Total</span><span style="font-weight:700;color:#38bdf8">'+money(slip)+'</span></div>';
+        pHTML+='<div style="padding:10px 0;font-size:13px;font-weight:700;color:'+statusColor+'">'+statusText+'</div>';
+        pHTML+='<button style="background:#1e3a5f;color:#93c5fd;border:none;padding:9px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;width:100%;margin-top:6px" onclick="document.getElementById(\'payslipfile\').click()">&#x1F504; Replace Payslip</button>';
+        pHTML+='<div class="disc">Future: OCR auto-extraction will be added here.</div>';
+      }
+      pHTML+='</div>';
+      return pHTML;
+    })();
 }
 
 function openSheet(type,id){
@@ -460,7 +602,7 @@ function openSheet(type,id){
   document.getElementById('stitle').textContent=(isEdit?'Edit ':'Add ')+(type==='income'?'Income':'Expense');
   var html='';
   if(type==='income'){
-    var fd2=rec?rec.date:today(),fco=rec?rec.company:'BCA',fam=rec?(rec.amount||''):'',fjr=rec?(rec.jobRef||''):'',fml=rec?(rec.miles||''):'',fds=rec?(rec.description||''):'',fst=rec?(rec.startTime||''):'',fet=rec?(rec.endTime||''):'',fit=rec?(rec.incomeType||'Delivery'):'Delivery';
+    var fd2=rec?rec.date:today(),fco=rec?rec.company:'BCA',fam=rec?(rec.amount||''):'',fjr=rec?(rec.jobRef||''):'',fml=rec?(rec.miles||''):'',fds=rec?(rec.description||''):'',fst=rec?(rec.startTime||''):'',fet=rec?(rec.endTime||''):'',fit=rec?(rec.incomeType||'Delivery'):'Delivery',freg=rec?(rec.registration||''):'',fsp=rec?(rec.startPostcode||''):'',fep=rec?(rec.endPostcode||''):'';
     var opts='';for(var i=0;i<COS.length;i++)opts+='<option value="'+COS[i]+'"'+(fco===COS[i]?' selected':'')+'>'+COS[i]+'</option>';
     var topts='';for(var i=0;i<INCOME_TYPES.length;i++)topts+='<option value="'+INCOME_TYPES[i]+'"'+(fit===INCOME_TYPES[i]?' selected':'')+'>'+INCOME_TYPES[i]+'</option>';
     html='<div class="field"><label>Date</label><input type="date" id="f1" value="'+fd2+'"></div>'
@@ -470,6 +612,8 @@ function openSheet(type,id){
       +'<div class="field"><label>Job Reference</label><input type="text" id="f4" placeholder="e.g. BCA-1234" value="'+fjr+'"><div class="field-hint">Same ref groups multiple entries & links expenses</div></div>'
       +'<div class="field-row"><div class="field"><label>Start Time</label><input type="time" id="f_start" value="'+fst+'"></div><div class="field"><label>End Time</label><input type="time" id="f_end" value="'+fet+'"></div></div>'
       +'<div class="field"><label>Miles Driven</label><input type="number" id="f5" placeholder="0" value="'+fml+'" inputmode="numeric"></div>'
+      +'<div class="field"><label>Vehicle Registration</label><input type="text" id="f_reg" placeholder="e.g. AB12 CDE" value="'+freg+'" style="text-transform:uppercase"></div>'
+      +'<div class="field-row"><div class="field"><label>Start Postcode</label><input type="text" id="f_sp" placeholder="e.g. LU1 2AB" value="'+fsp+'" style="text-transform:uppercase"></div><div class="field"><label>End Postcode</label><input type="text" id="f_ep" placeholder="e.g. M1 4BT" value="'+fep+'" style="text-transform:uppercase"></div></div>'
       +'<div class="field"><label>Notes</label><input type="text" id="f6" placeholder="Optional" value="'+fds+'"></div>';
   } else {
     var fd2=rec?rec.date:today(),fcat=rec?rec.category:'Fuel (Reimbursed)',fam=rec?(rec.amount||''):'',frc=rec?(rec.receipt||''):'',fds=rec?(rec.description||''):'',fco2=rec?(rec.company||''):'',fjr2=rec?(rec.jobRef||''):'',fimg=rec?(rec.receiptImage||''):'';
@@ -484,7 +628,7 @@ function openSheet(type,id){
       +'<div class="field"><label>Amount (&#xA3;)</label><input type="number" id="f3" step="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal"></div>'
       +'<div class="field"><label>Company (optional)</label><select id="f4b">'+copts+'</select></div>'
       +'<div class="field"><label>Link to Job Reference</label><input type="text" id="f4c" list="joblist" placeholder="Type to search..." value="'+fjr2+'" autocomplete="off"><datalist id="joblist">'+dlOpts+'</datalist><div class="field-hint">Sorted by same date &gt; same company &gt; most recent</div></div>'
-      +'<div class="field"><label>Receipt Photo</label><input type="file" id="f_img" accept="image/*" capture="environment">'+imgPreview+'<div class="field-hint">Tap to take photo or choose from library</div></div>'
+      +'<div class="field"><label>Receipt Photo</label><input type="file" id="f_img" accept="image/*">'+imgPreview+(fimg?'<button type="button" style="margin-top:6px;background:#7f1d1d;color:#fca5a5;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer" onclick="deleteReceiptImage(\''+(rec?rec.id:'')+'\')">✕ Remove Image</button>':'')+'<div class="field-hint">Stored locally on device only. Not included in backups unless you export JSON.</div></div>'
       +'<div class="field"><label>Receipt Ref / Note</label><input type="text" id="f4" placeholder="e.g. REC-001" value="'+frc+'"></div>'
       +'<div class="field"><label>Description</label><input type="text" id="f5" placeholder="What was this for?" value="'+fds+'"></div>';
   }
@@ -498,7 +642,8 @@ function doSave(){
   if(!date||!amount){alert('Please enter a date and amount.');return;}
   var nid=EID?Number(EID):newid();
   if(ETYP==='income'){
-    var item={id:nid,date:date,company:document.getElementById('f2').value,incomeType:document.getElementById('f_type').value,amount:amount,jobRef:document.getElementById('f4').value,startTime:document.getElementById('f_start').value,endTime:document.getElementById('f_end').value,miles:document.getElementById('f5').value,description:document.getElementById('f6').value};
+    var regEl=document.getElementById('f_reg'),spEl=document.getElementById('f_sp'),epEl=document.getElementById('f_ep');
+    var item={id:nid,date:date,company:document.getElementById('f2').value,incomeType:document.getElementById('f_type').value,amount:amount,jobRef:document.getElementById('f4').value,startTime:document.getElementById('f_start').value,endTime:document.getElementById('f_end').value,miles:document.getElementById('f5').value,registration:regEl?(regEl.value.toUpperCase()):'',startPostcode:spEl?(spEl.value.toUpperCase()):'',endPostcode:epEl?(epEl.value.toUpperCase()):'',description:document.getElementById('f6').value};
     if(EID){for(var i=0;i<DB.income.length;i++){if(String(DB.income[i].id)===EID){DB.income[i]=item;break;}}}else DB.income.unshift(item);
   } else {
     var imgEl=document.getElementById('f_img');
