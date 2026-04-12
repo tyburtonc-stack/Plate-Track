@@ -299,6 +299,32 @@ function closeFab(){FAB_OPEN=false;document.getElementById('fabmenu').className=
 function setChartView(v){CHART_VIEW=v;rDash();}
 function daysToDeadline(){var now=new Date(),yr=now.getFullYear(),d=new Date(yr,0,31);if(d<now)d=new Date(yr+1,0,31);return Math.ceil((d-now)/86400000);}
 
+function filterIncome(val){
+  SEARCH_INCOME=val;
+  var allItems=getIncome().slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_INCOME);});
+  var el=document.getElementById('income-results');
+  if(el) el.innerHTML=items.length===0?'<div class="empty">'+(SEARCH_INCOME?'No results for &quot;'+SEARCH_INCOME+'&quot;':'No income yet.')+'</div>':buildIncomeListHTML(items);
+  var inp=document.getElementById('income-search-input');
+  if(inp&&inp.value!==val){inp.value=val;}
+  var clr=document.querySelector('#pg1 .search-clear');
+  if(SEARCH_INCOME&&!clr){var sw=document.querySelector('#pg1 .search-wrap');if(sw){var btn=document.createElement('button');btn.className='search-clear';btn.innerHTML='&#x2715;';btn.onclick=function(){filterIncome('');var si=document.getElementById('income-search-input');if(si){si.value='';si.focus();}};sw.appendChild(btn);}}
+  else if(!SEARCH_INCOME&&clr){clr.remove();}
+}
+
+function filterExpenses(val){
+  SEARCH_EXP=val;
+  var allItems=getExp().slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_EXP);});
+  var el=document.getElementById('expense-results');
+  if(el) el.innerHTML=items.length===0?'<div class="empty">'+(SEARCH_EXP?'No results for &quot;'+SEARCH_EXP+'&quot;':'No expenses yet.')+'</div>':buildExpenseListHTML(items);
+  var inp=document.getElementById('expense-search-input');
+  if(inp&&inp.value!==val){inp.value=val;}
+  var clr=document.querySelector('#pg2 .search-clear');
+  if(SEARCH_EXP&&!clr){var sw=document.querySelector('#pg2 .search-wrap');if(sw){var btn=document.createElement('button');btn.className='search-clear';btn.innerHTML='&#x2715;';btn.onclick=function(){filterExpenses('');var si=document.getElementById('expense-search-input');if(si){si.value='';si.focus();}};sw.appendChild(btn);}}
+  else if(!SEARCH_EXP&&clr){clr.remove();}
+}
+
 function showTab(n){CTAB=n;for(var i=0;i<4;i++){document.getElementById('tab'+i).className='tb'+(i===n?' on':'');document.getElementById('pg'+i).className='pg'+(i===n?' on':'');}render(n);}
 function render(n){if(n===0)rDash();if(n===1)rIncome();if(n===2)rExpenses();if(n===3)rSummary();}
 function setFYR(v){FYR=v;render(CTAB);}function setFCO(v){FCO=v;render(CTAB);}
@@ -480,6 +506,63 @@ function rDash(){
     +deadlineHTML;
 }
 
+function buildIncomeListHTML(items){
+  if(items.length===0) return '';
+  var groups={},groupOrder=[];
+  for(var i=0;i<items.length;i++){var x=items[i],key=x.jobRef||('__'+x.id);if(!groups[key]){groups[key]={ref:x.jobRef||'',company:x.company,date:x.date,items:[]};groupOrder.push(key);}groups[key].items.push(x);}
+  var html='';
+  if(items.length===0){html='<div class="empty">No income yet.<br>Tap + to log your first job.</div>';}
+  else{
+    for(var gi=0;gi<groupOrder.length;gi++){
+      var gk=groupOrder[gi],g=groups[gk],totalInc=0,totalMins=0;
+      for(var i=0;i<g.items.length;i++){totalInc+=parseFloat(g.items[i].amount||0);totalMins+=parseDuration(g.items[i].startTime,g.items[i].endTime);}
+      var linkedExpCount=0;if(g.ref){for(var j=0;j<DB.expenses.length;j++){if(DB.expenses[j].jobRef===g.ref)linkedExpCount++;}}
+      var jobPft=g.ref?jobProfit(g.ref):totalInc;
+      var rph=totalMins>0?jobPft/(totalMins/60):null;
+      if(g.items.length===1&&!g.ref){
+        var x=g.items[0],mins=parseDuration(x.startTime,x.endTime),xrph=mins>0?parseFloat(x.amount||0)/(mins/60):null;
+        var regTag=x.registration?'<span class="reg-tag">'+x.registration+'</span> ':'';
+        var routeTag=(x.startPostcode||x.endPostcode)?'<div class="route-line">'+((x.startPostcode||'?')+' &#x2192; '+(x.endPostcode||'?'))+'</div>':'';
+        html+='<div class="li"><div class="ll"><div class="lm">'+cobadge(x.company)+' '+typebadge(x.incomeType||'Delivery')+' '+regTag+'</div>'
+          +routeTag
+          +'<div class="ls">'+fdate(x.date)+(x.miles?' &middot; '+x.miles+' mi':'')+(x.description?' &middot; '+x.description:'')+'</div>'
+          +(mins>0?'<div class="ls">&#x23F1; '+fmtHours(mins)+(xrph?' &middot; <span class="purple" style="font-weight:700">'+money(xrph)+'/hr</span>':'')+'</div>':'')
+          +'</div><div class="lr"><div class="la green">'+money(x.amount)+'</div><button class="eb" onclick="openSheet(\'income\',\''+x.id+'\')">&#x270F;&#xFE0F; Edit</button></div></div>';
+      } else {
+        var gReg=g.items[0]&&g.items[0].registration?'<span class="reg-tag">'+g.items[0].registration+'</span> ':'';
+        var gRoute=(g.items[0]&&(g.items[0].startPostcode||g.items[0].endPostcode))?'<div class="route-line" style="font-size:10px;margin-top:2px">'+((g.items[0].startPostcode||'?')+' → '+(g.items[0].endPostcode||'?'))+'</div>':'';
+        html+='<div class="job-group"><div class="job-group-hdr"><div style="font-size:14px;font-weight:700;color:#e2e8f0">'+cobadge(g.company)+(g.ref?' '+g.ref:'')+' '+gReg+(linkedExpCount>0?'<span class="linked-tag">'+linkedExpCount+' exp</span>':'')+(rph?'<span class="rate-tag" style="margin-left:6px">'+money(rph)+'/hr</span>':'')+'</div><div style="text-align:right"><div style="font-size:15px;font-weight:700;color:#22c55e">'+money(totalInc)+'</div>'+gRoute+'</div></div>';
+        for(var i=0;i<g.items.length;i++){var x=g.items[i],mins=parseDuration(x.startTime,x.endTime);html+='<div class="job-group-item"><div><div style="font-size:13px;color:#e2e8f0">'+typebadge(x.incomeType||'Delivery')+' '+money(x.amount)+'</div><div style="font-size:11px;color:#64748b">'+fdate(x.date)+(mins>0?' &middot; '+fmtHours(mins):'')+(x.miles?' &middot; '+x.miles+' mi':'')+'</div></div><button class="eb" style="margin-top:0" onclick="openSheet(\'income\',\''+x.id+'\')">&#x270F;&#xFE0F;</button></div>';}
+        html+='</div>';
+      }
+    }
+  }
+  return html;
+}
+
+function buildExpenseListHTML(items){
+  if(items.length===0) return '';
+  var html='';
+  for(var i=0;i<items.length;i++){
+    var x=items[i];
+    var isReimb=isReimbursedCat(x.category),isNonReimb=x.category==='Travel (Not Reimbursed)';
+    var amtCls=isReimb?'green':'orange',catLabel=x.category;
+    if(isNonReimb)catLabel='\uD83D\uDCB8 '+x.category;
+    if(isReimb)catLabel='\uD83D\uDD04 '+x.category;
+    var reimbTag=isReimb?'<span class="reimb-tag">not deductible</span>':'';
+    var coBH=x.company?cobadge(x.company)+' ':'';
+    var linkedTag=x.jobRef?'<span class="linked-tag">'+x.jobRef+'</span>':'';
+    var thumbHTML=x.receiptImage?'<img class="receipt-thumb" src="'+x.receiptImage+'" onclick="viewReceipt(\''+x.receiptImage+'\')" alt="Receipt">':'';
+    html+='<div class="li">'+(thumbHTML?'<div style="flex-shrink:0">'+thumbHTML+'</div>':'')
+      +'<div class="ll"><div class="lm">'+coBH+catLabel+reimbTag+linkedTag+'</div>'
+      +'<div class="ls">'+fdate(x.date)+(x.receipt?' &middot; Ref: '+x.receipt:'')+(x.description?' &middot; '+x.description:'')+'</div></div>'
+      +'<div class="lr"><div class="la '+amtCls+'">'+money(x.amount)+'</div>'
+      +'<button class="eb" onclick="openSheet(\'expense\',\''+x.id+'\')">&#x270F;&#xFE0F; Edit</button>'
+      +'</div></div>';
+  }
+  return html;
+}
+
 function rIncome(){
   var allItems=getIncome().slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
   var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_INCOME);});
@@ -512,35 +595,18 @@ function rIncome(){
       }
     }
   }
-  var searchBar='<div class="search-wrap"><span class="search-icon">&#x1F50D;</span><input type="text" placeholder="Search job ref, reg, postcode..." value="'+SEARCH_INCOME+'" oninput="SEARCH_INCOME=this.value;rIncome()" style="padding-left:34px">'+(SEARCH_INCOME?'<button class="search-clear" onclick="SEARCH_INCOME=\'\';rIncome()">&#x2715;</button>':'')+'</div>';
-  var warning='<div class="data-warning">&#x26A0;&#xFE0F; Data stored locally on this device. Export backups regularly.</div>';
-  document.getElementById('pg1').innerHTML=filtersHTML()+warning+searchBar+'<div class="th"><span class="tt">Income</span><button class="addbtn" onclick="openSheet(\'income\',\'\')">+ Add</button></div>'+(SEARCH_INCOME&&items.length===0?'<div class="empty">No results for &quot;'+SEARCH_INCOME+'&quot;</div>':html);
+  var searchBar='<div class="search-wrap"><span class="search-icon">&#x1F50D;</span><input type="text" id="income-search-input" placeholder="Search job ref, reg, postcode..." value="'+SEARCH_INCOME+'" oninput="filterIncome(this.value)" style="padding-left:34px">'+(SEARCH_INCOME?'<button class="search-clear" onclick="filterIncome(\'\')">&#x2715;</button>':'')+'</div>';
+  document.getElementById('pg1').innerHTML=filtersHTML()+searchBar+'<div class="th"><span class="tt">Income</span><button class="addbtn" onclick="openSheet(\'income\',\'\')">+ Add</button></div><div id="income-results">'+(items.length===0?'<div class="empty">'+(SEARCH_INCOME?'No results for &quot;'+SEARCH_INCOME+'&quot;':'No income yet.<br>Tap + to log your first job.')+'</div>':html)+'</div>';
 }
 
 function rExpenses(){
   var allExpItems=getExp().slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
   var items=allExpItems.filter(function(x){return matchesSearch(x,SEARCH_EXP);});
-  var html='';
-  if(items.length===0){html='<div class="empty">No expenses yet.<br>Tap + to log a receipt.</div>';}
-  else{
-    for(var i=0;i<items.length;i++){
-      var x=items[i],isReimb=isReimbursedCat(x.category),isNonReimb=x.category==='Travel (Not Reimbursed)';
-      var amtCls=isReimb?'green':'orange',catLabel=x.category;
-      if(isNonReimb)catLabel='\uD83D\uDCB8 '+x.category;
-      if(isReimb)catLabel='\uD83D\uDD04 '+x.category;
-      var reimbTag=isReimb?'<span class="reimb-tag">not deductible</span>':'';
-      var coBH=x.company?cobadge(x.company)+' ':'';
-      var linkedTag=x.jobRef?'<span class="linked-tag">'+x.jobRef+'</span>':'';
-      var thumbHTML=x.receiptImage?'<img class="receipt-thumb" src="'+x.receiptImage+'" onclick="viewReceipt(\''+x.receiptImage+'\')" alt="Receipt">':'';
-      html+='<div class="li">'+(thumbHTML?'<div style="flex-shrink:0">'+thumbHTML+'</div>':'')
-        +'<div class="ll"><div class="lm">'+coBH+catLabel+reimbTag+linkedTag+'</div>'
-        +'<div class="ls">'+fdate(x.date)+(x.receipt?' &middot; Ref: '+x.receipt:'')+(x.description?' &middot; '+x.description:'')+'</div></div>'
-        +'<div class="lr"><div class="la '+amtCls+'">'+money(x.amount)+'</div><button class="eb" onclick="openSheet(\'expense\',\''+x.id+'\')">&#x270F;&#xFE0F; Edit</button></div></div>';
-    }
-  }
-  var expSearch='<div class="search-wrap"><span class="search-icon">&#x1F50D;</span><input type="text" placeholder="Search category, job ref, description..." value="'+SEARCH_EXP+'" oninput="SEARCH_EXP=this.value;rExpenses()" style="padding-left:34px">'+(SEARCH_EXP?'<button class="search-clear" onclick="SEARCH_EXP=\'\';rExpenses()">&#x2715;</button>':'')+'</div>';
-  document.getElementById('pg2').innerHTML=filtersHTML()+expSearch+'<div class="th"><span class="tt">Expenses</span><button class="addbtn" onclick="openSheet(\'expense\',\'\')">+ Add</button></div>'+(SEARCH_EXP&&items.length===0?'<div class="empty">No results for &quot;'+SEARCH_EXP+'&quot;</div>':html);
+  var html=buildExpenseListHTML(items);
+  var expSearch='<div class="search-wrap"><span class="search-icon">&#x1F50D;</span><input type="text" id="expense-search-input" placeholder="Search category, job ref, description..." value="'+SEARCH_EXP+'" oninput="filterExpenses(this.value)" style="padding-left:34px">'+(SEARCH_EXP?'<button class="search-clear" onclick="filterExpenses(\'\')">&#x2715;</button>':'')+'</div>';
+  document.getElementById('pg2').innerHTML=filtersHTML()+expSearch+'<div class="th"><span class="tt">Expenses</span><button class="addbtn" onclick="openSheet(\'expense\',\'\')">+ Add</button></div><div id="expense-results">'+(items.length===0?'<div class="empty">'+(SEARCH_EXP?'No results for &quot;'+SEARCH_EXP+'&quot;':'No expenses yet.<br>Tap + to log a receipt.')+'</div>':html)+'</div>';
 }
+
 
 function rSummary(){
   var t=calcs(),fi=getIncome(),mi=0;
@@ -628,7 +694,7 @@ function openSheet(type,id){
       +'<div class="field"><label>Amount (&#xA3;)</label><input type="number" id="f3" step="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal"></div>'
       +'<div class="field"><label>Company (optional)</label><select id="f4b">'+copts+'</select></div>'
       +'<div class="field"><label>Link to Job Reference</label><input type="text" id="f4c" list="joblist" placeholder="Type to search..." value="'+fjr2+'" autocomplete="off"><datalist id="joblist">'+dlOpts+'</datalist><div class="field-hint">Sorted by same date &gt; same company &gt; most recent</div></div>'
-      +'<div class="field"><label>Receipt Photo</label><input type="file" id="f_img" accept="image/*">'+imgPreview+(fimg?'<button type="button" style="margin-top:6px;background:#7f1d1d;color:#fca5a5;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer" onclick="deleteReceiptImage(\''+(rec?rec.id:'')+'\')">✕ Remove Image</button>':'')+'<div class="field-hint">Stored locally on device only. Not included in backups unless you export JSON.</div></div>'
+      +'<div class="field"><label>Receipt Photo</label><input type="file" id="f_img" accept="image/*,.heic,.heif,application/pdf">'+imgPreview+(fimg?'<button type="button" style="margin-top:6px;background:#7f1d1d;color:#fca5a5;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer" onclick="deleteReceiptImage(\''+(rec?rec.id:'')+'\')">✕ Remove Image</button>':'')+'<div class="field-hint">Stored locally on device only. Not included in backups unless you export JSON.</div></div>'
       +'<div class="field"><label>Receipt Ref / Note</label><input type="text" id="f4" placeholder="e.g. REC-001" value="'+frc+'"></div>'
       +'<div class="field"><label>Description</label><input type="text" id="f5" placeholder="What was this for?" value="'+fds+'"></div>';
   }
