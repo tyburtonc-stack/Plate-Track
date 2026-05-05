@@ -572,8 +572,8 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 .goal-label{font-size:11px;color:var(–text4)}
 .goal-add-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(–r-full);border:1px solid var(–border);background:none;color:var(–text4);font-size:11px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
 /* ── AI Chat ─────────────────────────────────────────────────────── */
-#pg4.on{padding-bottom:0;overflow:hidden}
-.ai-pg{display:flex;flex-direction:column;height:calc(100svh - env(safe-area-inset-top,0px) - 56px - 49px - max(env(safe-area-inset-bottom),12px));overflow:hidden}
+#pg4.on{padding-bottom:0}
+.ai-pg{position:fixed;left:0;right:0;top:60px;bottom:calc(49px + max(env(safe-area-inset-bottom),12px));display:flex;flex-direction:column;background:var(--bg);overflow:hidden;z-index:10}
 .ai-hdr{flex-shrink:0;padding:12px 16px;background:var(--hdr);border-bottom:1px solid var(--border)}
 .ai-hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
 .ai-hdr-title{font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.02em}
@@ -3096,7 +3096,18 @@ function rAI() {
     + "</div>"
     + "</div>";
 
-aiScrollBottom();
+  // Position the fixed chat container just below the actual header
+  (function() {
+    var sync = document.querySelector('.sync-bar');
+    var hdr = document.querySelector('.hdr');
+    var top = 0;
+    if (sync && sync.offsetHeight > 0 && sync.style.display !== 'none') top += sync.offsetHeight;
+    if (hdr) top += hdr.offsetHeight;
+    var aiPg = document.querySelector('#pg4 .ai-pg');
+    if (aiPg && top > 0) aiPg.style.top = top + 'px';
+  })();
+
+  aiScrollBottom();
 }
 
 function aiScrollBottom() {
