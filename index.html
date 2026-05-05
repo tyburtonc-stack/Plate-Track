@@ -1163,7 +1163,13 @@ try{var ps=localStorage.getItem('pt_payslip');if(ps)PAYSLIP=JSON.parse(ps);}catc
 try{var al=localStorage.getItem('pt_alloc');if(al){var alp=JSON.parse(al);ALLOC.invest=alp.invest||20;ALLOC.bills=alp.bills||10;}}catch(e){}
 
 // Initialise UI on load
-document.addEventListener('DOMContentLoaded', function(){ showTab(0); });
+document.addEventListener('DOMContentLoaded', function(){
+  try {
+    showTab(0);
+  } catch(e) {
+    document.body.innerHTML += '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border:2px solid red;padding:20px;border-radius:12px;z-index:9999;max-width:90%;font-family:monospace;font-size:12px;word-break:break-all"><b>PlateTrack Error:</b><br>' + e.message + '<br><br>' + e.stack + '</div>';
+  }
+});
 
 // --- Helpers ---
 function tyear(d){var dt=new Date(d),y=dt.getFullYear();return dt>=new Date(y,3,6)?(y+'/'+(y+1)):((y-1)+'/'+y);}
