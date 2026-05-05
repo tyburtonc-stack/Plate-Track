@@ -3214,20 +3214,30 @@ system: systemPrompt,
 messages: apiMsgs
 })
 })
-.then(function(r) { return r.json(); })
+.then(function(r) {
+  return r.json().then(function(d) { d._status = r.status; d._ok = r.ok; return d; });
+})
 .then(function(d) {
 AI_THINKING = false;
-var replyText = "Sorry, I could not connect right now. Please try again shortly.";
+var replyText = "";
 if (d.content && d.content.length > 0) {
 replyText = d.content.map(function(c) { return c.text || ""; }).join("");
+} else if (d.error && d.error.message) {
+replyText = "AI error: " + d.error.message;
+} else if (d.message) {
+replyText = "Error: " + d.message;
+} else {
+replyText = "No response from AI (status " + (d._status || "?") + "). Please try again.";
 }
 var replyHTML = '<p style="margin:0">' + replyText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n\n/g,'</p><p style="margin:8px 0 0">').replace(/\n/g,'<br>') + '</p>';
 AI_MSGS.push({ role: "bot", text: replyText, html: replyHTML, time: aiTimeStr() });
 rAI();
 })
-.catch(function() {
+.catch(function(err) {
 AI_THINKING = false;
-AI_MSGS.push({ role: "bot", text: "Sorry, something went wrong. Check your connection and try again.", time: aiTimeStr() });
+var errMsg = "Could not reach the AI service. Check your connection and try again.";
+if (err && err.message) errMsg += " (" + err.message + ")";
+AI_MSGS.push({ role: "bot", text: errMsg, time: aiTimeStr() });
 rAI();
 });
 }
