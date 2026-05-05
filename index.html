@@ -1905,7 +1905,7 @@ function rDash(){
       +'<button onclick="toggleDashFilter()" style="display:flex;align-items:center;gap:5px;padding:7px 13px;border-radius:var(--r-full);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+bBdr+';background:'+bBg+';color:'+bClr+';box-shadow:var(--shadow-sm);-webkit-tap-highlight-color:transparent">'+bLbl+'</button>'
       +'</div>';
   })();
-  var heroLbl=isFiltered?'Take-Home':'Today’s Take-Home';
+  var heroLbl=isFiltered?"Take-Home":"Today's Take-Home";
   var pg=greetSection+dashChipFilterHTML()+'<div class="dash-hero">'+streakHTML
     +'<div class="dash-hero-label">'+heroLbl+'</div>'
     +'<div class="dash-hero-amount'+(todayTakeHome===0?' zero':'')+'">'+money(todayTakeHome)+'</div>'
