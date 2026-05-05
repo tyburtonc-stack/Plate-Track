@@ -617,6 +617,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 <div class="pg" id="pg1"></div>
 <div class="pg" id="pg2"></div>
 <div class="pg" id="pg3"></div>
+<div class="pg" id="pg4"></div>
 
 <!-- Bottom tabs with centre FAB -->
 
@@ -629,9 +630,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
     <span class="tb-icon">&#x1F4B0;</span>
     <span class="tb-label">Income</span>
   </button>
-  <div class="tb-fab-wrap" id="fab-tab" role="button" aria-label="Add" onclick="toggleFab(event)">
-    <div class="tb-fab-btn" id="fab">+</div>
-  </div>
+
   <button class="tb" id="tab2" onclick="showTab(2)">
     <span class="tb-icon">&#x1F9FE;</span>
     <span class="tb-label">Expenses</span>
@@ -639,6 +638,10 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
   <button class="tb" id="tab3" onclick="showTab(3)">
     <span class="tb-icon">&#x1F4CB;</span>
     <span class="tb-label">Summary</span>
+  </button>
+  <button class="tb" id="tab4" onclick="showTab(4)">
+    <span class="tb-icon">&#x2728;</span>
+    <span class="tb-label">AI</span>
   </button>
 </div>
 
@@ -746,18 +749,6 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 <!-- FAB -->
 
 <!-- FAB quick-add menu - pops above centre tab -->
-
-<div class="fab-backdrop" id="fab-backdrop" onclick="closeFab()" style="display:none;position:fixed;inset:0;z-index:89;"></div>
-<div class="fab-menu" id="fabmenu">
-  <div class="fab-item" onclick="closeFab();openSheet('income','')">
-    <div class="fab-item-icon" style="background:#16A34A;color:#fff">&#x1F4B0;</div>
-    <span class="fab-item-label">Income</span>
-  </div>
-  <div class="fab-item" onclick="closeFab();openSheet('expense','')">
-    <div class="fab-item-icon" style="background:#EA580C;color:#fff">&#x1F9FE;</div>
-    <span class="fab-item-label">Expense</span>
-  </div>
-</div>
 
 <input type="file" id="impfile" accept=".json" style="display:none">
 <input type="file" id="payslipfile" accept="image/*,application/pdf" style="display:none">
@@ -1165,7 +1156,7 @@ function debugSync(){
 
 var DB={income:[],expenses:[]};
 var FYR='All',FCO='All',FDFROM='',FDTO='';
-var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},FAB_OPEN=false,CHART_VIEW='monthly';
+var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly';
 var SEARCH_INCOME='',SEARCH_EXP='',JOB_SEARCH='',JOB_SECTION_OPEN=true;
 var PAYSLIP={image:'',manualTotal:'',status:''};
 
@@ -1494,23 +1485,7 @@ document.getElementById('payslipfile').onchange=function(e){
 };
 
 // --- FAB ---
-function toggleFab(e){
-  if(e){e.stopPropagation();}
-  FAB_OPEN=!FAB_OPEN;
-  document.getElementById('fabmenu').className='fab-menu'+(FAB_OPEN?' open':'');
-  var bd=document.getElementById('fab-backdrop');
-  if(bd)bd.style.display=FAB_OPEN?'block':'none';
-  var btn=document.getElementById('fab');
-  if(btn){btn.textContent=FAB_OPEN?'\u2715':'+';btn.style.transform=FAB_OPEN?'rotate(45deg)':'';}
-}
-function closeFab(){
-  FAB_OPEN=false;
-  document.getElementById('fabmenu').className='fab-menu';
-  var bd=document.getElementById('fab-backdrop');
-  if(bd)bd.style.display='none';
-  var btn=document.getElementById('fab');
-  if(btn){btn.textContent='+';btn.style.transform='';}
-}
+
 
 // --- Header date ---
 function updateHeaderDate(){
@@ -1719,10 +1694,10 @@ function saveAlloc(){
 // --- Tab routing ---
 function showTab(n){
   CTAB=n;
-  for(var i=0;i<4;i++){document.getElementById('tab'+i).className='tb'+(i===n?' on':'');document.getElementById('pg'+i).className='pg'+(i===n?' on':'');}
+  for(var i=0;i<5;i++){var _tb=document.getElementById('tab'+i);var _pg=document.getElementById('pg'+i);if(_tb)_tb.className='tb'+(i===n?' on':'');if(_pg)_pg.className='pg'+(i===n?' on':'');}
   render(n);
 }
-function render(n){if(n===0)rDash();if(n===1)rIncome();if(n===2)rExpenses();if(n===3)rSummary();}
+function render(n){if(n===0)rDash();if(n===1)rIncome();if(n===2)rExpenses();if(n===3)rSummary();if(n===4)rAI();}
 
 // --- DASHBOARD ---
 function dashOpenJob(el){var id=el.getAttribute('data-jid');if(id)openSheet('income',id);}
@@ -1963,7 +1938,7 @@ function rDash(){
       +'<button onclick="toggleDashFilter()" style="display:flex;align-items:center;gap:5px;padding:7px 13px;border-radius:var(--r-full);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+bBdr+';background:'+bBg+';color:'+bClr+';box-shadow:var(--shadow-sm);-webkit-tap-highlight-color:transparent">'+bLbl+'</button>'
       +'</div>';
   })();
-  var heroLbl=isFiltered?'Take-Home':'Today’s Take-Home';
+  var heroLbl=isFiltered?"Take-Home":"Today's Take-Home";
   var pg=greetSection+dashChipFilterHTML()+'<div class="dash-hero">'+streakHTML
     +'<div class="dash-hero-label">'+heroLbl+'</div>'
     +'<div class="dash-hero-amount'+(todayTakeHome===0?' zero':'')+'">'+money(todayTakeHome)+'</div>'
@@ -1983,7 +1958,7 @@ function rDash(){
     +'<input type="text" id="dash-search-input" class="std-input" placeholder="Search jobs, ref, postcode..." value="'+DASH_SEARCH+'" oninput="dashSearchJobs(this.value)" style="padding-left:36px">'
     +(DASH_SEARCH?'<button class="search-clear" onclick="dashClearSearch()">&#x2715;</button>':'')
     +'</div></div>'
-    +'<div id="dash-jobs-outer">'+(jobsSource.length>0?todayJobsHTML:'<div class="section"><div class="empty-state"><div class="empty-state-icon">&#x1F697;</div><div class="empty-state-title">'+(isFiltered?'No jobs in this period':'Log your first job')+'</div><div class="empty-state-sub">'+(isFiltered?'Try adjusting your filter':'Tap below to record a job in under 10 seconds')+'</div>'+(isFiltered?'':'<button class="empty-state-btn" onclick="closeFab();openSheet(\'income\',\'\')">&#x2B; Add Job</button>')+'</div></div>')+'</div>'
+    +'<div id="dash-jobs-outer">'+(jobsSource.length>0?todayJobsHTML:'<div class="section"><div class="empty-state"><div class="empty-state-icon">&#x1F697;</div><div class="empty-state-title">'+(isFiltered?'No jobs in this period':'Log your first job')+'</div><div class="empty-state-sub">'+(isFiltered?'Try adjusting your filter':'Tap below to record a job in under 10 seconds')+'</div>'+(isFiltered?'':'<button class="empty-state-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add Job</button>')+'</div></div>')+'</div>'
     +deadlineHTML
     +'<div style="height:16px"></div>';
 
@@ -2278,7 +2253,7 @@ function rSummary(){
 
 // --- SHEET (Add/Edit) ---
 function openSheet(type,id){
-  closeFab();
+  
   if(!id||id===''){if(!checkLimitBeforeAdd(type))return;}
   ETYP=type;EID=(id&&id!=='')?String(id):null;
   var isEdit=EID!==null,rec=null;
@@ -2981,6 +2956,231 @@ function doSwipeDelete(type,id){
       .then(function(){supaPushAll(function(){updateSyncBar();});})
       .catch(function(e){console.warn('Delete sync error:',e);});
   }
+}
+
+
+// AI CHAT
+var AI_MSGS = [];
+var AI_THINKING = false;
+var AI_FREE_LIMIT = 5;
+var AI_USED_FREE = 0;
+try { AI_USED_FREE = parseInt(localStorage.getItem("pt_ai_used") || "0") || 0; } catch(e) {}
+
+var AI_SUGGESTIONS = [
+  "Am I on track this month?",
+  "What can I claim on tax?",
+  "How much tax will I owe?",
+  "Which company pays me most?",
+  "What is my best earning day?",
+  "How are my expenses looking?"
+];
+
+function aiCanSend() {
+  if (isPro()) return true;
+  return AI_USED_FREE < AI_FREE_LIMIT;
+}
+
+function aiIncrementUsed() {
+  AI_USED_FREE++;
+  try { localStorage.setItem("pt_ai_used", String(AI_USED_FREE)); } catch(e) {}
+}
+
+function aiTimeStr() {
+  var d = new Date();
+  return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+}
+
+function aiEsc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+}
+
+function rAI() {
+  var pg = document.getElementById("pg4");
+  if (!pg) return;
+
+  var limitNote = "";
+  if (!isPro()) {
+    var left = Math.max(0, AI_FREE_LIMIT - AI_USED_FREE);
+    if (left > 0) {
+      limitNote = "<div class=\"ai-limit-note\">" + left + " free question" + (left === 1 ? "" : "s") + " remaining &bull; <span onclick=\"showPaywall(true)\">Go Pro for unlimited</span></div>";
+    } else {
+      limitNote = "<div class=\"ai-limit-note\"><span onclick=\"showPaywall(true)\">Upgrade to Pro for unlimited AI &#x1F680;</span></div>";
+    }
+  }
+
+  var showWelcome = AI_MSGS.length === 0;
+  var welcomeHTML = "";
+  if (showWelcome) {
+    welcomeHTML = "<div class=\"ai-welcome\">"
+      + "<div class=\"ai-welcome-icon\">&#x2728;</div>"
+      + "<div class=\"ai-welcome-title\">Your Financial AI</div>"
+      + "<div class=\"ai-welcome-sub\">Ask me anything about your earnings, expenses, tax or profitability. I use your real PlateTrack data to answer.</div>"
+      + "</div>";
+  }
+
+  var msgsHTML = "";
+  for (var i = 0; i < AI_MSGS.length; i++) {
+    var m = AI_MSGS[i];
+    msgsHTML += "<div class=\"ai-msg " + m.role + "\">"
+      + "<div class=\"ai-bubble\">" + (m.role === "user" ? aiEsc(m.text) : (m.html || aiEsc(m.text))) + "</div>"
+      + "<div class=\"ai-msg-time\">" + m.time + "</div>"
+      + "</div>";
+  }
+
+  var suggestHTML = "";
+  if (showWelcome) {
+    suggestHTML = "<div class=\"ai-suggestions\"><div class=\"ai-suggestions-label\">Try asking</div><div class=\"ai-chips\">";
+    for (var j = 0; j < AI_SUGGESTIONS.length; j++) {
+      suggestHTML += "<div class=\"ai-chip\" onclick=\"aiSendChip(" + JSON.stringify(AI_SUGGESTIONS[j]) + ")\">" + AI_SUGGESTIONS[j] + "</div>";
+    }
+    suggestHTML += "</div></div>";
+  }
+
+  var sendDisabled = aiCanSend() ? "" : "disabled";
+
+  pg.innerHTML = "<div class=\"ai-pg\">"
+    + "<div class=\"ai-hdr\">"
+    + "<div class=\"ai-hdr-top\"><div class=\"ai-hdr-title\">AI Assistant</div><div class=\"ai-hdr-badge\">&#x2728; BETA</div></div>"
+    + "<div class=\"ai-hdr-sub\">Powered by Claude &bull; Uses your live data</div>"
+    + "</div>"
+    + "<div class=\"ai-msgs\" id=\"ai-msgs-wrap\">"
+    + welcomeHTML
+    + msgsHTML
+    + "<div class=\"ai-typing\" id=\"ai-typing\"><div class=\"ai-dot\"></div><div class=\"ai-dot\"></div><div class=\"ai-dot\"></div></div>"
+    + "</div>"
+    + suggestHTML
+    + limitNote
+    + "<div class=\"ai-input-row\">"
+    + "<textarea class=\"ai-input\" id=\"ai-input\" placeholder=\"Ask about your earnings, tax, expenses...\" rows=\"1\" oninput=\"aiAutoResize(this)\" onkeydown=\"aiKeyDown(event)\"></textarea>"
+
+```
++ "<button class=\"ai-send\" id=\"ai-send-btn\" onclick=\"aiSend()\" " + sendDisabled + ">&#x27A4;</button>"
++ "</div>"
++ "</div>";
+```
+
+aiScrollBottom();
+}
+
+function aiScrollBottom() {
+setTimeout(function() {
+var wrap = document.getElementById(“ai-msgs-wrap”);
+if (wrap) wrap.scrollTop = wrap.scrollHeight;
+}, 60);
+}
+
+function aiAutoResize(el) {
+el.style.height = “auto”;
+el.style.height = Math.min(el.scrollHeight, 100) + “px”;
+}
+
+function aiKeyDown(e) {
+if (e.key === “Enter” && !e.shiftKey) {
+e.preventDefault();
+aiSend();
+}
+}
+
+function aiSendChip(text) {
+var inp = document.getElementById(“ai-input”);
+if (inp) inp.value = text;
+aiSend();
+}
+
+function aiSend() {
+var inp = document.getElementById(“ai-input”);
+if (!inp) return;
+var text = inp.value.trim();
+if (!text || AI_THINKING) return;
+if (!aiCanSend()) { showPaywall(true); return; }
+
+inp.value = “”;
+inp.style.height = “auto”;
+AI_MSGS.push({ role: “user”, text: text, time: aiTimeStr() });
+AI_THINKING = true;
+aiIncrementUsed();
+rAI();
+
+setTimeout(function() {
+var typing = document.getElementById(“ai-typing”);
+if (typing) typing.className = “ai-typing show”;
+aiScrollBottom();
+}, 80);
+
+var t = calcs();
+var fi = getIncome();
+var fe = getExp();
+var userName = getUserName() || “the driver”;
+var todayStr = today();
+var tyearStr = tyear(todayStr);
+
+var coSummary = {};
+fi.forEach(function(i) { coSummary[i.company] = (coSummary[i.company] || 0) + parseFloat(i.amount || 0); });
+var coLines = Object.keys(coSummary).map(function(k) { return k + “: “ + money(coSummary[k]); }).join(”, “);
+
+var catSummary = {};
+fe.forEach(function(e) { catSummary[e.category] = (catSummary[e.category] || 0) + parseFloat(e.amount || 0); });
+var catLines = Object.keys(catSummary).map(function(k) { return k + “: “ + money(catSummary[k]); }).join(”, “);
+
+var recentJobs = fi.slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);}).slice(0,5)
+.map(function(j){ return j.date + “ “ + (j.company||””) + “ “ + money(j.amount); }).join(”; “);
+
+var systemPrompt = “You are a financial assistant built into PlateTrack, an expense and income tracker for UK self-employed trade plate drivers.”
++ “ The driver name is “ + userName + “.”
++ “ Today is “ + todayStr + “. Current tax year: “ + tyearStr + “.”
++ “ UK personal allowance: \u00a312,570. Basic rate: 20% up to \u00a337,700 above allowance. Higher rate: 40%. Class 4 NI: 9% and 2%.”
++ “ Trade plate drivers CANNOT claim the HMRC 45p/25p mileage allowance.”
++ “\n\nDRIVER FINANCIAL SUMMARY:”
++ “\nTotal income: “ + money(t.inc)
++ “\nTotal expenses: “ + money(t.exp)
++ “\nReimbursed expenses excluded from tax: “ + money(t.reimb)
++ “\nAllowable deductions: “ + money(t.deductible)
++ “\nNet taxable profit: “ + money(t.profit)
++ “\nEst income tax: “ + money(t.tax)
++ “\nEst Class 4 NI: “ + money(t.ni)
++ “\nIncome by company: “ + (coLines || “none”)
++ “\nExpenses by category: “ + (catLines || “none”)
++ “\nTotal income entries: “ + fi.length
++ “\nTotal expense entries: “ + fe.length
++ “\nRecent jobs: “ + (recentJobs || “none”)
++ “\n\nGive specific practical advice based on these real numbers. Be concise. Use GBP. Always recommend consulting an accountant for official returns. Plain text only, no markdown headers.”;
+
+var apiMsgs = [];
+var history = AI_MSGS.slice(0, -1);
+var startIdx = Math.max(0, history.length - 10);
+for (var h = startIdx; h < history.length; h++) {
+apiMsgs.push({ role: history[h].role === “user” ? “user” : “assistant”, content: history[h].text });
+}
+apiMsgs.push({ role: “user”, content: text });
+
+var PROXY_URL = “https://platetrack-ai.tyburtonc.workers.dev/”;
+
+fetch(PROXY_URL, {
+method: “POST”,
+headers: { “Content-Type”: “application/json” },
+body: JSON.stringify({
+model: “claude-sonnet-4-20250514”,
+max_tokens: 1000,
+system: systemPrompt,
+messages: apiMsgs
+})
+})
+.then(function(r) { return r.json(); })
+.then(function(d) {
+AI_THINKING = false;
+var replyText = “Sorry, I could not connect right now. Please try again shortly.”;
+if (d.content && d.content.length > 0) {
+replyText = d.content.map(function(c) { return c.text || “”; }).join(””);
+}
+var replyHTML = “<p style="margin:0">” + replyText.replace(/&/g,”&”).replace(/</g,”<”).replace(/>/g,”>”).replace(/\n\n/g,”</p><p style="margin:8px 0 0">”).replace(/\n/g,”<br>”) + “</p>”;
+AI_MSGS.push({ role: “bot”, text: replyText, html: replyHTML, time: aiTimeStr() });
+rAI();
+})
+.catch(function() {
+AI_THINKING = false;
+AI_MSGS.push({ role: “bot”, text: “Sorry, something went wrong. Check your connection and try again.”, time: aiTimeStr() });
+rAI();
+});
 }
 
 </script>
