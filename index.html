@@ -570,7 +570,47 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 .goal-meta{display:flex;justify-content:space-between;align-items:center}
 .goal-pct{font-size:13px;font-weight:800;color:var(–text2)}
 .goal-label{font-size:11px;color:var(–text4)}
-.goal-add-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(–r-full);border:1px solid var(–border);background:none;color:var(–text4);font-size:11px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}</style>
+.goal-add-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(–r-full);border:1px solid var(–border);background:none;color:var(–text4);font-size:11px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
+/* ── AI Chat ─────────────────────────────────────────────────────── */
+#pg4.on{padding-bottom:0;overflow:hidden}
+.ai-pg{display:flex;flex-direction:column;height:calc(100svh - env(safe-area-inset-top,0px) - 56px - 49px - max(env(safe-area-inset-bottom),12px));overflow:hidden}
+.ai-hdr{flex-shrink:0;padding:12px 16px;background:var(--hdr);border-bottom:1px solid var(--border)}
+.ai-hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.ai-hdr-title{font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.02em}
+.ai-hdr-badge{font-size:11px;font-weight:700;background:linear-gradient(135deg,var(--gold),#F0B429);color:#1A1A2E;padding:3px 9px;border-radius:var(--r-full);letter-spacing:.04em}
+.ai-hdr-sub{font-size:12px;color:var(--text4);font-weight:500}
+.ai-msgs{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px 8px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.ai-welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px 16px;flex:1}
+.ai-welcome-icon{font-size:48px;margin-bottom:12px}
+.ai-welcome-title{font-size:20px;font-weight:800;color:var(--text);margin-bottom:6px;letter-spacing:-.02em}
+.ai-welcome-sub{font-size:14px;color:var(--text3);line-height:1.5;max-width:280px}
+.ai-msg{display:flex;flex-direction:column;max-width:82%;animation:fadeIn .2s ease-out}
+.ai-msg.user{align-self:flex-end;align-items:flex-end}
+.ai-msg.bot{align-self:flex-start;align-items:flex-start}
+.ai-bubble{padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.55;word-break:break-word}
+.ai-msg.user .ai-bubble{background:var(--gold);color:#1A1A2E;border-bottom-right-radius:4px;font-weight:500}
+.ai-msg.bot .ai-bubble{background:var(--card);color:var(--text);border:1px solid var(--card-border);border-bottom-left-radius:4px;box-shadow:var(--shadow-sm)}
+.ai-msg-time{font-size:10px;color:var(--text4);margin-top:3px;font-weight:500}
+.ai-typing{display:none;gap:5px;padding:10px 14px;background:var(--card);border:1px solid var(--card-border);border-radius:18px;border-bottom-left-radius:4px;box-shadow:var(--shadow-sm);align-self:flex-start}
+.ai-typing.show{display:flex}
+.ai-dot{width:8px;height:8px;border-radius:50%;background:var(--text4);animation:aiDot 1.2s infinite}
+.ai-dot:nth-child(2){animation-delay:.2s}
+.ai-dot:nth-child(3){animation-delay:.4s}
+@keyframes aiDot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}
+.ai-suggestions{flex-shrink:0;padding:8px 16px 4px}
+.ai-suggestions-label{font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.ai-chips{display:flex;flex-wrap:wrap;gap:7px}
+.ai-chip{padding:7px 14px;border-radius:var(--r-full);font-size:13px;font-weight:600;border:1.5px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-shadow:var(--shadow-sm)}
+.ai-chip:active{background:var(--bg3)}
+.ai-limit-note{flex-shrink:0;padding:6px 16px;font-size:12px;color:var(--text4);text-align:center;line-height:1.5}
+.ai-limit-note span{color:var(--gold);font-weight:700;cursor:pointer}
+.ai-input-row{flex-shrink:0;display:flex;align-items:flex-end;gap:8px;padding:8px 12px;background:var(--bg);border-top:1px solid var(--border)}
+.ai-input{flex:1;background:var(--input);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:10px 14px;font-size:15px;color:var(--text);font-family:inherit;resize:none;outline:none;transition:border .2s;line-height:1.4;max-height:100px;overflow-y:auto}
+.ai-input:focus{border-color:var(--gold)}
+.ai-send{width:42px;height:42px;border-radius:50%;background:var(--gold);color:#1A1A2E;border:none;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px rgba(232,201,74,.4);-webkit-tap-highlight-color:transparent;transition:transform .15s}
+.ai-send:active{transform:scale(.92)}
+.ai-send:disabled{opacity:.4;cursor:default;transform:none}
+</style>
 
 </head>
 <body>
@@ -3052,114 +3092,111 @@ function rAI() {
     + limitNote
     + "<div class=\"ai-input-row\">"
     + "<textarea class=\"ai-input\" id=\"ai-input\" placeholder=\"Ask about your earnings, tax, expenses...\" rows=\"1\" oninput=\"aiAutoResize(this)\" onkeydown=\"aiKeyDown(event)\"></textarea>"
-
-```
-+ "<button class=\"ai-send\" id=\"ai-send-btn\" onclick=\"aiSend()\" " + sendDisabled + ">&#x27A4;</button>"
-+ "</div>"
-+ "</div>";
-```
+    + "<button class=\"ai-send\" id=\"ai-send-btn\" onclick=\"aiSend()\" " + sendDisabled + ">&#x27A4;</button>"
+    + "</div>"
+    + "</div>";
 
 aiScrollBottom();
 }
 
 function aiScrollBottom() {
 setTimeout(function() {
-var wrap = document.getElementById(“ai-msgs-wrap”);
+var wrap = document.getElementById("ai-msgs-wrap");
 if (wrap) wrap.scrollTop = wrap.scrollHeight;
 }, 60);
 }
 
 function aiAutoResize(el) {
-el.style.height = “auto”;
-el.style.height = Math.min(el.scrollHeight, 100) + “px”;
+el.style.height = "auto";
+el.style.height = Math.min(el.scrollHeight, 100) + "px";
 }
 
 function aiKeyDown(e) {
-if (e.key === “Enter” && !e.shiftKey) {
+if (e.key === "Enter" && !e.shiftKey) {
 e.preventDefault();
 aiSend();
 }
 }
 
 function aiSendChip(text) {
-var inp = document.getElementById(“ai-input”);
+var inp = document.getElementById("ai-input");
 if (inp) inp.value = text;
 aiSend();
 }
 
 function aiSend() {
-var inp = document.getElementById(“ai-input”);
+var inp = document.getElementById("ai-input");
 if (!inp) return;
 var text = inp.value.trim();
 if (!text || AI_THINKING) return;
 if (!aiCanSend()) { showPaywall(true); return; }
 
-inp.value = “”;
-inp.style.height = “auto”;
-AI_MSGS.push({ role: “user”, text: text, time: aiTimeStr() });
+inp.value = "";
+inp.style.height = "auto";
+AI_MSGS.push({ role: "user", text: text, time: aiTimeStr() });
 AI_THINKING = true;
 aiIncrementUsed();
 rAI();
 
 setTimeout(function() {
-var typing = document.getElementById(“ai-typing”);
-if (typing) typing.className = “ai-typing show”;
+var typing = document.getElementById("ai-typing");
+if (typing) typing.className = "ai-typing show";
 aiScrollBottom();
 }, 80);
 
 var t = calcs();
 var fi = getIncome();
 var fe = getExp();
-var userName = getUserName() || “the driver”;
+var userName = getUserName() || "the driver";
 var todayStr = today();
 var tyearStr = tyear(todayStr);
 
 var coSummary = {};
 fi.forEach(function(i) { coSummary[i.company] = (coSummary[i.company] || 0) + parseFloat(i.amount || 0); });
-var coLines = Object.keys(coSummary).map(function(k) { return k + “: “ + money(coSummary[k]); }).join(”, “);
+var coLines = Object.keys(coSummary).map(function(k) { return k + ": " + money(coSummary[k]); }).join(", ");
 
 var catSummary = {};
 fe.forEach(function(e) { catSummary[e.category] = (catSummary[e.category] || 0) + parseFloat(e.amount || 0); });
-var catLines = Object.keys(catSummary).map(function(k) { return k + “: “ + money(catSummary[k]); }).join(”, “);
+var catLines = Object.keys(catSummary).map(function(k) { return k + ": " + money(catSummary[k]); }).join(", ");
 
 var recentJobs = fi.slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);}).slice(0,5)
-.map(function(j){ return j.date + “ “ + (j.company||””) + “ “ + money(j.amount); }).join(”; “);
+.map(function(j){ return j.date + " " + (j.company||"") + " " + money(j.amount); }).join("; ");
 
-var systemPrompt = “You are a financial assistant built into PlateTrack, an expense and income tracker for UK self-employed trade plate drivers.”
-+ “ The driver name is “ + userName + “.”
-+ “ Today is “ + todayStr + “. Current tax year: “ + tyearStr + “.”
-+ “ UK personal allowance: \u00a312,570. Basic rate: 20% up to \u00a337,700 above allowance. Higher rate: 40%. Class 4 NI: 9% and 2%.”
-+ “ Trade plate drivers CANNOT claim the HMRC 45p/25p mileage allowance.”
-+ “\n\nDRIVER FINANCIAL SUMMARY:”
-+ “\nTotal income: “ + money(t.inc)
-+ “\nTotal expenses: “ + money(t.exp)
-+ “\nReimbursed expenses excluded from tax: “ + money(t.reimb)
-+ “\nAllowable deductions: “ + money(t.deductible)
-+ “\nNet taxable profit: “ + money(t.profit)
-+ “\nEst income tax: “ + money(t.tax)
-+ “\nEst Class 4 NI: “ + money(t.ni)
-+ “\nIncome by company: “ + (coLines || “none”)
-+ “\nExpenses by category: “ + (catLines || “none”)
-+ “\nTotal income entries: “ + fi.length
-+ “\nTotal expense entries: “ + fe.length
-+ “\nRecent jobs: “ + (recentJobs || “none”)
-+ “\n\nGive specific practical advice based on these real numbers. Be concise. Use GBP. Always recommend consulting an accountant for official returns. Plain text only, no markdown headers.”;
+var systemPrompt = "You are a financial assistant built into PlateTrack, an expense and income tracker for UK self-employed trade plate drivers."
++ " The driver name is " + userName + "."
++ " Today is " + todayStr + ". Current tax year: " + tyearStr + "."
++ " UK personal allowance: \u00a312,570. Basic rate: 20% up to \u00a337,700 above allowance. Higher rate: 40%. Class 4 NI: 9% and 2%."
++ " Trade plate drivers CANNOT claim the HMRC 45p/25p mileage allowance."
++ "\n\nDRIVER FINANCIAL SUMMARY:"
++ "\nTotal income: " + money(t.inc)
++ "\nTotal expenses: " + money(t.exp)
++ "\nReimbursed expenses excluded from tax: " + money(t.reimb)
++ "\nAllowable deductions: " + money(t.deductible)
++ "\nNet taxable profit: " + money(t.profit)
++ "\nEst income tax: " + money(t.tax)
++ "\nEst Class 4 NI: " + money(t.ni)
++ "\nIncome by company: " + (coLines || "none")
++ "\nExpenses by category: " + (catLines || "none")
++ "\nTotal income entries: " + fi.length
++ "\nTotal expense entries: " + fe.length
++ "\nRecent jobs: " + (recentJobs || "none")
++ "\n\nGive specific practical advice based on these real numbers. Be concise. Use GBP. Always recommend consulting an accountant for official returns. Plain text only, no markdown headers.";
 
 var apiMsgs = [];
 var history = AI_MSGS.slice(0, -1);
 var startIdx = Math.max(0, history.length - 10);
 for (var h = startIdx; h < history.length; h++) {
-apiMsgs.push({ role: history[h].role === “user” ? “user” : “assistant”, content: history[h].text });
+apiMsgs.push({ role: history[h].role === "user" ? "user" : "assistant", content: history[h].text });
 }
-apiMsgs.push({ role: “user”, content: text });
+apiMsgs.push({ role: "user", content: text });
 
-var PROXY_URL = “https://platetrack-ai.tyburtonc.workers.dev/”;
+var PROXY_URL = "https://platetrack-ai.tyburtonc.workers.dev/";
 
 fetch(PROXY_URL, {
-method: “POST”,
-headers: { “Content-Type”: “application/json” },
+method: "POST",
+headers: { "Content-Type": "application/json" },
 body: JSON.stringify({
-model: “claude-sonnet-4-20250514”,
+model: "claude-sonnet-4-20250514",
 max_tokens: 1000,
 system: systemPrompt,
 messages: apiMsgs
@@ -3168,17 +3205,17 @@ messages: apiMsgs
 .then(function(r) { return r.json(); })
 .then(function(d) {
 AI_THINKING = false;
-var replyText = “Sorry, I could not connect right now. Please try again shortly.”;
+var replyText = "Sorry, I could not connect right now. Please try again shortly.";
 if (d.content && d.content.length > 0) {
-replyText = d.content.map(function(c) { return c.text || “”; }).join(””);
+replyText = d.content.map(function(c) { return c.text || ""; }).join("");
 }
-var replyHTML = “<p style="margin:0">” + replyText.replace(/&/g,”&”).replace(/</g,”<”).replace(/>/g,”>”).replace(/\n\n/g,”</p><p style="margin:8px 0 0">”).replace(/\n/g,”<br>”) + “</p>”;
-AI_MSGS.push({ role: “bot”, text: replyText, html: replyHTML, time: aiTimeStr() });
+var replyHTML = '<p style="margin:0">' + replyText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n\n/g,'</p><p style="margin:8px 0 0">').replace(/\n/g,'<br>') + '</p>';
+AI_MSGS.push({ role: "bot", text: replyText, html: replyHTML, time: aiTimeStr() });
 rAI();
 })
 .catch(function() {
 AI_THINKING = false;
-AI_MSGS.push({ role: “bot”, text: “Sorry, something went wrong. Check your connection and try again.”, time: aiTimeStr() });
+AI_MSGS.push({ role: "bot", text: "Sorry, something went wrong. Check your connection and try again.", time: aiTimeStr() });
 rAI();
 });
 }
