@@ -19,6 +19,7 @@
   --card:#FFFFFF;--card-border:#E0E4EA;
   --hdr:#FFFFFF;--hdr-border:#E8EBF0;
   --tab:#FFFFFF;--tab-border:#E0E4EA;--tab-active:#1A1A2E;--tab-blur-bg:rgba(255,255,255,.92);
+  --glass-bg:rgba(255,255,255,0.22);--glass-border:rgba(255,255,255,0.55);--glass-inset:rgba(255,255,255,0.7);--glass-pill:rgba(255,255,255,0.65);
   --input:#F0F1F3;--input-border:#D0D7DE;--input-focus:#E8C94A;
   --sheet:#FFFFFF;--sheet-border:#E0E4EA;
   --li:#F8F9FA;--li-border:#E8EBF0;
@@ -38,6 +39,7 @@ body.dark{
   --card:#161B22;--card-border:#30363D;
   --hdr:#161B22;--hdr-border:#21262D;
   --tab:#161B22;--tab-border:#30363D;--tab-active:#E8C94A;--tab-blur-bg:rgba(13,17,23,.92);
+  --glass-bg:rgba(20,20,28,0.55);--glass-border:rgba(255,255,255,0.15);--glass-inset:rgba(255,255,255,0.08);--glass-pill:rgba(255,255,255,0.14);
   --input:#21262D;--input-border:#30363D;
   --sheet:#161B22;--sheet-border:#30363D;
   --li:#21262D;--li-border:#30363D;
@@ -65,21 +67,18 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .hdr-date{font-size:12px;color:var(--text3);font-weight:500}
 /* ── Theme toggle ─────────────────────────────────────────────── */
 .theme-btn{width:36px;height:36px;border-radius:var(--r-full);background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .2s}
-/* ── Bottom tabs ──────────────────────────────────────────────── */
-.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--tab-blur-bg);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border-top:0.5px solid var(--tab-border);display:flex;align-items:flex-end;z-index:50;box-shadow:0 -1px 16px rgba(0,0,0,.07);padding-bottom:max(env(safe-area-inset-bottom),8px);padding-left:0;padding-right:0}
-.tb{flex:1;min-width:0;padding:8px 4px 7px;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;opacity:1;transition:transform .12s cubic-bezier(.4,0,.2,1);-webkit-tap-highlight-color:transparent}
-.tb:active{transform:scale(.80)}
-.tb-icon{font-size:24px;line-height:1;opacity:.35;transition:opacity .2s,transform .3s cubic-bezier(.34,1.56,.64,1)}
-.tb.on .tb-icon{opacity:1;transform:scale(1.14) translateY(-2px)}
-.tb-label{font-size:10px;font-weight:600;color:var(--text4);letter-spacing:.01em;line-height:1;overflow:hidden;white-space:nowrap;opacity:.55;transition:opacity .2s,color .2s}
-.tb.on .tb-label{color:var(--gold);font-weight:700;opacity:1;letter-spacing:.02em}
-/* Centre FAB — centred in 49pt zone, button rises above */
-.tb-fab-wrap{flex:1;min-width:0;height:49px;display:flex;justify-content:center;align-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.tb-fab-btn{width:54px;height:54px;border-radius:50%;background:var(--gold);color:#1A1A2E;border:none;font-size:26px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(232,201,74,.5);transition:transform .15s;cursor:pointer;font-weight:400;margin-top:-10px}
-.tb-fab-btn:active{transform:scale(.92)}
+/* ── Bottom tabs (iOS Liquid Glass) ──────────────────────────── */
+.tabs{position:fixed;bottom:max(calc(env(safe-area-inset-bottom) + 8px),16px);left:50%;transform:translateX(-50%);width:auto;min-width:280px;max-width:calc(100% - 32px);background:var(--glass-bg);backdrop-filter:blur(40px) saturate(220%);-webkit-backdrop-filter:blur(40px) saturate(220%);border-radius:40px;border:1px solid var(--glass-border);box-shadow:0 8px 32px rgba(0,0,0,0.18),inset 0 1px 0 var(--glass-inset);display:flex;align-items:center;z-index:50;padding:6px;gap:2px}
+.tb{flex:1;min-width:0;padding:8px 14px;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:34px;transition:background .2s,box-shadow .2s;-webkit-tap-highlight-color:transparent}
+.tb:active{transform:scale(.92)}
+.tb-icon{font-size:22px;line-height:1;opacity:.4;transition:opacity .2s}
+.tb.on .tb-icon{opacity:1}
+.tb-label{font-size:10px;font-weight:600;color:var(--text4);letter-spacing:.01em;line-height:1;white-space:nowrap;opacity:.5;transition:opacity .2s,color .2s}
+.tb.on .tb-label{color:var(--gold);font-weight:700;opacity:1}
+.tb.on{background:var(--glass-pill);box-shadow:0 2px 8px rgba(0,0,0,0.12),inset 0 1px 0 rgba(255,255,255,0.9)}
 /* ── Page content ─────────────────────────────────────────────── */
 .pg{padding:0;display:none;animation:fadeIn .18s ease-out;overflow-x:hidden}
-.pg.on{display:block;padding-bottom:calc(80px + max(env(safe-area-inset-bottom),12px))}
+.pg.on{display:block;padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 /* ── Dashboard hero ───────────────────────────────────────────── */
 .dash-hero{background:var(--hdr);border-bottom:1px solid var(--border);padding:14px 20px 14px;text-align:center;position:relative;overflow:hidden}
@@ -574,7 +573,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 .goal-add-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(–r-full);border:1px solid var(–border);background:none;color:var(–text4);font-size:11px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
 /* ── AI Chat ─────────────────────────────────────────────────────── */
 #pg4.on{padding-bottom:0}
-.ai-pg{position:fixed;left:0;right:0;top:60px;bottom:calc(49px + max(env(safe-area-inset-bottom),12px));display:flex;flex-direction:column;background:var(--bg);overflow:hidden;z-index:10}
+.ai-pg{position:fixed;left:0;right:0;top:60px;bottom:max(calc(env(safe-area-inset-bottom) + 76px),84px);display:flex;flex-direction:column;background:var(--bg);overflow:hidden;z-index:10}
 .ai-hdr{flex-shrink:0;padding:12px 16px;background:var(--hdr);border-bottom:1px solid var(--border)}
 .ai-hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
 .ai-hdr-title{font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.02em}
