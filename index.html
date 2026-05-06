@@ -600,6 +600,9 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 .ai-suggestions{flex-shrink:0;padding:8px 16px 4px}
 .ai-suggestions-label{font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
 .ai-chips{display:flex;flex-wrap:wrap;gap:7px}
+.ai-suggestions-compact{padding:6px 16px 4px}
+.ai-suggestions-compact .ai-chips{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
+.ai-suggestions-compact .ai-chips::-webkit-scrollbar{display:none}
 .ai-chip{padding:7px 14px;border-radius:var(--r-full);font-size:13px;font-weight:600;border:1.5px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-shadow:var(--shadow-sm)}
 .ai-chip:active{background:var(--bg3)}
 .ai-limit-note{flex-shrink:0;padding:6px 16px;font-size:12px;color:var(--text4);text-align:center;line-height:1.5}
@@ -3000,20 +3003,46 @@ function doSwipeDelete(type,id){
 
 
 // AI CHAT
-var AI_MSGS = [];
+var AI_MSGS = (function(){ try { return JSON.parse(localStorage.getItem("pt_ai_msgs") || "[]"); } catch(e){ return []; } })();
 var AI_THINKING = false;
 var AI_FREE_LIMIT = 5;
 var AI_USED_FREE = 0;
 try { AI_USED_FREE = parseInt(localStorage.getItem("pt_ai_used") || "0") || 0; } catch(e) {}
 
-var AI_SUGGESTIONS = [
-  "Am I on track this month?",
-  "What can I claim on tax?",
-  "How much tax will I owe?",
-  "Which company pays me most?",
-  "What is my best earning day?",
-  "How are my expenses looking?"
-];
+function aiSaveMsgs() {
+  try { localStorage.setItem("pt_ai_msgs", JSON.stringify(AI_MSGS.slice(-40))); } catch(e) {}
+}
+
+function aiClear() {
+  AI_MSGS = [];
+  try { localStorage.removeItem("pt_ai_msgs"); } catch(e) {}
+  rAI();
+}
+
+function aiGetSuggestions() {
+  var c = calcs();
+  var fi = getIncome();
+  var suggestions = [
+    "How much tax do I owe?",
+    "Am I on track this tax year?",
+    "What can I claim as expenses?"
+  ];
+  if (c.exp > 0) suggestions.push("Which expenses are highest?");
+  if (fi.length > 5) suggestions.push("What is my average job value?");
+  suggestions.push("Tips to reduce my tax bill");
+  return suggestions.slice(0, 6);
+}
+
+function aiRenderMd(text) {
+  var html = text
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g,"<em>$1</em>")
+    .replace(/\n\n/g,'</p><p style="margin:8px 0 0">')
+    .replace(/\n- /g,"<br>&bull; ")
+    .replace(/\n/g,"<br>");
+  return '<p style="margin:0">' + html + "</p>";
+}
 
 function aiCanSend() {
   if (isPro()) return true;
@@ -3067,20 +3096,20 @@ function rAI() {
       + "</div>";
   }
 
-  var suggestHTML = "";
-  if (showWelcome) {
-    suggestHTML = "<div class=\"ai-suggestions\"><div class=\"ai-suggestions-label\">Try asking</div><div class=\"ai-chips\">";
-    for (var j = 0; j < AI_SUGGESTIONS.length; j++) {
-      suggestHTML += "<div class=\"ai-chip\" onclick=\"aiSendChip(" + JSON.stringify(AI_SUGGESTIONS[j]) + ")\">" + AI_SUGGESTIONS[j] + "</div>";
-    }
-    suggestHTML += "</div></div>";
+  var chips = aiGetSuggestions();
+  var suggestHTML = "<div class=\"ai-suggestions" + (showWelcome ? "" : " ai-suggestions-compact") + "\">"
+    + (showWelcome ? "<div class=\"ai-suggestions-label\">Try asking</div>" : "")
+    + "<div class=\"ai-chips\">";
+  for (var j = 0; j < chips.length; j++) {
+    suggestHTML += "<div class=\"ai-chip\" onclick=\"aiSendChip(" + JSON.stringify(chips[j]) + ")\">" + chips[j] + "</div>";
   }
+  suggestHTML += "</div></div>";
 
   var sendDisabled = aiCanSend() ? "" : "disabled";
 
   pg.innerHTML = "<div class=\"ai-pg\">"
     + "<div class=\"ai-hdr\">"
-    + "<div class=\"ai-hdr-top\"><div class=\"ai-hdr-title\">AI Assistant</div><div class=\"ai-hdr-badge\">&#x2728; BETA</div></div>"
+    + "<div class=\"ai-hdr-top\"><div class=\"ai-hdr-title\">AI Assistant</div><div style=\"display:flex;align-items:center;gap:8px\"><div class=\"ai-hdr-badge\">&#x2728; BETA</div><button onclick=\"aiClear()\" style=\"background:none;border:none;font-size:13px;color:var(--text4);padding:4px 8px;cursor:pointer;border-radius:6px\">Clear</button></div></div>"
     + "<div class=\"ai-hdr-sub\">Powered by Claude &bull; Uses your live data</div>"
     + "</div>"
     + "<div class=\"ai-msgs\" id=\"ai-msgs-wrap\">"
@@ -3134,6 +3163,7 @@ if (!aiCanSend()) { showPaywall(true); return; }
 inp.value = "";
 inp.style.height = "auto";
 AI_MSGS.push({ role: "user", text: text, time: aiTimeStr() });
+aiSaveMsgs();
 AI_THINKING = true;
 aiIncrementUsed();
 rAI();
@@ -3159,8 +3189,11 @@ var catSummary = {};
 fe.forEach(function(e) { catSummary[e.category] = (catSummary[e.category] || 0) + parseFloat(e.amount || 0); });
 var catLines = Object.keys(catSummary).map(function(k) { return k + ": " + money(catSummary[k]); }).join(", ");
 
-var recentJobs = fi.slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);}).slice(0,5)
-.map(function(j){ return j.date + " " + (j.company||"") + " " + money(j.amount); }).join("; ");
+var recentJobs = fi.slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);}).slice(0,10)
+.map(function(j){ return j.date + " | " + (j.company||"") + " | " + money(j.amount) + (j.miles ? " | "+j.miles+"mi" : "") + (j.registration ? " | "+j.registration : ""); }).join("\n");
+
+var recentExpList = fe.slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);}).slice(0,10)
+.map(function(e){ return e.date + " | " + (e.category||"") + " | " + money(e.amount) + (e.company ? " | "+e.company : ""); }).join("\n");
 
 var systemPrompt = "You are a financial assistant built into PlateTrack, an expense and income tracker for UK self-employed trade plate drivers."
 + " The driver name is " + userName + "."
@@ -3179,12 +3212,13 @@ var systemPrompt = "You are a financial assistant built into PlateTrack, an expe
 + "\nExpenses by category: " + (catLines || "none")
 + "\nTotal income entries: " + fi.length
 + "\nTotal expense entries: " + fe.length
-+ "\nRecent jobs: " + (recentJobs || "none")
-+ "\n\nGive specific practical advice based on these real numbers. Be concise. Use GBP. Always recommend consulting an accountant for official returns. Plain text only, no markdown headers.";
++ "\n\nRECENT INCOME (last 10, newest first):\n" + (recentJobs || "None recorded")
++ "\n\nRECENT EXPENSES (last 10, newest first):\n" + (recentExpList || "None recorded")
++ "\n\nGive specific practical advice based on these real numbers. Be concise. Use GBP. Always recommend consulting an accountant for official returns.";
 
 var apiMsgs = [];
 var history = AI_MSGS.slice(0, -1);
-var startIdx = Math.max(0, history.length - 10);
+var startIdx = Math.max(0, history.length - 20);
 for (var h = startIdx; h < history.length; h++) {
 apiMsgs.push({ role: history[h].role === "user" ? "user" : "assistant", content: history[h].text });
 }
@@ -3209,13 +3243,15 @@ var replyText = "Sorry, I could not connect right now. Please try again shortly.
 if (d.content && d.content.length > 0) {
 replyText = d.content.map(function(c) { return c.text || ""; }).join("");
 }
-var replyHTML = '<p style="margin:0">' + replyText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n\n/g,'</p><p style="margin:8px 0 0">').replace(/\n/g,'<br>') + '</p>';
+var replyHTML = aiRenderMd(replyText);
 AI_MSGS.push({ role: "bot", text: replyText, html: replyHTML, time: aiTimeStr() });
+aiSaveMsgs();
 rAI();
 })
 .catch(function() {
 AI_THINKING = false;
 AI_MSGS.push({ role: "bot", text: "Sorry, something went wrong. Check your connection and try again.", time: aiTimeStr() });
+aiSaveMsgs();
 rAI();
 });
 }
