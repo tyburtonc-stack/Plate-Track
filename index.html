@@ -573,7 +573,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 .goal-add-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(–r-full);border:1px solid var(–border);background:none;color:var(–text4);font-size:11px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
 /* ── AI Chat ─────────────────────────────────────────────────────── */
 #pg4.on{padding-bottom:0}
-.ai-pg{position:fixed;left:0;right:0;top:60px;bottom:max(calc(env(safe-area-inset-bottom) + 76px),84px);display:flex;flex-direction:column;background:var(--bg);overflow:hidden;z-index:10}
+.ai-pg{position:fixed;left:0;right:0;top:60px;bottom:0;display:flex;flex-direction:column;background:var(--bg);overflow:hidden;z-index:10}
 .ai-hdr{flex-shrink:0;padding:12px 16px;background:var(--hdr);border-bottom:1px solid var(--border)}
 .ai-hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
 .ai-hdr-title{font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.02em}
@@ -607,7 +607,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 .ai-chip:active{background:var(--bg3)}
 .ai-limit-note{flex-shrink:0;padding:6px 16px;font-size:12px;color:var(--text4);text-align:center;line-height:1.5}
 .ai-limit-note span{color:var(--gold);font-weight:700;cursor:pointer}
-.ai-input-row{flex-shrink:0;display:flex;align-items:flex-end;gap:8px;padding:8px 12px;background:var(--bg);border-top:1px solid var(--border)}
+.ai-input-row{flex-shrink:0;display:flex;align-items:flex-end;gap:8px;padding:8px 12px max(calc(env(safe-area-inset-bottom) + 80px),84px);background:var(--bg);border-top:1px solid var(--border)}
 .ai-input{flex:1;background:var(--input);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:10px 14px;font-size:15px;color:var(--text);font-family:inherit;resize:none;outline:none;transition:border .2s;line-height:1.4;max-height:100px;overflow-y:auto}
 .ai-input:focus{border-color:var(--gold)}
 .ai-send{width:42px;height:42px;border-radius:50%;background:var(--gold);color:#1A1A2E;border:none;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px rgba(232,201,74,.4);-webkit-tap-highlight-color:transparent;transition:transform .15s}
