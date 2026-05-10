@@ -112,25 +112,32 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;background:linear-grad
 .tb:active{transform:scale(.90);transition:transform .1s ease}
 .tb-icon{font-size:21px;line-height:1;opacity:.38;transition:opacity .22s ease,transform .3s cubic-bezier(.34,1.56,.64,1);display:flex;align-items:center;justify-content:center;width:22px;height:22px}
 .tb.on .tb-icon{opacity:1;transform:scale(1.15) translateY(-1px)}
-.tb.on .tb-icon svg,.tb.on .tb-icon svg *{stroke:var(--accent)}
 .tb-label{font-size:10px;font-weight:600;color:var(--text4);letter-spacing:.005em;line-height:1;white-space:nowrap;opacity:.45;transition:opacity .22s ease,color .22s ease,font-weight .22s ease}
-.tb.on .tb-label{color:var(--accent);font-weight:700;opacity:1}
+.tb.on .tb-label{font-weight:700;opacity:1}
+#tab0.on .tb-icon svg,#tab0.on .tb-icon svg *{stroke:#3B82F6}
+#tab0.on .tb-label{color:#3B82F6}
+#tab1.on .tb-icon svg,#tab1.on .tb-icon svg *{stroke:#22C55E}
+#tab1.on .tb-label{color:#22C55E}
+#tab2.on .tb-icon svg,#tab2.on .tb-icon svg *{stroke:#EF4444}
+#tab2.on .tb-label{color:#EF4444}
+#tab3.on .tb-icon svg,#tab3.on .tb-icon svg *{stroke:#8B5CF6}
+#tab3.on .tb-label{color:#8B5CF6}
 .tb.on{background:none;box-shadow:none}
 /* ── FAB ─────────────────────────────────────────────────────── */
-.fab-wrap{position:relative;display:flex;flex-direction:column;align-items:center;flex-shrink:0;z-index:10;margin:0 4px}
+.fab-wrap{position:relative;display:flex;flex-direction:column;align-items:center;flex:1;z-index:10;margin:0 4px}
 @keyframes fabPulse{0%{box-shadow:0 6px 24px var(--fab-glow),0 2px 8px rgba(0,0,0,0.15),0 0 0 0 var(--fab-glow)}70%{box-shadow:0 6px 24px var(--fab-glow),0 2px 8px rgba(0,0,0,0.15),0 0 0 10px rgba(0,0,0,0)}100%{box-shadow:0 6px 24px var(--fab-glow),0 2px 8px rgba(0,0,0,0.15),0 0 0 0 rgba(0,0,0,0)}}
-.fab-btn{width:54px;height:54px;border-radius:50%;background:var(--fab-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;animation:fabPulse 3.5s ease-out infinite;-webkit-tap-highlight-color:transparent;transition:transform .2s cubic-bezier(.34,1.56,.64,1);position:relative;margin-top:-22px}
+.fab-btn{width:56px;height:56px;border-radius:50%;background:var(--fab-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;animation:fabPulse 3.5s ease-out infinite;-webkit-tap-highlight-color:transparent;transition:transform .2s cubic-bezier(.34,1.56,.64,1);position:relative;margin-top:2px}
 .fab-btn:active{animation:none;transform:scale(.90);box-shadow:0 6px 24px var(--fab-glow),0 2px 8px rgba(0,0,0,0.15),inset 0 1px 0 rgba(255,255,255,0.3)}
-.fab-icon{font-size:26px;color:#fff;font-weight:300;line-height:1;transition:transform .28s cubic-bezier(.34,1.56,.64,1);display:block}
+.fab-icon{font-size:28px;color:#fff;font-weight:300;line-height:1;transition:transform .28s cubic-bezier(.34,1.56,.64,1);display:block}
 .fab-icon.open{transform:rotate(45deg)}
-.fab-menu{position:absolute;bottom:calc(100% + 12px);left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:12px;pointer-events:none;opacity:0;transform:translateX(-50%) translateY(16px) scale(0.85);transition:opacity .22s ease,transform .22s cubic-bezier(.34,1.56,.64,1)}
+.fab-menu{position:absolute;bottom:calc(100% + 20px);left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:12px;pointer-events:none;opacity:0;transform:translateX(-50%) translateY(16px) scale(0.85);transition:opacity .22s ease,transform .22s cubic-bezier(.34,1.56,.64,1)}
 .fab-menu.open{pointer-events:all;opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
 .fab-action{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.fab-action-circle{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 16px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.3);transition:transform .15s}
+.fab-action-circle{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;transition:transform .15s}
 .fab-action:active .fab-action-circle{transform:scale(.91)}
-.fab-action-scan .fab-action-circle{background:linear-gradient(135deg,#7C3AED,#4F46E5)}
-.fab-action-income .fab-action-circle{background:linear-gradient(135deg,#22C55E,#16A34A)}
-.fab-action-expense .fab-action-circle{background:linear-gradient(135deg,#EF4444,#DC2626)}
+.fab-action-scan .fab-action-circle{background:rgba(255,255,255,0.88);border:1px solid rgba(200,200,230,0.5);box-shadow:0 6px 24px rgba(0,0,0,0.10),inset 0 1px 0 rgba(255,255,255,0.9)}
+.fab-action-income .fab-action-circle{background:rgba(34,197,94,0.14);border:1px solid rgba(34,197,94,0.25);box-shadow:0 4px 16px rgba(34,197,94,0.18)}
+.fab-action-expense .fab-action-circle{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.22);box-shadow:0 4px 16px rgba(239,68,68,0.15)}
 .fab-action-label{font-size:11px;font-weight:700;color:var(--text2);background:var(--glass-bg);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:3px 9px;border-radius:var(--r-full);border:1px solid var(--glass-border);white-space:nowrap;box-shadow:var(--shadow-sm)}
 .fab-backdrop{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,0.0);pointer-events:none;transition:background .25s}
 .fab-backdrop.open{pointer-events:all;background:rgba(0,0,0,0.15);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
@@ -787,20 +794,20 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
     <div class="fab-menu" id="fabMenu">
       <button class="fab-action fab-action-scan" onclick="fabScanReceipt()">
         <div class="fab-action-circle">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </div>
-        <span class="fab-action-label">Scan Receipt</span>
+        <span class="fab-action-label" style="text-align:center;line-height:1.4">Scan Receipt<br><span style="font-size:10px;font-weight:500;opacity:0.7">AI Auto-Fill</span></span>
       </button>
-      <div style="display:flex;gap:32px">
+      <div style="display:flex;gap:52px">
         <button class="fab-action fab-action-income" onclick="fabAddIncome()">
           <div class="fab-action-circle">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </div>
           <span class="fab-action-label">Add Income</span>
         </button>
         <button class="fab-action fab-action-expense" onclick="fabAddExpense()">
           <div class="fab-action-circle">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </div>
           <span class="fab-action-label">Add Expense</span>
         </button>
