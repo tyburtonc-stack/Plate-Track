@@ -105,20 +105,23 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;background:linear-grad
 /* ── Old header (hidden) ──────────────────────────────────────── */
 .hdr{display:none}
 /* ── Bottom nav (floating pill) ──────────────────────────────── */
-.tabs{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 14px);left:50%;transform:translateX(-50%);width:auto;min-width:300px;max-width:calc(100% - 28px);background:var(--glass-nav);backdrop-filter:blur(40px) saturate(220%);-webkit-backdrop-filter:blur(40px) saturate(220%);border-radius:100px;border:1px solid var(--glass-nav-border);box-shadow:0 8px 32px rgba(0,0,0,0.16),0 2px 8px rgba(0,0,0,0.08),inset 0 1px 0 var(--glass-inset);display:flex;align-items:center;z-index:100;padding:6px 8px;gap:0}
-.tb{flex:1;min-width:0;padding:7px 8px;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:90px;transition:background .2s,box-shadow .2s;-webkit-tap-highlight-color:transparent}
-.tb:active{transform:scale(.91)}
-.tb-icon{font-size:21px;line-height:1;opacity:.38;transition:opacity .2s,transform .2s;display:flex;align-items:center;justify-content:center;width:22px;height:22px}
-.tb.on .tb-icon{opacity:1;transform:scale(1.05)}
+.tabs{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 14px);left:50%;transform:translateX(-50%);width:auto;min-width:300px;max-width:calc(100% - 28px);background:var(--glass-nav);backdrop-filter:blur(48px) saturate(240%);-webkit-backdrop-filter:blur(48px) saturate(240%);border-radius:100px;border:1px solid var(--glass-nav-border);box-shadow:0 8px 40px rgba(0,0,0,0.18),0 2px 8px rgba(0,0,0,0.08),inset 0 1.5px 0 var(--glass-inset);display:flex;align-items:center;z-index:100;padding:8px 10px;gap:0;position:fixed}
+/* ── Sliding active indicator ─────────────────────────────────── */
+.tab-indicator{position:absolute;bottom:8px;height:calc(100% - 16px);border-radius:90px;background:var(--glass-pill);box-shadow:0 2px 10px rgba(0,0,0,0.10),inset 0 1.5px 0 rgba(255,255,255,0.9);transition:left .32s cubic-bezier(.34,1.56,.64,1),width .32s cubic-bezier(.34,1.56,.64,1),opacity .2s ease;pointer-events:none;z-index:0;opacity:0}
+.tb{flex:1;min-width:0;padding:7px 8px;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:90px;-webkit-tap-highlight-color:transparent;position:relative;z-index:1;transition:transform .1s ease}
+.tb:active{transform:scale(.90);transition:transform .1s ease}
+.tb-icon{font-size:21px;line-height:1;opacity:.38;transition:opacity .22s ease,transform .3s cubic-bezier(.34,1.56,.64,1);display:flex;align-items:center;justify-content:center;width:22px;height:22px}
+.tb.on .tb-icon{opacity:1;transform:scale(1.15) translateY(-1px)}
 .tb.on .tb-icon svg,.tb.on .tb-icon svg *{stroke:var(--accent)}
-.tb-label{font-size:10px;font-weight:600;color:var(--text4);letter-spacing:.005em;line-height:1;white-space:nowrap;opacity:.45;transition:opacity .2s,color .2s}
+.tb-label{font-size:10px;font-weight:600;color:var(--text4);letter-spacing:.005em;line-height:1;white-space:nowrap;opacity:.45;transition:opacity .22s ease,color .22s ease,font-weight .22s ease}
 .tb.on .tb-label{color:var(--accent);font-weight:700;opacity:1}
-.tb.on{background:var(--glass-pill);box-shadow:0 2px 8px rgba(0,0,0,0.10),inset 0 1px 0 rgba(255,255,255,0.85)}
+.tb.on{background:none;box-shadow:none}
 /* ── FAB ─────────────────────────────────────────────────────── */
 .fab-wrap{position:relative;display:flex;flex-direction:column;align-items:center;flex-shrink:0;z-index:10;margin:0 4px}
-.fab-btn{width:54px;height:54px;border-radius:50%;background:var(--fab-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px var(--fab-glow),0 2px 8px rgba(0,0,0,0.15),inset 0 1px 0 rgba(255,255,255,0.3);-webkit-tap-highlight-color:transparent;transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s;position:relative;margin-top:-20px}
-.fab-btn:active{transform:scale(.92)}
-.fab-icon{font-size:26px;color:#fff;font-weight:300;line-height:1;transition:transform .25s cubic-bezier(.34,1.56,.64,1);display:block}
+@keyframes fabPulse{0%{box-shadow:0 6px 24px var(--fab-glow),0 2px 8px rgba(0,0,0,0.15),0 0 0 0 var(--fab-glow)}70%{box-shadow:0 6px 24px var(--fab-glow),0 2px 8px rgba(0,0,0,0.15),0 0 0 10px rgba(0,0,0,0)}100%{box-shadow:0 6px 24px var(--fab-glow),0 2px 8px rgba(0,0,0,0.15),0 0 0 0 rgba(0,0,0,0)}}
+.fab-btn{width:54px;height:54px;border-radius:50%;background:var(--fab-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;animation:fabPulse 3.5s ease-out infinite;-webkit-tap-highlight-color:transparent;transition:transform .2s cubic-bezier(.34,1.56,.64,1);position:relative;margin-top:-22px}
+.fab-btn:active{animation:none;transform:scale(.90);box-shadow:0 6px 24px var(--fab-glow),0 2px 8px rgba(0,0,0,0.15),inset 0 1px 0 rgba(255,255,255,0.3)}
+.fab-icon{font-size:26px;color:#fff;font-weight:300;line-height:1;transition:transform .28s cubic-bezier(.34,1.56,.64,1);display:block}
 .fab-icon.open{transform:rotate(45deg)}
 .fab-menu{position:absolute;bottom:calc(100% + 12px);left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:12px;pointer-events:none;opacity:0;transform:translateX(-50%) translateY(16px) scale(0.85);transition:opacity .22s ease,transform .22s cubic-bezier(.34,1.56,.64,1)}
 .fab-menu.open{pointer-events:all;opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
@@ -765,6 +768,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 
 <!-- Bottom nav floating pill -->
 <div class="tabs" id="tabs">
+  <div class="tab-indicator" id="tabIndicator"></div>
   <button class="tb on" id="tab0" onclick="showTab(0)">
     <span class="tb-icon">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -2122,7 +2126,23 @@ function saveAlloc(){
 function showTab(n){
   CTAB=n;
   for(var i=0;i<5;i++){var _tb=document.getElementById('tab'+i);var _pg=document.getElementById('pg'+i);if(_tb)_tb.className='tb'+(i===n?' on':'');if(_pg)_pg.className='pg'+(i===n?' on':'');}
+  moveTabIndicator(n);
   render(n);
+}
+function moveTabIndicator(n){
+  var indicator=document.getElementById('tabIndicator');
+  var tabs=document.getElementById('tabs');
+  if(!indicator||!tabs)return;
+  // n=0→tab0, n=1→tab1, n=2→tab2, n=3→tab3; n=4 (AI) keeps indicator hidden
+  var btnId=['tab0','tab1','tab2','tab3'][n];
+  if(!btnId){indicator.style.opacity='0';return;}
+  var btn=document.getElementById(btnId);
+  if(!btn){indicator.style.opacity='0';return;}
+  var tabsRect=tabs.getBoundingClientRect();
+  var btnRect=btn.getBoundingClientRect();
+  indicator.style.opacity='1';
+  indicator.style.left=(btnRect.left-tabsRect.left)+'px';
+  indicator.style.width=btnRect.width+'px';
 }
 function render(n){if(n===0)rDash();if(n===1)rIncome();if(n===2)rExpenses();if(n===3)rSummary();if(n===4)rAI();}
 
@@ -3219,6 +3239,8 @@ setInterval(function(){
 updateHeaderDate();
 checkOnboarding();
 render(0);
+// Position indicator after first render (DOM needs to be laid out)
+setTimeout(function(){moveTabIndicator(0);},60);
 
 function dashChipFilterHTML(){
   if(!DASH_FILTER_OPEN)return '';
