@@ -16,10 +16,12 @@
   --bg:#F8F9FA;--bg2:#FFFFFF;--bg3:#F0F1F3;
   --border:#E0E4EA;--border2:#CBD2DC;
   --text:#0D1117;--text2:#3D4451;--text3:#57606A;--text4:#8B949E;
-  --card:#FFFFFF;--card-border:#E0E4EA;
+  --card:rgba(255,255,255,0.82);--card-border:rgba(255,255,255,0.9);
   --hdr:#FFFFFF;--hdr-border:#E8EBF0;
   --tab:#FFFFFF;--tab-border:#E0E4EA;--tab-active:#1A1A2E;--tab-blur-bg:rgba(255,255,255,.92);
-  --glass-bg:rgba(255,255,255,0.22);--glass-border:rgba(255,255,255,0.55);--glass-inset:rgba(255,255,255,0.7);--glass-pill:rgba(255,255,255,0.65);
+  --glass-bg:rgba(255,255,255,0.58);--glass-border:rgba(255,255,255,0.85);--glass-inset:rgba(255,255,255,0.95);--glass-pill:rgba(255,255,255,0.72);
+  --glass-nav:rgba(255,255,255,0.72);--glass-nav-border:rgba(255,255,255,0.9);
+  --util-btn:rgba(255,255,255,0.7);--util-btn-border:rgba(255,255,255,0.9);
   --input:#F0F1F3;--input-border:#D0D7DE;--input-focus:#E8C94A;
   --sheet:#FFFFFF;--sheet-border:#E0E4EA;
   --li:#F8F9FA;--li-border:#E8EBF0;
@@ -31,70 +33,163 @@
   --shadow-md:0 4px 12px rgba(0,0,0,.08),0 2px 4px rgba(0,0,0,.04);
   --shadow-lg:0 12px 40px rgba(0,0,0,.12),0 4px 12px rgba(0,0,0,.06);
   --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:20px;--r-full:100px;
+  /* Theme gradients — default: purple */
+  --grad-start:#E8EAF6;--grad-mid1:#EDE7F6;--grad-mid2:#F3E5F5;--grad-mid3:#FCE4EC;--grad-end:#FFF3E0;
+  --accent:#8B5CF6;--accent-glow:rgba(139,92,246,0.25);
+  --fab-bg:linear-gradient(135deg,#8B5CF6,#7C3AED);--fab-glow:rgba(139,92,246,0.45);
+  --ai-glow:rgba(139,92,246,0.6);
 }
 body.dark{
-  --bg:#0D1117;--bg2:#161B22;--bg3:#21262D;
-  --border:#30363D;--border2:#3D4451;
-  --text:#F0F6FF;--text2:#C9D1D9;--text3:#8B949E;--text4:#57606A;
-  --card:#161B22;--card-border:#30363D;
-  --hdr:#161B22;--hdr-border:#21262D;
-  --tab:#161B22;--tab-border:#30363D;--tab-active:#E8C94A;--tab-blur-bg:rgba(13,17,23,.92);
-  --glass-bg:rgba(20,20,28,0.55);--glass-border:rgba(255,255,255,0.15);--glass-inset:rgba(255,255,255,0.08);--glass-pill:rgba(255,255,255,0.14);
-  --input:#21262D;--input-border:#30363D;
-  --sheet:#161B22;--sheet-border:#30363D;
-  --li:#21262D;--li-border:#30363D;
+  --bg:#0D0F1A;--bg2:#12101E;--bg3:#1A1727;
+  --border:#2A2740;--border2:#3A3758;
+  --text:#F0F0FF;--text2:#C8C4E8;--text3:#9490B8;--text4:#6660A0;
+  --card:rgba(26,23,44,0.82);--card-border:rgba(255,255,255,0.1);
+  --hdr:#12101E;--hdr-border:#1A1727;
+  --tab:#12101E;--tab-border:#2A2740;--tab-active:#E8C94A;--tab-blur-bg:rgba(10,8,20,.92);
+  --glass-bg:rgba(18,16,32,0.68);--glass-border:rgba(255,255,255,0.12);--glass-inset:rgba(255,255,255,0.06);--glass-pill:rgba(255,255,255,0.1);
+  --glass-nav:rgba(15,12,28,0.78);--glass-nav-border:rgba(255,255,255,0.12);
+  --util-btn:rgba(30,28,50,0.75);--util-btn-border:rgba(255,255,255,0.15);
+  --input:#1A1727;--input-border:#2A2740;
+  --sheet:#12101E;--sheet-border:#2A2740;
+  --li:#1A1727;--li-border:#2A2740;
   --success:#22C55E;--success-bg:#052E16;--success-border:#166534;
   --danger:#EF4444;--danger-bg:#1C0A0A;--danger-border:#7F1D1D;
   --orange:#F97316;--orange-bg:#1C0A00;--orange-border:#92400E;
-  --shadow-sm:0 1px 3px rgba(0,0,0,.3);
-  --shadow-md:0 4px 12px rgba(0,0,0,.4);
-  --shadow-lg:0 12px 40px rgba(0,0,0,.5);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.4);
+  --shadow-md:0 4px 12px rgba(0,0,0,.5);
+  --shadow-lg:0 12px 40px rgba(0,0,0,.65);
+  --grad-start:#0D0F1A;--grad-mid1:#110E20;--grad-mid2:#150E22;--grad-end:#0D0F1A;
+}
+/* Purple theme (default) */
+body.theme-purple{
+  --grad-start:#E8EAF6;--grad-mid1:#EDE7F6;--grad-mid2:#F3E5F5;--grad-mid3:#FCE4EC;--grad-end:#FFF3E0;
+  --accent:#8B5CF6;--accent-glow:rgba(139,92,246,0.25);
+  --fab-bg:linear-gradient(135deg,#A78BFA,#7C3AED);--fab-glow:rgba(139,92,246,0.45);
+  --ai-glow:rgba(139,92,246,0.6);
+}
+body.dark.theme-purple{
+  --grad-start:#0D0F1A;--grad-mid1:#130F22;--grad-mid2:#180F28;--grad-end:#0D0F1A;
+  --accent:#A78BFA;--accent-glow:rgba(167,139,250,0.3);
+  --fab-bg:linear-gradient(135deg,#A78BFA,#7C3AED);--fab-glow:rgba(139,92,246,0.5);
+  --ai-glow:rgba(167,139,250,0.7);
+}
+/* Gold theme */
+body.theme-gold{
+  --grad-start:#FDF6E3;--grad-mid1:#FAF0D0;--grad-mid2:#FEF3D7;--grad-mid3:#FFF8E8;--grad-end:#FFFDF7;
+  --accent:#C9922A;--accent-glow:rgba(201,146,42,0.25);
+  --fab-bg:linear-gradient(135deg,#E8C94A,#C9922A);--fab-glow:rgba(232,201,74,0.5);
+  --ai-glow:rgba(232,201,74,0.6);
+}
+body.dark.theme-gold{
+  --grad-start:#15110A;--grad-mid1:#1E1608;--grad-mid2:#221A08;--grad-end:#15110A;
+  --accent:#E8C94A;--accent-glow:rgba(232,201,74,0.3);
+  --fab-bg:linear-gradient(135deg,#E8C94A,#C9922A);--fab-glow:rgba(232,201,74,0.5);
+  --ai-glow:rgba(232,201,74,0.65);
 }
 /* ── Reset & base ─────────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overscroll-behavior:none}
-body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;font-size:15px;line-height:1.5;padding-bottom:0;transition:background .25s,color .25s}
-/* ── Header ───────────────────────────────────────────────────── */
-.sync-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;padding-top:calc(env(safe-area-inset-top) + 8px);background:var(--card);border-bottom:1px solid var(--border);font-size:12px;position:sticky;top:0;z-index:101}
-.hdr{background:var(--hdr);border-bottom:1px solid var(--hdr-border);padding:12px 18px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-sm);padding-top:calc(env(safe-area-inset-top) + 12px)}
-.hdr-brand{display:flex;align-items:center;gap:10px}
-.hdr-logo-img{width:34px;height:34px;border-radius:8px;flex-shrink:0}
-.hdr-brand-text{line-height:1.1}
-.hdr-brand-name{font-size:16px;font-weight:800;letter-spacing:-.02em;color:var(--text)}
-.hdr-brand-name span{color:var(--gold)}
-.hdr-tagline{font-size:10px;color:var(--text4);letter-spacing:.06em;text-transform:uppercase;font-weight:500}
-.hdr-right{display:flex;align-items:center;gap:8px}
-.hdr-date{font-size:12px;color:var(--text3);font-weight:500}
-/* ── Theme toggle ─────────────────────────────────────────────── */
-.theme-btn{width:36px;height:36px;border-radius:var(--r-full);background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .2s}
-/* ── Bottom tabs (iOS Liquid Glass) ──────────────────────────── */
-.tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:auto;min-width:280px;max-width:calc(100% - 32px);background:var(--glass-bg);backdrop-filter:blur(40px) saturate(220%);-webkit-backdrop-filter:blur(40px) saturate(220%);border-radius:40px 40px 0 0;border:1px solid var(--glass-border);border-bottom:none;box-shadow:0 8px 32px rgba(0,0,0,0.18),inset 0 1px 0 var(--glass-inset);display:flex;align-items:flex-start;z-index:50;padding:6px 6px max(calc(env(safe-area-inset-bottom) + 6px),6px);gap:2px}
-.tb{flex:1;min-width:0;padding:8px 14px;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:34px;transition:background .2s,box-shadow .2s;-webkit-tap-highlight-color:transparent}
-.tb:active{transform:scale(.92)}
-.tb-icon{font-size:22px;line-height:1;opacity:.4;transition:opacity .2s}
-.tb.on .tb-icon{opacity:1}
-.tb-label{font-size:10px;font-weight:600;color:var(--text4);letter-spacing:.01em;line-height:1;white-space:nowrap;opacity:.5;transition:opacity .2s,color .2s}
-.tb.on .tb-label{color:var(--gold);font-weight:700;opacity:1}
-.tb.on{background:var(--glass-pill);box-shadow:0 2px 8px rgba(0,0,0,0.12),inset 0 1px 0 rgba(255,255,255,0.9)}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;font-size:15px;line-height:1.5;padding-bottom:0;transition:background .35s,color .35s}
+/* ── Gradient background ──────────────────────────────────────── */
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradient(160deg,var(--grad-start) 0%,var(--grad-mid1) 30%,var(--grad-mid2) 60%,var(--grad-mid3,var(--grad-mid2)) 80%,var(--grad-end) 100%);transition:background .5s}
+/* ── Floating utility header ──────────────────────────────────── */
+.util-hdr{position:fixed;top:0;left:0;right:0;z-index:120;display:flex;justify-content:space-between;align-items:center;padding:calc(env(safe-area-inset-top) + 10px) 20px 10px;pointer-events:none}
+.util-hdr-group{display:flex;gap:10px;pointer-events:all}
+.util-btn{width:44px;height:44px;border-radius:50%;background:var(--util-btn);backdrop-filter:blur(24px) saturate(200%);-webkit-backdrop-filter:blur(24px) saturate(200%);border:1px solid var(--util-btn-border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:19px;box-shadow:0 4px 16px rgba(0,0,0,0.10),0 1px 3px rgba(0,0,0,0.08),inset 0 1px 0 rgba(255,255,255,0.85);-webkit-tap-highlight-color:transparent;transition:transform .15s,box-shadow .15s;flex-shrink:0;position:relative}
+.util-btn:active{transform:scale(.91)}
+.util-btn-ai{box-shadow:0 4px 16px var(--ai-glow),0 1px 3px rgba(0,0,0,0.08),inset 0 1px 0 rgba(255,255,255,0.85)}
+.util-btn-ai-inner{font-size:20px;background:linear-gradient(135deg,var(--accent),#C084FC);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700;line-height:1}
+.util-notif-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#EF4444;border:2px solid white}
+/* ── Sync bar (hidden, kept for JS refs) ─────────────────────── */
+.sync-bar{display:none}
+/* ── Old header (hidden) ──────────────────────────────────────── */
+.hdr{display:none}
+/* ── Bottom nav (floating pill) ──────────────────────────────── */
+.tabs{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 14px);left:50%;transform:translateX(-50%);width:auto;min-width:300px;max-width:calc(100% - 28px);background:var(--glass-nav);backdrop-filter:blur(40px) saturate(220%);-webkit-backdrop-filter:blur(40px) saturate(220%);border-radius:100px;border:1px solid var(--glass-nav-border);box-shadow:0 8px 32px rgba(0,0,0,0.16),0 2px 8px rgba(0,0,0,0.08),inset 0 1px 0 var(--glass-inset);display:flex;align-items:center;z-index:100;padding:6px 8px;gap:0}
+.tb{flex:1;min-width:0;padding:7px 8px;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:90px;transition:background .2s,box-shadow .2s;-webkit-tap-highlight-color:transparent}
+.tb:active{transform:scale(.91)}
+.tb-icon{font-size:21px;line-height:1;opacity:.38;transition:opacity .2s,transform .2s;display:flex;align-items:center;justify-content:center;width:22px;height:22px}
+.tb.on .tb-icon{opacity:1;transform:scale(1.05)}
+.tb.on .tb-icon svg,.tb.on .tb-icon svg *{stroke:var(--accent)}
+.tb-label{font-size:10px;font-weight:600;color:var(--text4);letter-spacing:.005em;line-height:1;white-space:nowrap;opacity:.45;transition:opacity .2s,color .2s}
+.tb.on .tb-label{color:var(--accent);font-weight:700;opacity:1}
+.tb.on{background:var(--glass-pill);box-shadow:0 2px 8px rgba(0,0,0,0.10),inset 0 1px 0 rgba(255,255,255,0.85)}
+/* ── FAB ─────────────────────────────────────────────────────── */
+.fab-wrap{position:relative;display:flex;flex-direction:column;align-items:center;flex-shrink:0;z-index:10;margin:0 4px}
+.fab-btn{width:54px;height:54px;border-radius:50%;background:var(--fab-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px var(--fab-glow),0 2px 8px rgba(0,0,0,0.15),inset 0 1px 0 rgba(255,255,255,0.3);-webkit-tap-highlight-color:transparent;transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s;position:relative;margin-top:-20px}
+.fab-btn:active{transform:scale(.92)}
+.fab-icon{font-size:26px;color:#fff;font-weight:300;line-height:1;transition:transform .25s cubic-bezier(.34,1.56,.64,1);display:block}
+.fab-icon.open{transform:rotate(45deg)}
+.fab-menu{position:absolute;bottom:calc(100% + 12px);left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:12px;pointer-events:none;opacity:0;transform:translateX(-50%) translateY(16px) scale(0.85);transition:opacity .22s ease,transform .22s cubic-bezier(.34,1.56,.64,1)}
+.fab-menu.open{pointer-events:all;opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+.fab-action{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.fab-action-circle{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 16px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.3);transition:transform .15s}
+.fab-action:active .fab-action-circle{transform:scale(.91)}
+.fab-action-scan .fab-action-circle{background:linear-gradient(135deg,#7C3AED,#4F46E5)}
+.fab-action-income .fab-action-circle{background:linear-gradient(135deg,#22C55E,#16A34A)}
+.fab-action-expense .fab-action-circle{background:linear-gradient(135deg,#EF4444,#DC2626)}
+.fab-action-label{font-size:11px;font-weight:700;color:var(--text2);background:var(--glass-bg);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:3px 9px;border-radius:var(--r-full);border:1px solid var(--glass-border);white-space:nowrap;box-shadow:var(--shadow-sm)}
+.fab-backdrop{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,0.0);pointer-events:none;transition:background .25s}
+.fab-backdrop.open{pointer-events:all;background:rgba(0,0,0,0.15);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+/* ── Profile panel ────────────────────────────────────────────── */
+.side-panel-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0);backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px);pointer-events:none;transition:background .3s,backdrop-filter .3s}
+.side-panel-overlay.open{background:rgba(0,0,0,0.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);pointer-events:all}
+.side-panel{position:fixed;top:0;right:0;bottom:0;width:min(320px,92vw);background:var(--sheet);z-index:201;transform:translateX(100%);transition:transform .32s cubic-bezier(.32,0,.67,0);overflow-y:auto;box-shadow:-8px 0 40px rgba(0,0,0,0.2)}
+.side-panel-overlay.open .side-panel{transform:translateX(0);transition:transform .32s cubic-bezier(.22,1,.36,1)}
+.side-panel-hdr{padding:calc(env(safe-area-inset-top)+20px) 20px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.side-panel-title{font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.02em}
+.side-panel-close{width:32px;height:32px;border-radius:50%;background:var(--bg3);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--text3)}
+.side-panel-body{padding:20px}
+.profile-avatar{width:64px;height:64px;border-radius:50%;background:var(--fab-bg);display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:12px;box-shadow:0 4px 16px var(--fab-glow)}
+.profile-name{font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.02em;margin-bottom:2px}
+.profile-status{font-size:13px;color:var(--text3);margin-bottom:20px}
+.profile-section{margin-bottom:20px}
+.profile-section-title{font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
+.profile-row{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:6px;cursor:pointer;border:1px solid var(--border)}
+.profile-row:active{opacity:.75}
+.profile-row-left{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:var(--text)}
+.profile-row-icon{font-size:18px;width:28px;text-align:center}
+.profile-row-chev{font-size:12px;color:var(--text4)}
+.theme-chips{display:flex;gap:8px;margin-top:4px}
+.theme-chip-btn{flex:1;padding:10px 8px;border-radius:var(--r-md);border:2px solid var(--border);background:var(--bg3);cursor:pointer;font-size:12px;font-weight:700;color:var(--text3);transition:all .18s;text-align:center}
+.theme-chip-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(139,92,246,0.08)}
+/* ── Smart actions panel ──────────────────────────────────────── */
+.smart-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0);backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px);pointer-events:none;transition:background .3s}
+.smart-overlay.open{background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);pointer-events:all}
+.smart-sheet{position:fixed;bottom:0;left:0;right:0;background:var(--sheet);border-radius:28px 28px 0 0;z-index:201;transform:translateY(100%);transition:transform .32s cubic-bezier(.32,0,.67,0);padding-bottom:max(env(safe-area-inset-bottom),24px);max-height:80vh;overflow-y:auto}
+.smart-overlay.open .smart-sheet{transform:translateY(0);transition:transform .32s cubic-bezier(.22,1,.36,1)}
+.smart-sheet-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 0}
+.smart-sheet-hdr{padding:16px 20px 10px;display:flex;justify-content:space-between;align-items:center}
+.smart-sheet-title{font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.02em}
+.smart-sheet-icon{font-size:24px}
+.smart-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:4px 16px 20px}
+.smart-action-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 14px;cursor:pointer;transition:transform .15s,box-shadow .15s;-webkit-tap-highlight-color:transparent}
+.smart-action-card:active{transform:scale(.96)}
+.smart-action-icon{font-size:26px;margin-bottom:8px}
+.smart-action-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px}
+.smart-action-sub{font-size:11px;color:var(--text3);line-height:1.4}
 /* ── Page content ─────────────────────────────────────────────── */
 .pg{padding:0;display:none;animation:fadeIn .18s ease-out;overflow-x:hidden}
-.pg.on{display:block;padding-bottom:calc(82px + env(safe-area-inset-bottom,0px))}
+.pg.on{display:block;padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+/* ── Dashboard greeting section ───────────────────────────────── */
+.dash-greeting-section{padding:calc(env(safe-area-inset-top) + 72px) 22px 0}
+.dash-greeting-line1{font-size:26px;font-weight:700;color:var(--text);letter-spacing:-.02em;line-height:1.2}
+.dash-greeting-line2{font-size:15px;color:var(--text3);font-weight:400;margin-top:3px}
 /* ── Dashboard hero ───────────────────────────────────────────── */
-.dash-hero{background:var(--hdr);border-bottom:1px solid var(--border);padding:14px 20px 14px;text-align:center;position:relative;overflow:hidden}
-.dash-hero-greeting{font-size:13px;color:var(--text3);font-weight:500;margin-bottom:6px;letter-spacing:.01em}
-.dash-hero-label{font-size:12px;color:var(--text4);font-weight:500;letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
-.dash-hero-amount{font-size:48px;font-weight:800;color:var(--text);letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums;transition:color .3s}
+.dash-hero{background:transparent;border-bottom:none;padding:18px 22px 6px;text-align:center;position:relative;overflow:hidden}
+.dash-hero-label{font-size:12px;color:var(--text3);font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;opacity:.75}
+.dash-hero-amount{font-size:56px;font-weight:800;color:var(--text);letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;transition:color .3s}
 .dash-hero-amount.zero{color:var(--text3)}
-.dash-hero-sub{font-size:12px;color:var(--text4);margin-top:6px;font-weight:400}
-.dash-hero-comparison{display:inline-flex;align-items:center;gap:5px;margin-top:10px;padding:5px 12px;border-radius:var(--r-full);font-size:12px;font-weight:600}
-.dash-hero-comparison.ahead{background:var(--success-bg);color:var(--success);border:1px solid var(--success-border)}
-.dash-hero-comparison.behind{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-border)}
-.dash-hero-comparison.neutral{background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
-.dash-hero-streak{position:absolute;top:14px;right:16px;font-size:11px;font-weight:700;color:var(--orange);display:flex;align-items:center;gap:3px;background:var(--orange-bg);border:1px solid var(--orange-border);padding:3px 8px;border-radius:var(--r-full)}
+.dash-hero-sub{font-size:13px;color:var(--text3);margin-top:8px;font-weight:400}
+.dash-hero-comparison{display:inline-flex;align-items:center;gap:5px;margin-top:12px;padding:6px 14px;border-radius:var(--r-full);font-size:12px;font-weight:600}
+.dash-hero-comparison.ahead{background:rgba(22,163,74,0.12);color:var(--success);border:1px solid rgba(22,163,74,0.25)}
+.dash-hero-comparison.behind{background:rgba(234,88,12,0.10);color:var(--orange);border:1px solid rgba(234,88,12,0.2)}
+.dash-hero-comparison.neutral{background:rgba(255,255,255,0.45);color:var(--text3);border:1px solid var(--glass-border)}
+.dash-hero-streak{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:4px 10px;border-radius:var(--r-full);font-size:11px;font-weight:700;color:var(--orange);background:rgba(234,88,12,0.1);border:1px solid rgba(234,88,12,0.2)}
 /* ── Stat chips ───────────────────────────────────────────────── */
-.stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:10px 16px 10px}
-.stat-chip{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-lg);padding:13px 12px;box-shadow:var(--shadow-sm)}
+.stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:14px 16px 10px}
+.stat-chip{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-lg);padding:13px 12px;box-shadow:0 2px 12px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.04);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
 .stat-chip-label{font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
 .stat-chip-val{font-size:18px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .stat-chip-sub{font-size:10px;color:var(--text4);margin-top:2px}
@@ -105,20 +200,22 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .section-link{font-size:12px;color:var(--gold-dim);font-weight:600;background:none;border:none;cursor:pointer}
 body.dark .section-link{color:var(--gold)}
 /* ── Weekly chart ─────────────────────────────────────────────── */
-.week-chart{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-lg);padding:12px 14px;box-shadow:var(--shadow-sm)}
-.week-bars{display:flex;align-items:flex-end;gap:6px;height:56px;margin-bottom:8px}
-.week-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
-.week-bar-outer{width:100%;background:var(--bg3);border-radius:4px 4px 0 0;overflow:hidden;height:48px;display:flex;align-items:flex-end}
-.week-bar-inner{width:100%;border-radius:4px 4px 0 0;transition:height .4s cubic-bezier(.34,1.56,.64,1);min-height:3px}
-.week-bar-inner.today{background:var(--gold)}
-.week-bar-inner.past{background:var(--border2)}
-body.dark .week-bar-inner.past{background:#2d3748}
-.week-bar-inner.future{background:var(--bg3)}
+.week-chart{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-xl);padding:14px 14px 10px;box-shadow:0 2px 12px rgba(0,0,0,0.06);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.week-bars{display:flex;align-items:flex-end;gap:7px;height:60px;margin-bottom:10px}
+.week-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px}
+.week-bar-outer{width:100%;background:rgba(0,0,0,0.06);border-radius:6px 6px 0 0;overflow:hidden;height:50px;display:flex;align-items:flex-end}
+body.dark .week-bar-outer{background:rgba(255,255,255,0.07)}
+.week-bar-inner{width:100%;border-radius:6px 6px 0 0;transition:height .45s cubic-bezier(.34,1.56,.64,1);min-height:3px}
+.week-bar-inner.today{background:var(--fab-bg)}
+.week-bar-inner.past{background:rgba(139,92,246,0.22)}
+body.dark .week-bar-inner.past{background:rgba(139,92,246,0.25)}
+.week-bar-inner.future{background:rgba(0,0,0,0.05)}
+body.dark .week-bar-inner.future{background:rgba(255,255,255,0.05)}
 .week-bar-label{font-size:10px;color:var(--text4);font-weight:500}
-.week-bar-label.today{color:var(--gold);font-weight:700}
+.week-bar-label.today{color:var(--accent);font-weight:700}
 /* ── Job list cards ───────────────────────────────────────────── */
 .job-list{display:flex;flex-direction:column;gap:8px;padding-bottom:4px}
-.job-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-lg);padding:13px 14px;display:flex;justify-content:space-between;align-items:center;box-shadow:var(--shadow-sm);transition:transform .12s,box-shadow .12s;cursor:pointer}
+.job-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-xl);padding:14px 15px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);transition:transform .12s,box-shadow .12s;cursor:pointer}
 .job-card:active{transform:scale(.98);box-shadow:var(--shadow-sm)}
 .job-card-left{flex:1;min-width:0}
 .job-card-top{display:flex;align-items:center;gap:6px;margin-bottom:3px}
@@ -234,13 +331,7 @@ body.dark .std-select{color-scheme:dark;background-color:var(--input);color:var(
 .save-btn{background:var(--gold);color:#1A1A2E;border:none;border-radius:var(--r-lg);padding:16px;font-size:17px;font-weight:800;cursor:pointer;width:100%;margin-top:20px;letter-spacing:-.01em;transition:transform .1s,box-shadow .1s;box-shadow:0 4px 16px rgba(232,201,74,.4)}
 .save-btn:active{transform:scale(.97)}
 .del-btn{background:var(--danger-bg);color:var(--danger);border:1.5px solid var(--danger-border);border-radius:var(--r-lg);padding:13px;font-size:15px;font-weight:700;cursor:pointer;width:100%;margin-top:10px}
-/* ── FAB quick-add menu (pops above centre tab) ───────────────── */
-.fab-menu{position:fixed;bottom:calc(56px + max(env(safe-area-inset-bottom),12px));left:50%;transform:translateX(-50%);display:none;flex-direction:row;gap:12px;z-index:90;align-items:center}
-.fab-menu.open{display:flex;animation:fabMenuIn .2s ease-out}
-@keyframes fabMenuIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-.fab-item{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}
-.fab-item-label{background:var(--card);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:var(--r-full);font-size:13px;font-weight:600;white-space:nowrap;box-shadow:var(--shadow-md)}
-.fab-item-icon{width:48px;height:48px;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:var(--shadow-md)}
+/* ── FAB old styles removed — see new .fab-wrap/.fab-btn above ── */
 /* ── Toast ────────────────────────────────────────────────────── */
 .toast-wrap{position:fixed;top:calc(env(safe-area-inset-top) + 60px);left:50%;transform:translateX(-50%);z-index:500;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px}
 .toast{background:var(--text);color:var(--bg);padding:11px 20px;border-radius:var(--r-full);font-size:14px;font-weight:600;display:none;white-space:nowrap;box-shadow:var(--shadow-md);animation:toastIn .25s cubic-bezier(.34,1.56,.64,1)}
@@ -561,7 +652,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 .target-set-btn{background:none;border:none;color:var(--gold);font-size:11px;font-weight:700;cursor:pointer;padding:0;letter-spacing:.02em}
 
 /* ── Goal Widget ────────────────────────────────────────────────── */
-.goal-widget{margin:0 16px 12px;background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-lg);padding:12px 14px;box-shadow:var(--shadow-sm)}
+.goal-widget{margin:0 16px 12px;background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-xl);padding:14px 15px;box-shadow:0 2px 12px rgba(0,0,0,0.06);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
 .goal-type-row{display:flex;gap:6px;margin-bottom:12px}
 .goal-type-btn{flex:1;padding:6px 0;border-radius:var(--r-full);font-size:12px;font-weight:700;border:1.5px solid var(--border);background:var(--bg3);color:var(--text4);cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent}
 .goal-type-btn.active{background:var(--gold);color:#1A1A2E;border-color:var(--gold)}
@@ -573,7 +664,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 .goal-add-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(--r-full);border:1px solid var(--border);background:none;color:var(--text4);font-size:11px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
 /* ── AI Chat ─────────────────────────────────────────────────────── */
 #pg4.on{padding-bottom:0}
-.ai-pg{position:fixed;left:0;right:0;top:60px;bottom:0;display:flex;flex-direction:column;background:var(--bg);overflow:hidden;z-index:10}
+.ai-pg{position:fixed;left:0;right:0;top:0;bottom:0;display:flex;flex-direction:column;background:var(--bg);overflow:hidden;z-index:10}
 .ai-hdr{flex-shrink:0;padding:12px 16px;background:var(--hdr);border-bottom:1px solid var(--border)}
 .ai-hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
 .ai-hdr-title{font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.02em}
@@ -630,27 +721,34 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
   <button class="ob-skip" onclick="finishOnboarding()">I already have data</button>
 </div>
 
-<!-- Header -->
+<!-- Floating utility header -->
 
 <div id="sync-bar" class="sync-bar" style="display:none">
-  <div><span style="color:var(--text4)">☁️ </span><span id="sync-email" style="font-weight:600;color:var(--text3)"></span></div>
-  <div style="display:flex;gap:8px">
-    <button class="sync-bar-btn" onclick="supaPullAll(function(){render(CTAB);})">&#x2193; Pull</button>
-    <button class="sync-bar-btn" onclick="supaPushAll(null)">&#x2191; Push</button>
-    <button class="sync-bar-btn" onclick="signOut()">Sign out</button>
-  </div>
+  <span id="sync-email"></span>
 </div>
-<div class="hdr">
-  <div class="hdr-brand">
-    <div id="hdr-logo-wrap"></div>
-    <div class="hdr-brand-text">
-      <div class="hdr-brand-name">PLATE<span>TRACK</span></div>
-      <div class="hdr-tagline">Track. Manage. Maximise.</div>
-    </div>
+<div class="hdr" style="display:none">
+  <div id="hdr-logo-wrap"></div>
+  <span id="hdr-date"></span>
+  <button id="themeBtn" onclick="toggleTheme()"></button>
+</div>
+
+<div class="util-hdr" id="util-hdr">
+  <div class="util-hdr-group">
+    <button class="util-btn" id="profileBtn" onclick="openProfilePanel()" aria-label="Profile">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text2)"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    </button>
+    <button class="util-btn util-btn-ai" id="aiBtn" onclick="openSmartActions()" aria-label="Smart Actions">
+      <span class="util-btn-ai-inner">✦</span>
+    </button>
   </div>
-  <div class="hdr-right">
-    <span class="hdr-date" id="hdr-date"></span>
-    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle theme"></button>
+  <div class="util-hdr-group">
+    <button class="util-btn" id="searchBtn" onclick="openDashSearchPanel()" aria-label="Search">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text2)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </button>
+    <button class="util-btn" id="notifBtn" onclick="openNotifications()" aria-label="Notifications">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text2)"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="util-notif-dot" id="notifDot" style="display:none"></span>
+    </button>
   </div>
 </div>
 
@@ -662,31 +760,68 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 <div class="pg" id="pg3"></div>
 <div class="pg" id="pg4"></div>
 
-<!-- Bottom tabs with centre FAB -->
+<!-- FAB backdrop -->
+<div class="fab-backdrop" id="fabBackdrop" onclick="closeFAB()"></div>
 
-<div class="tabs">
+<!-- Bottom nav floating pill -->
+<div class="tabs" id="tabs">
   <button class="tb on" id="tab0" onclick="showTab(0)">
-    <span class="tb-icon">&#x1F4CA;</span>
-    <span class="tb-label">Dashboard</span>
+    <span class="tb-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </span>
+    <span class="tb-label">Home</span>
   </button>
   <button class="tb" id="tab1" onclick="showTab(1)">
-    <span class="tb-icon">&#x1F4B0;</span>
+    <span class="tb-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+    </span>
     <span class="tb-label">Income</span>
   </button>
 
+  <!-- FAB center -->
+  <div class="fab-wrap">
+    <div class="fab-menu" id="fabMenu">
+      <button class="fab-action fab-action-scan" onclick="fabScanReceipt()">
+        <div class="fab-action-circle">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
+        <span class="fab-action-label">Scan Receipt</span>
+      </button>
+      <div style="display:flex;gap:32px">
+        <button class="fab-action fab-action-income" onclick="fabAddIncome()">
+          <div class="fab-action-circle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+          <span class="fab-action-label">Add Income</span>
+        </button>
+        <button class="fab-action fab-action-expense" onclick="fabAddExpense()">
+          <div class="fab-action-circle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+          <span class="fab-action-label">Add Expense</span>
+        </button>
+      </div>
+    </div>
+    <button class="fab-btn" id="fabBtn" onclick="toggleFAB()" aria-label="Quick add">
+      <span class="fab-icon" id="fabIcon">+</span>
+    </button>
+  </div>
+
   <button class="tb" id="tab2" onclick="showTab(2)">
-    <span class="tb-icon">&#x1F9FE;</span>
+    <span class="tb-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+    </span>
     <span class="tb-label">Expenses</span>
   </button>
   <button class="tb" id="tab3" onclick="showTab(3)">
-    <span class="tb-icon">&#x1F4CB;</span>
-    <span class="tb-label">Summary</span>
-  </button>
-  <button class="tb" id="tab4" onclick="showTab(4)">
-    <span class="tb-icon">&#x2728;</span>
-    <span class="tb-label">AI</span>
+    <span class="tb-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    </span>
+    <span class="tb-label">Insights</span>
   </button>
 </div>
+<!-- AI tab still exists for showTab(4) routing but is not in the nav -->
+<div id="tab4" style="display:none"></div>
 
 <!-- Sheet overlay -->
 
@@ -788,6 +923,111 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 <!-- Toast -->
 
 <div class="toast-wrap"><div class="toast" id="toast"></div></div>
+
+<!-- Profile panel -->
+<div class="side-panel-overlay" id="profileOverlay" onclick="closeProfilePanel(event)">
+  <div class="side-panel" id="profilePanel">
+    <div class="side-panel-hdr">
+      <span class="side-panel-title">Profile</span>
+      <button class="side-panel-close" onclick="closeProfilePanel()">&#x2715;</button>
+    </div>
+    <div class="side-panel-body">
+      <div class="profile-avatar">&#x1F464;</div>
+      <div class="profile-name" id="profilePanelName">PlateTrack</div>
+      <div class="profile-status" id="profilePanelStatus">Local mode</div>
+
+      <div class="profile-section">
+        <div class="profile-section-title">Account</div>
+        <div class="profile-row" onclick="profileActionAccount()">
+          <span class="profile-row-left"><span class="profile-row-icon">☁️</span><span id="profileAccountLabel">Sign in to sync</span></span>
+          <span class="profile-row-chev">›</span>
+        </div>
+        <div class="profile-row" id="profileSyncRow" style="display:none" onclick="syncNow()">
+          <span class="profile-row-left"><span class="profile-row-icon">🔄</span>Sync now</span>
+          <span class="profile-row-chev">›</span>
+        </div>
+        <div class="profile-row" id="profileSignOutRow" style="display:none" onclick="signOut()">
+          <span class="profile-row-left"><span class="profile-row-icon">🚪</span>Sign out</span>
+          <span class="profile-row-chev">›</span>
+        </div>
+      </div>
+
+      <div class="profile-section">
+        <div class="profile-section-title">Appearance</div>
+        <div style="padding:4px 0 10px">
+          <div style="font-size:12px;color:var(--text4);margin-bottom:8px">Theme</div>
+          <div class="theme-chips">
+            <button class="theme-chip-btn" id="themeBtnPurple" onclick="setTheme('purple')">&#x1F538; Purple</button>
+            <button class="theme-chip-btn" id="themeBtnGold" onclick="setTheme('gold')">&#x1F7E1; Gold</button>
+          </div>
+        </div>
+        <div class="profile-row" onclick="toggleTheme()">
+          <span class="profile-row-left"><span class="profile-row-icon" id="profileDarkIcon">🌙</span>Dark mode</span>
+          <span id="profileDarkLabel" style="font-size:12px;color:var(--text3);font-weight:600">Auto</span>
+        </div>
+      </div>
+
+      <div class="profile-section">
+        <div class="profile-section-title">Settings</div>
+        <div class="profile-row" onclick="document.getElementById('profileOverlay').className='side-panel-overlay';openNameModal()">
+          <span class="profile-row-left"><span class="profile-row-icon">✏️</span>Edit name</span>
+          <span class="profile-row-chev">›</span>
+        </div>
+        <div class="profile-row" onclick="document.getElementById('profileOverlay').className='side-panel-overlay';openAllocModal()">
+          <span class="profile-row-left"><span class="profile-row-icon">⚙️</span>Money allocation</span>
+          <span class="profile-row-chev">›</span>
+        </div>
+        <div class="profile-row" onclick="document.getElementById('profileOverlay').className='side-panel-overlay';document.getElementById('coModal').className='modal-overlay open'">
+          <span class="profile-row-left"><span class="profile-row-icon">🏢</span>Manage companies</span>
+          <span class="profile-row-chev">›</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Smart actions panel -->
+<div class="smart-overlay" id="smartOverlay" onclick="closeSmartActions(event)">
+  <div class="smart-sheet" id="smartSheet">
+    <div class="smart-sheet-handle"></div>
+    <div class="smart-sheet-hdr">
+      <span class="smart-sheet-title">Smart Actions</span>
+      <span class="smart-sheet-icon">✦</span>
+    </div>
+    <div class="smart-actions-grid">
+      <div class="smart-action-card" onclick="smartAction('scan')">
+        <div class="smart-action-icon">📷</div>
+        <div class="smart-action-title">Scan Receipt</div>
+        <div class="smart-action-sub">AI auto-fill from photo</div>
+      </div>
+      <div class="smart-action-card" onclick="smartAction('spending')">
+        <div class="smart-action-icon">📈</div>
+        <div class="smart-action-title">Spending Spikes</div>
+        <div class="smart-action-sub">Explain unusual costs</div>
+      </div>
+      <div class="smart-action-card" onclick="smartAction('summary')">
+        <div class="smart-action-icon">📋</div>
+        <div class="smart-action-title">Weekly Summary</div>
+        <div class="smart-action-sub">AI earnings digest</div>
+      </div>
+      <div class="smart-action-card" onclick="smartAction('tax')">
+        <div class="smart-action-icon">🧾</div>
+        <div class="smart-action-title">Tax Deductions</div>
+        <div class="smart-action-sub">Detect what to claim</div>
+      </div>
+      <div class="smart-action-card" onclick="smartAction('profit')">
+        <div class="smart-action-icon">💡</div>
+        <div class="smart-action-title">Profit Insights</div>
+        <div class="smart-action-sub">Optimise earnings</div>
+      </div>
+      <div class="smart-action-card" onclick="smartAction('forecast')">
+        <div class="smart-action-icon">🔮</div>
+        <div class="smart-action-title">Forecasting</div>
+        <div class="smart-action-sub">Projected income</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- FAB -->
 
@@ -1266,12 +1506,156 @@ function allocate(amount,taxRate){
 // --- Theme ---
 function applyTheme(dark){
   document.body.classList.toggle('dark',dark);
-  var btn=document.getElementById('themeBtn');
-  if(btn)btn.textContent=dark?'\u2600\uFE0F':'\uD83C\uDF19';
   try{localStorage.setItem('pt_theme',dark?'dark':'light');}catch(e){}
+  updateProfileDarkLabel();
 }
 function toggleTheme(){applyTheme(!document.body.classList.contains('dark'));}
-(function(){try{var t=localStorage.getItem('pt_theme');applyTheme(t==='dark');}catch(e){applyTheme(false);}})();
+function setTheme(name){
+  document.body.classList.remove('theme-purple','theme-gold');
+  if(name==='gold')document.body.classList.add('theme-gold');
+  else document.body.classList.add('theme-purple');
+  try{localStorage.setItem('pt_color_theme',name||'purple');}catch(e){}
+  updateThemeChips();
+}
+function updateThemeChips(){
+  var isGold=document.body.classList.contains('theme-gold');
+  var p=document.getElementById('themeBtnPurple');
+  var g=document.getElementById('themeBtnGold');
+  if(p)p.className='theme-chip-btn'+(isGold?'':' active');
+  if(g)g.className='theme-chip-btn'+(isGold?' active':'');
+}
+function updateProfileDarkLabel(){
+  var isDark=document.body.classList.contains('dark');
+  var lbl=document.getElementById('profileDarkLabel');
+  var icon=document.getElementById('profileDarkIcon');
+  if(lbl)lbl.textContent=isDark?'On':'Off';
+  if(icon)icon.textContent=isDark?'\u2600\uFE0F':'\uD83C\uDF19';
+}
+(function(){
+  try{var t=localStorage.getItem('pt_theme');applyTheme(t==='dark');}catch(e){applyTheme(false);}
+  try{var ct=localStorage.getItem('pt_color_theme')||'purple';setTheme(ct);}catch(e){setTheme('purple');}
+})();
+
+// --- FAB ---
+var FAB_OPEN=false;
+function toggleFAB(){
+  FAB_OPEN=!FAB_OPEN;
+  var menu=document.getElementById('fabMenu');
+  var icon=document.getElementById('fabIcon');
+  var backdrop=document.getElementById('fabBackdrop');
+  if(menu)menu.className='fab-menu'+(FAB_OPEN?' open':'');
+  if(icon)icon.className='fab-icon'+(FAB_OPEN?' open':'');
+  if(backdrop)backdrop.className='fab-backdrop'+(FAB_OPEN?' open':'');
+}
+function closeFAB(){
+  FAB_OPEN=false;
+  var menu=document.getElementById('fabMenu');
+  var icon=document.getElementById('fabIcon');
+  var backdrop=document.getElementById('fabBackdrop');
+  if(menu)menu.className='fab-menu';
+  if(icon)icon.className='fab-icon';
+  if(backdrop)backdrop.className='fab-backdrop';
+}
+function fabAddIncome(){closeFAB();openSheet('income','');}
+function fabAddExpense(){closeFAB();openSheet('expense','');}
+function fabScanReceipt(){
+  closeFAB();
+  // Open expense sheet with receipt scanning focus
+  openSheet('expense','');
+  // Attempt to trigger payslip file input after sheet opens
+  setTimeout(function(){
+    var pf=document.getElementById('payslipfile');
+    if(pf)pf.click();
+  },350);
+}
+
+// --- Profile panel ---
+function openProfilePanel(){
+  var ol=document.getElementById('profileOverlay');
+  if(ol){
+    ol.className='side-panel-overlay open';
+    // Update profile data
+    var nameEl=document.getElementById('profilePanelName');
+    if(nameEl)nameEl.textContent=getUserName()||'PlateTrack';
+    var statusEl=document.getElementById('profilePanelStatus');
+    if(statusEl)statusEl.textContent=SUPA_USER?SUPA_USER.email:'Local mode \u2014 tap to sync';
+    var accLabel=document.getElementById('profileAccountLabel');
+    if(accLabel)accLabel.textContent=SUPA_USER?SUPA_USER.email:'Sign in to sync';
+    var syncRow=document.getElementById('profileSyncRow');
+    var signOutRow=document.getElementById('profileSignOutRow');
+    if(syncRow)syncRow.style.display=SUPA_USER?'flex':'none';
+    if(signOutRow)signOutRow.style.display=SUPA_USER?'flex':'none';
+    updateThemeChips();
+    updateProfileDarkLabel();
+  }
+}
+function closeProfilePanel(e){
+  if(e&&e.target!==document.getElementById('profileOverlay'))return;
+  var ol=document.getElementById('profileOverlay');
+  if(ol)ol.className='side-panel-overlay';
+}
+function profileActionAccount(){
+  document.getElementById('profileOverlay').className='side-panel-overlay';
+  if(SUPA_USER){showToast(SUPA_USER.email);}else{showAuthModal();}
+}
+
+// --- Smart actions panel ---
+function openSmartActions(){
+  var ol=document.getElementById('smartOverlay');
+  if(ol)ol.className='smart-overlay open';
+}
+function closeSmartActions(e){
+  if(e&&e.target!==document.getElementById('smartOverlay'))return;
+  var ol=document.getElementById('smartOverlay');
+  if(ol)ol.className='smart-overlay';
+}
+function smartAction(type){
+  document.getElementById('smartOverlay').className='smart-overlay';
+  var prompts={
+    scan:'Open the Expenses tab and use the receipt photo feature to scan and auto-fill.',
+    spending:'Analysing your spending patterns and flagging any unusual costs...',
+    summary:'Generating your weekly earnings summary...',
+    tax:'Reviewing your expenses for potential tax deductions...',
+    profit:'Calculating profit optimisation insights...',
+    forecast:'Building your income forecast...'
+  };
+  if(type==='scan'){showToast('Open Expenses \u2192 Add \u2192 attach receipt photo');return;}
+  // Route to AI tab with a prefilled prompt
+  var aiPrompts={
+    spending:'Analyse my spending for any unusual spikes or outliers. What stands out?',
+    summary:'Give me a weekly summary of my earnings, expenses, and take-home pay.',
+    tax:'Review my expenses and identify the best tax deductions I can claim.',
+    profit:'Give me actionable insights to optimise my profit this month.',
+    forecast:'Based on my income history, forecast my earnings for the next 4 weeks.'
+  };
+  if(aiPrompts[type]){
+    // Pre-load the AI prompt and navigate to AI tab
+    window._aiPrefill=aiPrompts[type];
+    showTab(4);
+  }
+}
+
+// --- Search panel (via header button) ---
+function openDashSearchPanel(){
+  if(CTAB===0){
+    // Focus the dashboard search input
+    var inp=document.getElementById('dash-search-input');
+    if(inp){inp.focus();inp.scrollIntoView({behavior:'smooth',block:'center'});}
+    else{showToast('Use the search bar below');}
+  } else {
+    // Navigate to dashboard and focus search
+    showTab(0);
+    setTimeout(function(){
+      var inp=document.getElementById('dash-search-input');
+      if(inp){inp.focus();inp.scrollIntoView({behavior:'smooth',block:'center'});}
+    },200);
+  }
+}
+
+// --- Notifications ---
+function openNotifications(){
+  showToast('No new notifications');
+}
 
 // --- Streak ---
 function getStreak(){
@@ -1900,6 +2284,15 @@ function rDash(){
     todayTakeHome=Math.max(0,_fI-_fE);
   }
 
+  // Greeting & date
+  var now=new Date();
+  var greetHour=now.getHours();
+  var greetEmoji=greetHour<12?'🌤️':greetHour<17?'☀️':'🌙';
+  var greetWord=greetHour<12?'Good morning':greetHour<17?'Good afternoon':'Good evening';
+  var userName=getUserName();
+  var greetName=userName?', '+userName:'';
+  var dateStr=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+
   // Comparison line
   var comp=dailyComparison();
   var compHTML='';
@@ -1913,7 +2306,7 @@ function rDash(){
 
   // Streak
   var streak=getStreak();
-  var streakHTML=streak>=3?'<div class="dash-hero-streak">&#x1F525; '+streak+' days</div>':'';
+  var streakHTML=streak>=3?'<div style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:4px 12px;border-radius:100px;font-size:11px;font-weight:700;color:var(--orange);background:rgba(234,88,12,0.10);border:1px solid rgba(234,88,12,0.2)">&#x1F525; '+streak+'-day streak</div>':'';
 
   // Weekly bar chart
   var wk=getWeekKey(td),weekDays=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -1929,10 +2322,10 @@ function rDash(){
     dayData.push({label:weekDays[di],key:dkey,val:val,isToday:dkey===td,isPast:dd<new Date()&&dkey!==td});
   }
   var barsHTML=dayData.map(function(d){
-    var pct=d.val>0?Math.max(8,(d.val/maxDay)*100):0;
+    var pct=d.val>0?Math.max(10,(d.val/maxDay)*100):0;
     var cls=d.isToday?'today':d.isPast&&d.val>0?'past':'future';
     return '<div class="week-bar-wrap">'
-      +'<div class="week-bar-outer"><div class="week-bar-inner '+cls+'" style="height:'+pct+'%"></div></div>'
+      +'<div class="week-bar-outer"><div class="week-bar-inner '+cls+'" style="height:'+pct+'%;transition:height .5s cubic-bezier(.34,1.56,.64,1)"></div></div>'
       +'<span class="week-bar-label'+(d.isToday?' today':'')+'">'+d.label+'</span>'
       +'</div>';
   }).join('');
@@ -1971,29 +2364,43 @@ function rDash(){
     +'<div class="deadline-card"><div><div class="deadline-label">Self Assessment</div><div class="deadline-date">31 January deadline</div></div>'
     +'<div style="text-align:right"><div class="deadline-days" style="color:'+dColor+'">'+days+'</div><div class="deadline-days-label">days left</div></div></div></div>';
 
-  var greetSection=(function(){
-    var bBg=DASH_FILTER_OPEN?'var(--text)':(isFiltered?'var(--gold)':'var(--card)');
-    var bClr=DASH_FILTER_OPEN?'var(--bg)':(isFiltered?'#1A1A2E':'var(--text3)');
-    var bBdr=DASH_FILTER_OPEN?'var(--text)':(isFiltered?'var(--gold)':'var(--border)');
-    var bLbl=isFiltered&&!DASH_FILTER_OPEN?'&#x2713; Filtered':'&#x25BC; Filter';
-    return '<div style="padding:14px 20px 8px;display:flex;justify-content:space-between;align-items:center">'
-      +'<div style="font-size:17px;font-weight:500;color:var(--text2);letter-spacing:-.01em">'+greeting()+'</div>'
-      +'<button onclick="toggleDashFilter()" style="display:flex;align-items:center;gap:5px;padding:7px 13px;border-radius:var(--r-full);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+bBdr+';background:'+bBg+';color:'+bClr+';box-shadow:var(--shadow-sm);-webkit-tap-highlight-color:transparent">'+bLbl+'</button>'
-      +'</div>';
-  })();
-  var heroLbl=isFiltered?"Take-Home":"Today's Take-Home";
-  var pg=greetSection+dashChipFilterHTML()+'<div class="dash-hero">'+streakHTML
+  // Filter button (glass-style)
+  var bBg=DASH_FILTER_OPEN?'var(--accent)':'var(--glass-bg)';
+  var bClr=DASH_FILTER_OPEN?'#fff':'var(--text3)';
+  var bBdr=DASH_FILTER_OPEN?'var(--accent)':(isFiltered?'var(--accent)':'var(--glass-border)');
+  var bLbl=isFiltered&&!DASH_FILTER_OPEN?'&#x2713; Filtered':'&#x25BC; Filter';
+  var filterBtn='<button onclick="toggleDashFilter()" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--r-full);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+bBdr+';background:'+bBg+';color:'+bClr+';backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 8px rgba(0,0,0,0.08);-webkit-tap-highlight-color:transparent">'+bLbl+'</button>';
+
+  var heroLbl=isFiltered?'TAKE-HOME':'TODAY\'S TAKE-HOME';
+
+  // Greeting section (scrolls with content, sits below sticky util-hdr)
+  var greetingSection='<div class="dash-greeting-section">'
+    +'<div class="dash-greeting-line1">'+greetWord+greetName+' '+greetEmoji+'</div>'
+    +'<div class="dash-greeting-line2">'+dateStr+'</div>'
+    +'</div>';
+
+  // Filter row (inline with content)
+  var filterRow='<div style="padding:16px 22px 0;display:flex;justify-content:space-between;align-items:center">'
+    +'<div></div>'
+    +filterBtn
+    +'</div>';
+
+  var pg=greetingSection
+    +filterRow
+    +dashChipFilterHTML()
+    +'<div class="dash-hero">'
     +'<div class="dash-hero-label">'+heroLbl+'</div>'
     +'<div class="dash-hero-amount'+(todayTakeHome===0?' zero':'')+'">'+money(todayTakeHome)+'</div>'
     +'<div class="dash-hero-sub">After tax &amp; deductible expenses</div>'
-    +compHTML+'</div>'
+    +(compHTML||streakHTML?'<div>'+compHTML+(streakHTML&&!compHTML?streakHTML:'')+'</div>':'')
+    +'</div>'
     +'<div class="stat-row">'
-    +'<div class="stat-chip"><div class="stat-chip-label">This Week</div><div class="stat-chip-val '+(weekInc>0?'green':'text3')+'">'+money(weekInc)+'</div></div>'
+    +'<div class="stat-chip"><div class="stat-chip-label">This Week</div><div class="stat-chip-val '+(weekInc>0?'green':'text3')+'">'+money(weekInc)+'</div>'+(weekInc>0?'<div class="stat-chip-sub">&#x2197; this week</div>':'')+'</div>'
     +'<div class="stat-chip"><div class="stat-chip-label">This Month</div><div class="stat-chip-val '+(monthNet>0?'green':'text3')+'">'+money(monthNet)+'</div><div class="stat-chip-sub">net profit</div></div>'
     +'<div class="stat-chip"><div class="stat-chip-label">Tax Pot</div><div class="stat-chip-val red">'+money(alloc.tax)+'</div><div class="stat-chip-sub">set aside</div></div>'
     +'</div>'
     +goalWidgetHTML(todayInc, weekInc, monthInc)
-    +'<div class="section"><div class="section-hdr" style="padding-top:4px"><span class="section-title">This Week</span></div>'
+    +'<div class="section"><div class="section-hdr" style="padding-top:4px"><span class="section-title">This Week</span><span style="font-size:12px;color:var(--text4)">'+(weekInc>0?money(weekInc):'')+'</span></div>'
     +'<div class="week-chart"><div class="week-bars">'+barsHTML+'</div></div></div>'
     +'<div class="search-bar">'
     +'<div class="search-inner">'
@@ -2003,7 +2410,7 @@ function rDash(){
     +'</div></div>'
     +'<div id="dash-jobs-outer">'+(jobsSource.length>0?todayJobsHTML:'<div class="section"><div class="empty-state"><div class="empty-state-icon">&#x1F697;</div><div class="empty-state-title">'+(isFiltered?'No jobs in this period':'Log your first job')+'</div><div class="empty-state-sub">'+(isFiltered?'Try adjusting your filter':'Tap below to record a job in under 10 seconds')+'</div>'+(isFiltered?'':'<button class="empty-state-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add Job</button>')+'</div></div>')+'</div>'
     +deadlineHTML
-    +'<div style="height:16px"></div>';
+    +'<div style="height:24px"></div>';
 
   document.getElementById('pg0').innerHTML=pg;
 }
@@ -2278,11 +2685,9 @@ function rSummary(){
     +'<button class="import-btn" onclick="document.getElementById(\'impfile\').click()"><span>&#x2B06;&#xFE0F;</span> Restore from Backup</button>'
     +'<button class="report-btn" onclick="generateReport()"><span>&#x1F4C4;</span> Self Assessment Report (.txt)</button>'
     +'<button class="report-btn" style="background:#F0FDF4;color:#16A34A;border-color:#BBF7D0" onclick="generateCSV()"><span>&#x1F4CA;</span> Export to CSV <span style="font-size:11px;font-weight:500;opacity:.7;margin-left:4px">Income &amp; Expenses</span>'+(isPro()?'':'<span style="background:#F59E0B;color:#fff;font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px;margin-left:6px;vertical-align:middle">PRO</span>')+'</button>'
-    +'<button class="settings-btn" onclick="SUPA_USER?signOut():showAuthModal()">'+'☁️ '+(SUPA_USER?SUPA_USER.email+' — Sign out':'Sign in / Create Account')+'</button>'
-    
-    
+    +'<button class="settings-btn" onclick="openProfilePanel()"><span>&#x1F464;</span> Account &amp; Settings</button>'
     +'<button class="settings-btn" onclick="openCoModal()"><span>&#x1F3E2;</span> Manage Companies</button>'
-    +'<button class="settings-btn" onclick="openNameModal()"><span>&#x1F464;</span> Change Your Name</button>'
+    +'<button class="settings-btn" onclick="openNameModal()"><span>&#x2712;</span> Change Your Name</button>'
     +'</div></div>'
     // Tips
     +'<div style="padding-bottom:8px">'
@@ -2715,35 +3120,18 @@ function authSubmit(){
 }
 
 function updateSyncBar(){
-  var bar=document.getElementById('sync-bar');
-  var hdr=document.querySelector('.hdr');
-  if(!bar)return;
-  if(SUPA_USER){
-    bar.style.display='flex';
-    if(hdr)hdr.style.paddingTop='12px';
-    // After rendering, set hdr sticky top = sync bar height so they don't overlap
-    setTimeout(function(){
-      if(hdr&&bar){
-        var barH=bar.getBoundingClientRect().height;
-        hdr.style.top=barH+'px';
-      }
-    },50);
-    var el=document.getElementById('sync-email');
-    if(el)el.textContent=SUPA_USER.email;
-    var st=document.getElementById('sync-status');
-    if(st){
-      if(window._lastSync){
-        var mins=Math.round((new Date()-window._lastSync)/60000);
-        st.textContent=mins<1?'Synced just now':mins===1?'Synced 1 min ago':'Synced '+mins+'m ago';
-      } else { st.textContent='Not synced yet'; }
-    }
-  } else {
-    bar.style.display='none';
-    if(hdr){
-      hdr.style.paddingTop='calc(env(safe-area-inset-top) + 12px)';
-      hdr.style.top='0px';
-    }
-  }
+  // Old sync bar is hidden — update profile panel if open instead
+  var statusEl=document.getElementById('profilePanelStatus');
+  var accLabel=document.getElementById('profileAccountLabel');
+  var syncRow=document.getElementById('profileSyncRow');
+  var signOutRow=document.getElementById('profileSignOutRow');
+  if(statusEl)statusEl.textContent=SUPA_USER?SUPA_USER.email:'Local mode — tap to sync';
+  if(accLabel)accLabel.textContent=SUPA_USER?SUPA_USER.email:'Sign in to sync';
+  if(syncRow)syncRow.style.display=SUPA_USER?'flex':'none';
+  if(signOutRow)signOutRow.style.display=SUPA_USER?'flex':'none';
+  // Update notification dot if sync issue
+  var dot=document.getElementById('notifDot');
+  if(dot)dot.style.display='none';
 }
 
 function syncNow(){if(!SUPA_USER){showAuthModal();return;}supaPushAll(function(){updateSyncBar();});}
@@ -3125,18 +3513,22 @@ function rAI() {
     + "</div>"
     + "</div>";
 
-  // Position the fixed chat container just below the actual header
+  // Position AI page — accounts for safe area only (util-hdr is floating/fixed)
   (function() {
-    var sync = document.querySelector('.sync-bar');
-    var hdr = document.querySelector('.hdr');
-    var top = 0;
-    if (sync && sync.offsetHeight > 0 && sync.style.display !== 'none') top += sync.offsetHeight;
-    if (hdr) top += hdr.offsetHeight;
     var aiPg = document.querySelector('#pg4 .ai-pg');
-    if (aiPg && top > 0) aiPg.style.top = top + 'px';
+    if (aiPg) aiPg.style.top = '0';
   })();
 
   aiScrollBottom();
+  // Handle smart action prefill
+  if(window._aiPrefill){
+    var prefillText=window._aiPrefill;
+    window._aiPrefill=null;
+    setTimeout(function(){
+      var aiInp=document.getElementById('ai-input');
+      if(aiInp){aiInp.value=prefillText;aiAutoResize(aiInp);aiInp.focus();}
+    },200);
+  }
 }
 
 function aiScrollBottom() {
