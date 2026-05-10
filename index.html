@@ -105,10 +105,10 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;background:linear-grad
 /* ── Old header (hidden) ──────────────────────────────────────── */
 .hdr{display:none}
 /* ── Bottom nav (floating pill) ──────────────────────────────── */
-.tabs{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 14px);left:50%;transform:translateX(-50%);width:auto;min-width:300px;max-width:calc(100% - 28px);background:var(--glass-nav);backdrop-filter:blur(48px) saturate(240%);-webkit-backdrop-filter:blur(48px) saturate(240%);border-radius:100px;border:1px solid var(--glass-nav-border);box-shadow:0 8px 40px rgba(0,0,0,0.18),0 2px 8px rgba(0,0,0,0.08),inset 0 1.5px 0 var(--glass-inset);display:flex;align-items:center;z-index:100;padding:8px 10px;gap:0;position:fixed}
+.tabs{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 8px);left:50%;transform:translateX(-50%);width:calc(100% - 16px);max-width:calc(100% - 16px);background:var(--glass-nav);backdrop-filter:blur(48px) saturate(240%);-webkit-backdrop-filter:blur(48px) saturate(240%);border-radius:100px;border:1px solid var(--glass-nav-border);box-shadow:0 8px 40px rgba(0,0,0,0.18),0 2px 8px rgba(0,0,0,0.08),inset 0 1.5px 0 var(--glass-inset);display:flex;align-items:center;z-index:100;padding:6px 6px;gap:0}
 /* ── Sliding active indicator ─────────────────────────────────── */
 .tab-indicator{position:absolute;bottom:8px;height:calc(100% - 16px);border-radius:90px;background:var(--glass-pill);box-shadow:0 2px 10px rgba(0,0,0,0.10),inset 0 1.5px 0 rgba(255,255,255,0.9);transition:left .32s cubic-bezier(.34,1.56,.64,1),width .32s cubic-bezier(.34,1.56,.64,1),opacity .2s ease;pointer-events:none;z-index:0;opacity:0}
-.tb{flex:1;min-width:0;padding:7px 8px;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:90px;-webkit-tap-highlight-color:transparent;position:relative;z-index:1;transition:transform .1s ease}
+.tb{flex:1;min-width:0;padding:8px 6px;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:90px;-webkit-tap-highlight-color:transparent;position:relative;z-index:1;transition:transform .1s ease}
 .tb:active{transform:scale(.90);transition:transform .1s ease}
 .tb-icon{font-size:21px;line-height:1;opacity:.38;transition:opacity .22s ease,transform .3s cubic-bezier(.34,1.56,.64,1);display:flex;align-items:center;justify-content:center;width:22px;height:22px}
 .tb.on .tb-icon{opacity:1;transform:scale(1.15) translateY(-1px)}
@@ -173,7 +173,7 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;background:linear-grad
 .smart-action-sub{font-size:11px;color:var(--text3);line-height:1.4}
 /* ── Page content ─────────────────────────────────────────────── */
 .pg{padding:0;display:none;animation:fadeIn .18s ease-out;overflow-x:hidden}
-.pg.on{display:block;padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+.pg.on{display:block;padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 /* ── Dashboard greeting section ───────────────────────────────── */
 .dash-greeting-section{padding:calc(env(safe-area-inset-top) + 72px) 22px 0}
