@@ -1922,9 +1922,94 @@ function generateCSV(){
 document.getElementById('payslipfile').onchange=function(e){
   var f=e.target.files[0];if(!f)return;
   var r=new FileReader();
-  r.onload=function(ev){PAYSLIP.image=ev.target.result;var manual=prompt('Payslip uploaded. Enter total pay shown (e.g. 450.00):');if(manual)PAYSLIP.manualTotal=manual;try{localStorage.setItem('pt_payslip',JSON.stringify(PAYSLIP));}catch(e){}if(CTAB===3)rSummary();showToast('Payslip saved!');};
+  r.onload=function(ev){
+    PAYSLIP.image=ev.target.result;
+    PAYSLIP.manualTotal='';
+    try{localStorage.setItem('pt_payslip',JSON.stringify(PAYSLIP));}catch(e){}
+    if(CTAB===3)rSummary();
+    ocrPayslip(f);
+  };
   r.readAsDataURL(f);e.target.value='';
 };
+
+function ocrPayslip(file){
+  showToast('Scanning payslip…');
+  compressImage(file,800,0.7,function(blob){
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var base64=ev.target.result.split(',')[1];
+      fetch('https://platetrack-ai.tyburtonc.workers.dev/',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          model:'claude-sonnet-4-5',
+          max_tokens:100,
+          messages:[{role:'user',content:[
+            {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
+            {type:'text',text:'Extract the net/take-home pay from this payslip. Return ONLY valid JSON, no markdown: {"total":number_or_null}. The number is the net pay (after tax/deductions) as a plain GBP number.'}
+          ]}]
+        })
+      })
+      .then(function(r){return r.json();})
+      .then(function(d){
+        var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
+        var m=txt.match(/\{[\s\S]*\}/);
+        var data;if(m)try{data=JSON.parse(m[0]);}catch(e){}
+        if(data&&data.total!=null&&!isNaN(data.total)){
+          PAYSLIP.manualTotal=String(data.total);
+          try{localStorage.setItem('pt_payslip',JSON.stringify(PAYSLIP));}catch(e){}
+          if(CTAB===3)rSummary();
+          showToast('Payslip scanned — net pay: £'+parseFloat(data.total).toFixed(2));
+        } else {
+          showToast('Could not read total — enter it manually');
+          editPayslipTotal();
+        }
+      })
+      .catch(function(){
+        showToast('Could not scan payslip — enter total manually');
+        editPayslipTotal();
+      });
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function removePayslip(){
+  swipeConfirm('Remove payslip?',function(){
+    PAYSLIP={image:'',manualTotal:'',status:''};
+    try{localStorage.removeItem('pt_payslip');}catch(e){}
+    if(CTAB===3)rSummary();
+    showToast('Payslip removed');
+  },'Remove','Cancel','background:#EF4444;color:#fff');
+}
+
+function editPayslipTotal(){
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:flex-end;justify-content:center;padding:0 16px 40px';
+  overlay.innerHTML='<div style="background:var(--card);border-radius:16px;padding:20px;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(0,0,0,.3)">'
+    +'<div style="font-size:15px;font-weight:600;color:var(--text);text-align:center;margin-bottom:16px">Enter net/total pay from payslip</div>'
+    +'<input id="payslip-amt-input" type="number" inputmode="decimal" step="0.01" min="0" placeholder="e.g. 450.00" style="width:100%;box-sizing:border-box;padding:13px;border:1.5px solid var(--border2);border-radius:10px;font-size:16px;background:var(--bg2);color:var(--text);margin-bottom:12px">'
+    +'<div style="display:flex;gap:10px">'
+    +'<button id="pmt-cancel" style="flex:1;padding:13px;background:var(--bg3);border:none;border-radius:10px;font-size:15px;font-weight:600;color:var(--text3);cursor:pointer">Cancel</button>'
+    +'<button id="pmt-save" style="flex:1;padding:13px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;background:var(--accent);color:#fff">Save</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+  var input=overlay.querySelector('#payslip-amt-input');
+  if(PAYSLIP.manualTotal)input.value=PAYSLIP.manualTotal;
+  setTimeout(function(){input.focus();},100);
+  function close(){if(overlay.parentNode)overlay.parentNode.removeChild(overlay);}
+  overlay.querySelector('#pmt-cancel').onclick=close;
+  overlay.querySelector('#pmt-save').onclick=function(){
+    var val=parseFloat(input.value);
+    if(isNaN(val)||val<=0){showToast('Please enter a valid amount');return;}
+    PAYSLIP.manualTotal=String(val);
+    try{localStorage.setItem('pt_payslip',JSON.stringify(PAYSLIP));}catch(e){}
+    close();
+    if(CTAB===3)rSummary();
+    showToast('Payslip total saved');
+  };
+  overlay.onclick=function(e){if(e.target===overlay)close();};
+}
 
 // --- FAB ---
 
@@ -2640,15 +2725,19 @@ function rSummary(){
       +'<button class="import-btn" onclick="document.getElementById(\'payslipfile\').click()" style="margin-bottom:0"><span>&#x2B06;&#xFE0F;</span> Upload Payslip</button></div>';
   } else {
     var logged=calcs().inc,slip=parseFloat(PAYSLIP.manualTotal||0),diff=logged-slip;
-    var sColor=Math.abs(diff)<0.01?'var(--success)':diff>0?'var(--orange)':'var(--danger)';
-    var sText=Math.abs(diff)<0.01?'\u2705 Income matches payslip':diff>0?'\u26A0\uFE0F You logged more than payslip':'\u26A0\uFE0F Payslip shows more than logged';
+    var hasTotal=PAYSLIP.manualTotal&&parseFloat(PAYSLIP.manualTotal)>0;
+    var sColor=!hasTotal?'var(--text4)':Math.abs(diff)<0.01?'var(--success)':diff>0?'var(--orange)':'var(--danger)';
+    var sText=!hasTotal?'&#x23F3; Tap \u201CEdit Total\u201D to enter payslip amount':Math.abs(diff)<0.01?'\u2705 Income matches payslip':diff>0?'\u26A0\uFE0F You logged more than payslip':'\u26A0\uFE0F Payslip shows more than logged';
     payslipHTML+='<div style="padding:16px">';
-    if(PAYSLIP.image)payslipHTML+='<img src="'+PAYSLIP.image+'" style="width:100%;max-height:180px;object-fit:contain;border-radius:var(--r-lg);margin-bottom:12px;cursor:pointer" onclick="viewReceipt(\''+PAYSLIP.image+'\')" alt="Payslip">';
-    payslipHTML+='<div class="summary-row" style="border:none;padding:6px 0"><span class="summary-row-label">Logged</span><span class="summary-row-val green">'+money(logged)+'</span></div>'
-      +'<div class="summary-row" style="border:none;padding:6px 0"><span class="summary-row-label">Payslip</span><span class="summary-row-val" style="color:var(--success)">'+money(slip)+'</span></div>'
+    if(PAYSLIP.image)payslipHTML+='<img src="'+PAYSLIP.image+'" style="width:100%;max-height:180px;object-fit:contain;border-radius:var(--r-lg);margin-bottom:12px;cursor:pointer" onclick="viewReceipt(PAYSLIP.image)" alt="Payslip">';
+    payslipHTML+='<div class="summary-row" style="border:none;padding:6px 0"><span class="summary-row-label">Logged income</span><span class="summary-row-val green">'+money(logged)+'</span></div>'
+      +(hasTotal?'<div class="summary-row" style="border:none;padding:6px 0"><span class="summary-row-label">Payslip net pay</span><span class="summary-row-val" style="color:var(--success)">'+money(slip)+'</span></div>':'')
       +'<div style="padding:10px 0;font-weight:700;font-size:13px;color:'+sColor+'">'+sText+'</div>'
-      +'<button class="import-btn" onclick="document.getElementById(\'payslipfile\').click()" style="margin-bottom:0;margin-top:6px"><span>&#x1F504;</span> Replace Payslip</button>'
-      +'<div class="disc">Payslip OCR is not yet available.</div></div>';
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'
+      +'<button class="import-btn" onclick="document.getElementById(\'payslipfile\').click()" style="margin-bottom:0;flex:1;min-width:120px"><span>&#x1F504;</span> Replace</button>'
+      +'<button class="import-btn" onclick="editPayslipTotal()" style="margin-bottom:0;flex:1;min-width:120px"><span>&#x270F;&#xFE0F;</span> Edit Total</button>'
+      +'<button class="import-btn" onclick="removePayslip()" style="margin-bottom:0;flex:1;min-width:120px;color:var(--danger);border-color:var(--danger)"><span>&#x1F5D1;&#xFE0F;</span> Remove</button>'
+      +'</div></div>';
   }
   payslipHTML+='</div>';
 
