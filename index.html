@@ -2102,7 +2102,7 @@ function fuzzyMatchPayslip(items,entries){
       if(refNorm&&refNorm===_psNorm(e.jobRef||'')){
         score=2;
       } else {
-        var entryToks=_psTok((e.jobRef||'')+' '+(e.description||'')+' '+(e.company||''));
+        var entryToks=_psTok((e.jobRef||'')+' '+(e.category||'')+' '+(e.description||'')+' '+(e.company||''));
         var overlap=_psOverlap(descToks,entryToks);
         if(overlap>=0.5)score=overlap;
       }
@@ -2908,7 +2908,8 @@ function rSummary(){
       if(_psHasItems&&_psPeriod){
         // Full reconciliation
         var _periodInc=DB.income.filter(function(e){return inDateRange(e.date,PAYSLIP.periodFrom,PAYSLIP.periodTo);});
-        var _mr=fuzzyMatchPayslip(PAYSLIP.items,_periodInc);
+        var _periodExp=DB.expenses.filter(function(e){return inDateRange(e.date,PAYSLIP.periodFrom,PAYSLIP.periodTo)&&isReimbursedCat(e.category);});
+        var _mr=fuzzyMatchPayslip(PAYSLIP.items,_periodInc.concat(_periodExp));
         var _matched=_mr.matched,_missing=_mr.missing,_extra=_mr.extra;
         // Net pay comparison
         var _loggedTotal=0;
