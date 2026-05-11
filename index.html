@@ -1450,8 +1450,8 @@ function debugSync(){
 
 var DB={income:[],expenses:[]};
 var FYR='All',FCO='All',FDFROM='',FDTO='';
-var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly',PROFIT_CHART_OPEN=false;
-var SEARCH_INCOME='',SEARCH_EXP='',JOB_SEARCH='',JOB_SECTION_OPEN=true;
+var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly',PROFIT_CHART_OPEN=true;
+var SEARCH_INCOME='',SEARCH_EXP='',JOB_SEARCH='',JOB_SECTION_OPEN=false;
 var PAYSLIP={image:'',manualTotal:'',status:''};
 
 // --- Storage ---
@@ -2685,6 +2685,8 @@ function rSummary(){
     +'<div style="font-size:11px;color:var(--text4);margin-top:4px;font-weight:500">Total Tax Bill</div>'
     +'</div>'
     +'</div>'
+    // Jobs (collapsible, starts collapsed)
+    +jobSectionHTML
     // Profit Over Time (collapsible)
     +'<div class="summary-card"><div class="summary-card-hdr" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="PROFIT_CHART_OPEN=!PROFIT_CHART_OPEN;rSummary()">Profit Over Time<span style="font-size:13px;opacity:0.5">'+(PROFIT_CHART_OPEN?'&#x25B2;':'&#x25BC;')+'</span></div>'
     +(PROFIT_CHART_OPEN?'<div style="padding:0 16px 16px"><div class="chart-tabs"><button class="ctab'+(CHART_VIEW==='monthly'?' on':'')+'" onclick="event.stopPropagation();CHART_VIEW=\'monthly\';rSummary()">Monthly</button><button class="ctab'+(CHART_VIEW==='weekly'?' on':'')+'" onclick="event.stopPropagation();CHART_VIEW=\'weekly\';rSummary()">Weekly</button></div>'+(CHART_VIEW==='monthly'?(months6.length>0?monthRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'):(weeks8.length>0?weekRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'))+'</div>':'')
@@ -2692,10 +2694,6 @@ function rSummary(){
     // SA breakdown
     +'<div class="summary-card"><div class="summary-card-hdr">Self Assessment Breakdown</div>'+rowsHTML
     +'<div class="disc" style="padding:14px 16px;border-top:1px solid var(--border)">Estimates only &mdash; 2024/25 UK tax rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p). Consult an accountant.</div></div>'
-    // Jobs
-    +jobSectionHTML
-    // Payslip
-    +payslipHTML
     // Export
     +'<div class="summary-card"><div class="summary-card-hdr">Export &amp; Reports</div>'
     +'<div style="padding:12px 16px 16px">'
@@ -2707,6 +2705,8 @@ function rSummary(){
     +'<button class="settings-btn" onclick="openCoModal()"><span>&#x1F3E2;</span> Manage Companies</button>'
     +'<button class="settings-btn" onclick="openNameModal()"><span>&#x2712;</span> Change Your Name</button>'
     +'</div></div>'
+    // Payslip
+    +payslipHTML
     // Tips
     +'<div style="padding-bottom:8px">'
     +'<div class="tip-card"><div class="tip-icon">&#x1F9E5;</div><div><div class="tip-title">Uniform &amp; PPE</div><div class="tip-body">Hi-vis, safety boots and trade plate uniforms are all claimable.</div></div></div>'
