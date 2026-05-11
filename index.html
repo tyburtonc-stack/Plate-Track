@@ -187,7 +187,7 @@ body.dark .fab-action-scan .fab-action-circle{background:rgba(255,255,255,0.1);b
 .pg.on{display:block;padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 /* ── Dashboard greeting section ───────────────────────────────── */
-.dash-greeting-section{padding:calc(env(safe-area-inset-top) + 72px) 22px 0}
+.dash-greeting-section{padding:calc(env(safe-area-inset-top) + 52px) 22px 0}
 .dash-greeting-line1{font-size:26px;font-weight:700;color:var(--text);letter-spacing:-.02em;line-height:1.2}
 .dash-greeting-line2{font-size:15px;color:var(--text3);font-weight:400;margin-top:3px}
 /* ── Dashboard hero ───────────────────────────────────────────── */
@@ -347,7 +347,7 @@ body.dark .std-select{color-scheme:dark;background-color:var(--input);color:var(
 .del-btn{background:var(--danger-bg);color:var(--danger);border:1.5px solid var(--danger-border);border-radius:var(--r-lg);padding:13px;font-size:15px;font-weight:700;cursor:pointer;width:100%;margin-top:10px}
 /* ── FAB old styles removed — see new .fab-wrap/.fab-btn above ── */
 /* ── Toast ────────────────────────────────────────────────────── */
-.toast-wrap{position:fixed;top:calc(env(safe-area-inset-top) + 60px);left:50%;transform:translateX(-50%);z-index:500;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px}
+.toast-wrap{position:fixed;top:calc(env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:500;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px}
 .toast{background:var(--text);color:var(--bg);padding:11px 20px;border-radius:var(--r-full);font-size:14px;font-weight:600;display:none;white-space:nowrap;box-shadow:var(--shadow-md);animation:toastIn .25s cubic-bezier(.34,1.56,.64,1)}
 @keyframes toastIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
 /* Milestone toast */
@@ -988,11 +988,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
           <span class="profile-row-left"><span class="profile-row-icon">✏️</span>Edit name</span>
           <span class="profile-row-chev">›</span>
         </div>
-        <div class="profile-row" onclick="document.getElementById('profileOverlay').className='side-panel-overlay';openAllocModal()">
-          <span class="profile-row-left"><span class="profile-row-icon">⚙️</span>Money allocation</span>
-          <span class="profile-row-chev">›</span>
-        </div>
-        <div class="profile-row" onclick="document.getElementById('profileOverlay').className='side-panel-overlay';document.getElementById('coModal').className='modal-overlay open'">
+        <div class="profile-row" onclick="document.getElementById('profileOverlay').className='side-panel-overlay';openCoModal()">
           <span class="profile-row-left"><span class="profile-row-icon">🏢</span>Manage companies</span>
           <span class="profile-row-chev">›</span>
         </div>
@@ -1454,7 +1450,7 @@ function debugSync(){
 
 var DB={income:[],expenses:[]};
 var FYR='All',FCO='All',FDFROM='',FDTO='';
-var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly';
+var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly',PROFIT_CHART_OPEN=false;
 var SEARCH_INCOME='',SEARCH_EXP='',JOB_SEARCH='',JOB_SECTION_OPEN=true;
 var PAYSLIP={image:'',manualTotal:'',status:''};
 
@@ -2411,8 +2407,7 @@ function rDash(){
     +'</div>';
 
   // Filter row (inline with content)
-  var filterRow='<div style="padding:16px 22px 0;display:flex;justify-content:space-between;align-items:center">'
-    +'<div></div>'
+  var filterRow='<div style="padding:8px 22px 0;display:flex;justify-content:flex-end;align-items:center">'
     +filterBtn
     +'</div>';
 
@@ -2690,18 +2685,10 @@ function rSummary(){
     +'<div style="font-size:11px;color:var(--text4);margin-top:4px;font-weight:500">Total Tax Bill</div>'
     +'</div>'
     +'</div>'
-        +'<div class="summary-card"><div class="summary-card-hdr" style="display:flex;justify-content:space-between;align-items:center">&#x1F4B0; Money Allocation <button onclick="openAllocModal()" style="background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:var(--r-full);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer">&#x2699;&#xFE0F; Edit</button></div>'
-    +'<div class="alloc-grid" style="padding:0 16px 16px">'
-    +'<div class="alloc-pot"><div class="alloc-pot-icon">&#x1F3DB;&#xFE0F;</div><div class="alloc-pot-val red">'+money(alloc.tax)+'</div><div class="alloc-pot-lbl">Tax Pot</div></div>'
-    +'<div class="alloc-pot"><div class="alloc-pot-icon">&#x1F4C8;</div><div class="alloc-pot-val green">'+money(alloc.invest)+'</div><div class="alloc-pot-lbl">Invest ('+ALLOC.invest+'%)</div></div>'
-    +'<div class="alloc-pot"><div class="alloc-pot-icon">&#x1F4B3;</div><div class="alloc-pot-val" style="color:var(--gold-dim)">'+money(alloc.bills)+'</div><div class="alloc-pot-lbl">Bills ('+ALLOC.bills+'%)</div></div>'
-    +'<div class="alloc-pot"><div class="alloc-pot-icon">&#x1F44D;</div><div class="alloc-pot-val" style="color:var(--purple)">'+money(alloc.spend)+'</div><div class="alloc-pot-lbl">Spendable</div></div>'
-    +'</div></div>'
-    // Charts
-    +'<div class="summary-card"><div class="summary-card-hdr">Profit Over Time</div>'
-    +'<div style="padding:0 16px 16px"><div class="chart-tabs"><button class="ctab'+(CHART_VIEW==='monthly'?' on':'')+'" onclick="CHART_VIEW=\'monthly\';rSummary()">Monthly</button><button class="ctab'+(CHART_VIEW==='weekly'?' on':'')+'" onclick="CHART_VIEW=\'weekly\';rSummary()">Weekly</button></div>'
-    +(CHART_VIEW==='monthly'?(months6.length>0?monthRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'):(weeks8.length>0?weekRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'))
-    +'</div></div>'
+    // Profit Over Time (collapsible)
+    +'<div class="summary-card"><div class="summary-card-hdr" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="PROFIT_CHART_OPEN=!PROFIT_CHART_OPEN;rSummary()">Profit Over Time<span style="font-size:13px;opacity:0.5">'+(PROFIT_CHART_OPEN?'&#x25B2;':'&#x25BC;')+'</span></div>'
+    +(PROFIT_CHART_OPEN?'<div style="padding:0 16px 16px"><div class="chart-tabs"><button class="ctab'+(CHART_VIEW==='monthly'?' on':'')+'" onclick="event.stopPropagation();CHART_VIEW=\'monthly\';rSummary()">Monthly</button><button class="ctab'+(CHART_VIEW==='weekly'?' on':'')+'" onclick="event.stopPropagation();CHART_VIEW=\'weekly\';rSummary()">Weekly</button></div>'+(CHART_VIEW==='monthly'?(months6.length>0?monthRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'):(weeks8.length>0?weekRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'))+'</div>':'')
+    +'</div>'
     // SA breakdown
     +'<div class="summary-card"><div class="summary-card-hdr">Self Assessment Breakdown</div>'+rowsHTML
     +'<div class="disc" style="padding:14px 16px;border-top:1px solid var(--border)">Estimates only &mdash; 2024/25 UK tax rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p). Consult an accountant.</div></div>'
