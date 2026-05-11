@@ -482,6 +482,17 @@ body.dark .linked-tag{background:#1E3A5F;color:#93C5FD}
 body.dark .rate-tag{background:#2E1065;color:#C084FC}
 .disc{font-size:11px;color:var(--text4);margin-top:10px;line-height:1.5;border-top:1px solid var(--border);padding-top:10px}
 .payslip-placeholder{background:var(--li);border:1.5px dashed var(--border2);border-radius:var(--r-lg);padding:20px;text-align:center;color:var(--text4);font-size:14px;margin-bottom:10px}
+.ps-group-hdr{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-top:1px solid var(--border);cursor:pointer;user-select:none}
+.ps-group-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.ps-group-title.matched{color:var(--success)}.ps-group-title.missing{color:var(--orange)}.ps-group-title.extra{color:var(--text3)}
+.ps-group-count{font-size:11px;font-weight:700;padding:2px 8px;border-radius:var(--r-full)}
+.ps-group-count.matched{background:var(--success-bg);color:var(--success)}.ps-group-count.missing{background:var(--orange-bg);color:var(--orange)}.ps-group-count.extra{background:var(--bg3);color:var(--text3)}
+.ps-item{display:flex;justify-content:space-between;align-items:center;padding:9px 16px 9px 24px;border-top:1px solid var(--border);font-size:13px}
+.ps-item-left{flex:1;min-width:0;margin-right:8px;overflow:hidden}
+.ps-item-co{font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.04em;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps-item-desc{color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps-item-amount{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0}
+.ps-item-amount.matched{color:var(--success)}.ps-item-amount.missing{color:var(--orange)}.ps-item-amount.extra{color:var(--text3)}
 .receipt-thumb{width:42px;height:42px;object-fit:cover;border-radius:var(--r-md);cursor:pointer;flex-shrink:0;border:1px solid var(--border)}
 input[type=date],input[type=time],input[type=file],input[type=number],input[type=text]{color:var(--text)}
 input[type=file]{padding:6px;font-size:13px;background:var(--input);border:1.5px solid var(--border);border-radius:var(--r-lg);width:100%}
@@ -1452,7 +1463,8 @@ var DB={income:[],expenses:[]};
 var FYR='All',FCO='All',FDFROM='',FDTO='';
 var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly',PROFIT_CHART_OPEN=true;
 var SEARCH_INCOME='',SEARCH_EXP='',JOB_SEARCH='',JOB_SECTION_OPEN=false;
-var PAYSLIP={image:'',manualTotal:'',status:''};
+var PAYSLIP={image:'',manualTotal:'',status:'',periodFrom:'',periodTo:'',items:[]};
+var PAYSLIP_GRP_MATCHED=true,PAYSLIP_GRP_MISSING=true,PAYSLIP_GRP_EXTRA=false;
 
 // --- Storage ---
 
@@ -1475,6 +1487,10 @@ function saveDB(){
 }
 loadDB();loadGoal();
 try{var ps=localStorage.getItem('pt_payslip');if(ps)PAYSLIP=JSON.parse(ps);}catch(e){}
+if(!PAYSLIP.periodFrom)PAYSLIP.periodFrom='';
+if(!PAYSLIP.periodTo)PAYSLIP.periodTo='';
+if(!Array.isArray(PAYSLIP.items))PAYSLIP.items=[];
+function savePayslip(){try{localStorage.setItem('pt_payslip',JSON.stringify(PAYSLIP));}catch(e){}}
 try{var al=localStorage.getItem('pt_alloc');if(al){var alp=JSON.parse(al);ALLOC.invest=alp.invest||20;ALLOC.bills=alp.bills||10;}}catch(e){}
 
 // --- Helpers ---
@@ -1924,8 +1940,10 @@ document.getElementById('payslipfile').onchange=function(e){
   var r=new FileReader();
   r.onload=function(ev){
     PAYSLIP.image=ev.target.result;
-    PAYSLIP.manualTotal='';
-    try{localStorage.setItem('pt_payslip',JSON.stringify(PAYSLIP));}catch(e){}
+    PAYSLIP.manualTotal='';PAYSLIP.status='';
+    PAYSLIP.periodFrom='';PAYSLIP.periodTo='';PAYSLIP.items=[];
+    PAYSLIP_GRP_MATCHED=true;PAYSLIP_GRP_MISSING=true;PAYSLIP_GRP_EXTRA=false;
+    savePayslip();
     if(CTAB===3)rSummary();
     ocrPayslip(f);
   };
@@ -1933,8 +1951,11 @@ document.getElementById('payslipfile').onchange=function(e){
 };
 
 function ocrPayslip(file){
+  PAYSLIP.status='scanning';
+  savePayslip();
+  if(CTAB===3)rSummary();
   showToast('Scanning payslip…');
-  compressImage(file,800,0.7,function(blob){
+  compressImage(file,1200,0.85,function(blob){
     var reader=new FileReader();
     reader.onload=function(ev){
       var base64=ev.target.result.split(',')[1];
@@ -1943,10 +1964,10 @@ function ocrPayslip(file){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           model:'claude-sonnet-4-5',
-          max_tokens:100,
+          max_tokens:1500,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-            {type:'text',text:'Extract the net/take-home pay from this payslip. Return ONLY valid JSON, no markdown: {"total":number_or_null}. The number is the net pay (after tax/deductions) as a plain GBP number.'}
+            {type:'text',text:'Extract all data from this payslip. Return ONLY valid JSON, no markdown:\n{"periodFrom":"YYYY-MM-DD or null","periodTo":"YYYY-MM-DD or null","netPay":number_or_null,"items":[{"ref":"job/invoice ref or null","description":"1-6 word label","company":"client company name or null","amount":number}]}\nRules: items[] lists every pay line (jobs, bonuses, deductions). Deductions have negative amounts. netPay is the final net/take-home total. Dates in YYYY-MM-DD. Amounts as plain GBP numbers.'}
           ]}]
         })
       })
@@ -1955,19 +1976,26 @@ function ocrPayslip(file){
         var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
         var m=txt.match(/\{[\s\S]*\}/);
         var data;if(m)try{data=JSON.parse(m[0]);}catch(e){}
-        if(data&&data.total!=null&&!isNaN(data.total)){
-          PAYSLIP.manualTotal=String(data.total);
-          try{localStorage.setItem('pt_payslip',JSON.stringify(PAYSLIP));}catch(e){}
-          if(CTAB===3)rSummary();
-          showToast('Payslip scanned — net pay: £'+parseFloat(data.total).toFixed(2));
-        } else {
-          showToast('Could not read total — enter it manually');
-          editPayslipTotal();
+        PAYSLIP.status='done';
+        if(data){
+          if(data.netPay!=null&&!isNaN(data.netPay))PAYSLIP.manualTotal=String(data.netPay);
+          if(data.periodFrom)PAYSLIP.periodFrom=data.periodFrom;
+          if(data.periodTo)PAYSLIP.periodTo=data.periodTo;
+          if(Array.isArray(data.items)&&data.items.length>0)PAYSLIP.items=data.items;
         }
+        savePayslip();
+        if(CTAB===3)rSummary();
+        var msg='Payslip scanned';
+        if(PAYSLIP.manualTotal)msg+=' — net pay: £'+parseFloat(PAYSLIP.manualTotal).toFixed(2);
+        showToast(msg);
+        if(!PAYSLIP.periodFrom||!PAYSLIP.periodTo)showPayslipPeriodPrompt();
       })
       .catch(function(){
-        showToast('Could not scan payslip — enter total manually');
-        editPayslipTotal();
+        PAYSLIP.status='error';
+        savePayslip();
+        if(CTAB===3)rSummary();
+        showToast('Scan failed — enter details manually');
+        showPayslipPeriodPrompt();
       });
     };
     reader.readAsDataURL(blob);
@@ -1976,7 +2004,8 @@ function ocrPayslip(file){
 
 function removePayslip(){
   swipeConfirm('Remove payslip?',function(){
-    PAYSLIP={image:'',manualTotal:'',status:''};
+    PAYSLIP={image:'',manualTotal:'',status:'',periodFrom:'',periodTo:'',items:[]};
+    PAYSLIP_GRP_MATCHED=true;PAYSLIP_GRP_MISSING=true;PAYSLIP_GRP_EXTRA=false;
     try{localStorage.removeItem('pt_payslip');}catch(e){}
     if(CTAB===3)rSummary();
     showToast('Payslip removed');
@@ -2003,12 +2032,147 @@ function editPayslipTotal(){
     var val=parseFloat(input.value);
     if(isNaN(val)||val<=0){showToast('Please enter a valid amount');return;}
     PAYSLIP.manualTotal=String(val);
-    try{localStorage.setItem('pt_payslip',JSON.stringify(PAYSLIP));}catch(e){}
+    savePayslip();
     close();
     if(CTAB===3)rSummary();
     showToast('Payslip total saved');
   };
   overlay.onclick=function(e){if(e.target===overlay)close();};
+}
+
+function showPayslipPeriodPrompt(){
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:flex-end;justify-content:center;padding:0 16px 40px';
+  overlay.innerHTML='<div style="background:var(--card);border-radius:16px;padding:20px;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(0,0,0,.3)">'
+    +'<div style="font-size:15px;font-weight:600;color:var(--text);text-align:center;margin-bottom:4px">Pay Period</div>'
+    +'<div style="font-size:13px;color:var(--text4);text-align:center;margin-bottom:16px">Enter the dates this payslip covers</div>'
+    +'<div style="display:flex;gap:10px;margin-bottom:12px">'
+    +'<div style="flex:1"><label style="font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">From</label>'
+    +'<input type="date" id="ps-period-from" class="std-input" value="'+(PAYSLIP.periodFrom||'')+'" style="padding:10px 12px;font-size:14px"></div>'
+    +'<div style="flex:1"><label style="font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">To</label>'
+    +'<input type="date" id="ps-period-to" class="std-input" value="'+(PAYSLIP.periodTo||'')+'" style="padding:10px 12px;font-size:14px"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button id="psp-cancel" style="flex:1;padding:13px;background:var(--bg3);border:none;border-radius:10px;font-size:15px;font-weight:600;color:var(--text3);cursor:pointer">Cancel</button>'
+    +'<button id="psp-save" style="flex:1;padding:13px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;background:var(--accent);color:#fff">Save</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+  function close(){if(overlay.parentNode)overlay.parentNode.removeChild(overlay);}
+  overlay.querySelector('#psp-cancel').onclick=close;
+  overlay.querySelector('#psp-save').onclick=function(){
+    var from=overlay.querySelector('#ps-period-from').value;
+    var to=overlay.querySelector('#ps-period-to').value;
+    if(!from||!to){showToast('Please enter both dates');return;}
+    if(from>to){showToast('From date must be before To date');return;}
+    PAYSLIP.periodFrom=from;PAYSLIP.periodTo=to;
+    savePayslip();close();
+    if(CTAB===3)rSummary();
+    showToast('Pay period saved');
+  };
+  overlay.onclick=function(e){if(e.target===overlay)close();};
+}
+
+var _PS_STOPWORDS={a:1,the:1,and:1,for:1,to:1,of:1,in:1,on:1,at:1,by:1,job:1,delivery:1,pay:1,ltd:1,limited:1};
+function _psNorm(s){return(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();}
+function _psTok(s){return _psNorm(s).split(' ').filter(function(t){return t.length>1&&!_PS_STOPWORDS[t];});}
+function _psOverlap(tA,tB){
+  var shorter=tA.length<tB.length?tA:tB;
+  if(!shorter.length)return 0;
+  var setB={};tB.forEach(function(t){setB[t]=1;});
+  var hits=tA.filter(function(t){return setB[t];}).length;
+  return hits/shorter.length;
+}
+function _psCoMatch(a,b){
+  var na=_psNorm(a||''),nb=_psNorm(b||'');
+  if(!na||!nb)return false;
+  return na.indexOf(nb)>=0||nb.indexOf(na)>=0||_psOverlap(_psTok(na),_psTok(nb))>=0.6;
+}
+
+function fuzzyMatchPayslip(items,entries){
+  var used={};
+  var matched=[],missing=[];
+  items.forEach(function(item){
+    if((item.amount||0)<=0)return;
+    var refNorm=_psNorm(item.ref||'');
+    var descToks=_psTok((item.description||''));
+    var best=null,bestScore=-1;
+    entries.forEach(function(e){
+      if(used[e.id])return;
+      var score=0;
+      if(refNorm&&refNorm===_psNorm(e.jobRef||'')){
+        score=2;
+      } else {
+        var entryToks=_psTok((e.jobRef||'')+' '+(e.description||'')+' '+(e.company||''));
+        var overlap=_psOverlap(descToks,entryToks);
+        if(overlap>=0.5)score=overlap;
+      }
+      if(score>0&&_psCoMatch(item.company,e.company))score+=1;
+      if(score>bestScore){bestScore=score;best=e;}
+    });
+    if(best&&bestScore>0){
+      used[best.id]=true;
+      matched.push({item:item,entry:best,amountMatch:Math.abs(parseFloat(best.amount||0)-item.amount)<0.02});
+    } else {
+      missing.push({item:item});
+    }
+  });
+  var extra=entries.filter(function(e){return !used[e.id];});
+  return {matched:matched,missing:missing,extra:extra};
+}
+
+function buildPayslipGroupHTML(group,type){
+  if(!group.length)return '';
+  var icons={matched:'&#x2705;',missing:'&#x26A0;&#xFE0F;',extra:'&#x2795;'};
+  var titles={matched:'Matched',missing:'Missing from log',extra:'Not on payslip'};
+  var stateVar='PAYSLIP_GRP_'+type.toUpperCase();
+  var open=window[stateVar];
+  var total=0;
+  group.forEach(function(g){
+    if(type==='matched')total+=g.item.amount;
+    else if(type==='missing')total+=g.item.amount;
+    else total+=parseFloat(g.amount||0);
+  });
+  var bodyId='ps-grp-body-'+type;
+  var html='<div>'
+    +'<div class="ps-group-hdr" onclick="'+stateVar+'=!'+stateVar+';document.getElementById(\''+bodyId+'\').style.display='+stateVar+'?\'block\':\'none\'">'
+    +'<span class="ps-group-title '+type+'">'+icons[type]+' '+titles[type]+'</span>'
+    +'<div style="display:flex;align-items:center;gap:8px">'
+    +'<span class="ps-group-count '+type+'">'+group.length+'</span>'
+    +'<span style="font-size:13px;font-weight:700;color:var(--text3);font-variant-numeric:tabular-nums">'+money(total)+'</span>'
+    +'</div></div>'
+    +'<div id="'+bodyId+'" style="display:'+(open?'block':'none')+'">';
+  if(type==='matched'){
+    group.forEach(function(g){
+      var co=(g.item.company||g.entry.company||'').substr(0,30);
+      var desc=(g.item.description||g.item.ref||'').substr(0,40);
+      html+='<div class="ps-item">'
+        +'<div class="ps-item-left">'+(co?'<div class="ps-item-co">'+co+'</div>':'')+'<div class="ps-item-desc">'+desc+'</div></div>'
+        +(g.amountMatch
+          ?'<span class="ps-item-amount matched">'+money(g.item.amount)+'</span>'
+          :'<span class="ps-item-amount missing" title="Logged: '+money(parseFloat(g.entry.amount||0))+'">'+money(g.item.amount)+' &#x26A0;</span>')
+        +'</div>';
+    });
+  } else if(type==='missing'){
+    group.forEach(function(g){
+      var co=(g.item.company||'').substr(0,30);
+      var desc=(g.item.description||g.item.ref||'').substr(0,40);
+      html+='<div class="ps-item">'
+        +'<div class="ps-item-left">'+(co?'<div class="ps-item-co">'+co+'</div>':'')+'<div class="ps-item-desc">'+desc+'</div></div>'
+        +'<span class="ps-item-amount missing">'+money(g.item.amount)+'</span>'
+        +'</div>';
+    });
+  } else {
+    group.forEach(function(g){
+      var co=(g.company||'').substr(0,30);
+      var desc=(g.jobRef||g.description||'').substr(0,40);
+      html+='<div class="ps-item">'
+        +'<div class="ps-item-left">'+(co?'<div class="ps-item-co">'+co+'</div>':'')+'<div class="ps-item-desc">'+desc+'</div></div>'
+        +'<span class="ps-item-amount extra">'+money(parseFloat(g.amount||0))+'</span>'
+        +'</div>';
+    });
+  }
+  html+='</div></div>';
+  return html;
 }
 
 // --- FAB ---
@@ -2720,23 +2884,74 @@ function rSummary(){
 
   // Payslip
   var payslipHTML='<div class="summary-card"><div class="summary-card-hdr">&#x1F4C4; Payslip Cross-Check</div>';
-  if(!PAYSLIP.image&&!PAYSLIP.manualTotal){
+  var _psEmpty=!PAYSLIP.image&&!PAYSLIP.manualTotal&&!PAYSLIP.items.length&&PAYSLIP.status!=='scanning';
+  if(_psEmpty){
     payslipHTML+='<div style="padding:16px"><div class="payslip-placeholder">&#x1F4C4; No payslip uploaded yet</div>'
       +'<button class="import-btn" onclick="document.getElementById(\'payslipfile\').click()" style="margin-bottom:0"><span>&#x2B06;&#xFE0F;</span> Upload Payslip</button></div>';
   } else {
-    var logged=calcs().inc,slip=parseFloat(PAYSLIP.manualTotal||0),diff=logged-slip;
-    var hasTotal=PAYSLIP.manualTotal&&parseFloat(PAYSLIP.manualTotal)>0;
-    var sColor=!hasTotal?'var(--text4)':Math.abs(diff)<0.01?'var(--success)':diff>0?'var(--orange)':'var(--danger)';
-    var sText=!hasTotal?'&#x23F3; Tap \u201CEdit Total\u201D to enter payslip amount':Math.abs(diff)<0.01?'\u2705 Income matches payslip':diff>0?'\u26A0\uFE0F You logged more than payslip':'\u26A0\uFE0F Payslip shows more than logged';
+    var _psScanning=PAYSLIP.status==='scanning';
+    var _psPeriod=PAYSLIP.periodFrom&&PAYSLIP.periodTo;
+    var _psHasItems=PAYSLIP.items.length>0;
     payslipHTML+='<div style="padding:16px">';
-    if(PAYSLIP.image)payslipHTML+='<img src="'+PAYSLIP.image+'" style="width:100%;max-height:180px;object-fit:contain;border-radius:var(--r-lg);margin-bottom:12px;cursor:pointer" onclick="viewReceipt(PAYSLIP.image)" alt="Payslip">';
-    payslipHTML+='<div class="summary-row" style="border:none;padding:6px 0"><span class="summary-row-label">Logged income</span><span class="summary-row-val green">'+money(logged)+'</span></div>'
-      +(hasTotal?'<div class="summary-row" style="border:none;padding:6px 0"><span class="summary-row-label">Payslip net pay</span><span class="summary-row-val" style="color:var(--success)">'+money(slip)+'</span></div>':'')
-      +'<div style="padding:10px 0;font-weight:700;font-size:13px;color:'+sColor+'">'+sText+'</div>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'
-      +'<button class="import-btn" onclick="document.getElementById(\'payslipfile\').click()" style="margin-bottom:0;flex:1;min-width:120px"><span>&#x1F504;</span> Replace</button>'
-      +'<button class="import-btn" onclick="editPayslipTotal()" style="margin-bottom:0;flex:1;min-width:120px"><span>&#x270F;&#xFE0F;</span> Edit Total</button>'
-      +'<button class="import-btn" onclick="removePayslip()" style="margin-bottom:0;flex:1;min-width:120px;color:var(--danger);border-color:var(--danger)"><span>&#x1F5D1;&#xFE0F;</span> Remove</button>'
+    if(PAYSLIP.image)payslipHTML+='<img src="'+PAYSLIP.image+'" style="width:100%;max-height:160px;object-fit:contain;border-radius:var(--r-lg);margin-bottom:12px;cursor:pointer" onclick="viewReceipt(PAYSLIP.image)" alt="Payslip">';
+    if(_psScanning){
+      payslipHTML+='<div style="text-align:center;color:var(--text4);font-size:14px;padding:8px 0 12px">&#x23F3; Scanning payslip\u2026</div>';
+    } else {
+      // Period row
+      if(_psPeriod){
+        payslipHTML+='<div class="summary-row" style="border:none;padding:5px 0 8px"><span class="summary-row-label">Pay period</span>'
+          +'<span class="summary-row-val" style="font-size:13px;color:var(--text3)">'+fdateShort(PAYSLIP.periodFrom)+' \u2013 '+fdateShort(PAYSLIP.periodTo)+'</span></div>';
+      } else {
+        payslipHTML+='<div style="background:var(--orange-bg);border:1px solid var(--orange-border);border-radius:var(--r-md);padding:9px 12px;margin-bottom:10px;font-size:13px;color:var(--orange)">'
+          +'&#x26A0;&#xFE0F; Pay period not detected &mdash; <button onclick="showPayslipPeriodPrompt()" style="background:none;border:none;color:var(--orange);font-weight:700;cursor:pointer;font-size:13px;padding:0;text-decoration:underline">set dates</button></div>';
+      }
+      if(_psHasItems&&_psPeriod){
+        // Full reconciliation
+        var _periodInc=DB.income.filter(function(e){return inDateRange(e.date,PAYSLIP.periodFrom,PAYSLIP.periodTo);});
+        var _mr=fuzzyMatchPayslip(PAYSLIP.items,_periodInc);
+        var _matched=_mr.matched,_missing=_mr.missing,_extra=_mr.extra;
+        // Net pay comparison
+        var _loggedTotal=0;
+        _matched.forEach(function(g){_loggedTotal+=parseFloat(g.entry.amount||0);});
+        _extra.forEach(function(g){_loggedTotal+=parseFloat(g.amount||0);});
+        var _slipTotal=parseFloat(PAYSLIP.manualTotal||0);
+        var _hasNetPay=PAYSLIP.manualTotal&&_slipTotal>0;
+        if(_hasNetPay){
+          var _diff=_loggedTotal-_slipTotal;
+          var _diffOk=Math.abs(_diff)<0.02;
+          var _sColor=_diffOk?'var(--success)':_diff>0?'var(--orange)':'var(--danger)';
+          var _sText=_diffOk?'\u2705 Logged income matches payslip net pay'
+            :_diff>0?'\u26A0\uFE0F You\u2019ve logged \u00A3'+Math.abs(_diff).toFixed(2)+' more than payslip'
+                   :'\u26A0\uFE0F Payslip shows \u00A3'+Math.abs(_diff).toFixed(2)+' more than logged';
+          payslipHTML+='<div class="summary-row" style="border:none;padding:5px 0"><span class="summary-row-label">Logged (period)</span><span class="summary-row-val green">'+money(_loggedTotal)+'</span></div>'
+            +'<div class="summary-row" style="border:none;padding:5px 0"><span class="summary-row-label">Payslip net pay</span><span class="summary-row-val" style="color:var(--success)">'+money(_slipTotal)+'</span></div>'
+            +'<div style="padding:8px 0 10px;font-weight:700;font-size:13px;color:'+_sColor+'">'+_sText+'</div>';
+        }
+        payslipHTML+='</div><div style="border-top:1px solid var(--border)">';
+        payslipHTML+=buildPayslipGroupHTML(_matched,'matched');
+        payslipHTML+=buildPayslipGroupHTML(_missing,'missing');
+        payslipHTML+=buildPayslipGroupHTML(_extra,'extra');
+        payslipHTML+='</div><div style="padding:16px">';
+      } else {
+        // Fallback: simple total comparison (no items or no period)
+        var _loggedFb=0;
+        var _incFb=_psPeriod?DB.income.filter(function(e){return inDateRange(e.date,PAYSLIP.periodFrom,PAYSLIP.periodTo);}):getIncome();
+        _incFb.forEach(function(e){_loggedFb+=parseFloat(e.amount||0);});
+        var _slipFb=parseFloat(PAYSLIP.manualTotal||0);
+        var _hasTotalFb=PAYSLIP.manualTotal&&_slipFb>0;
+        var _diffFb=_loggedFb-_slipFb;
+        var _sColorFb=!_hasTotalFb?'var(--text4)':Math.abs(_diffFb)<0.01?'var(--success)':_diffFb>0?'var(--orange)':'var(--danger)';
+        var _sTextFb=!_hasTotalFb?'&#x23F3; Tap \u201CEdit Total\u201D to enter payslip amount':Math.abs(_diffFb)<0.01?'\u2705 Income matches payslip':_diffFb>0?'\u26A0\uFE0F You logged more than payslip':'\u26A0\uFE0F Payslip shows more than logged';
+        payslipHTML+='<div class="summary-row" style="border:none;padding:6px 0"><span class="summary-row-label">Logged income</span><span class="summary-row-val green">'+money(_loggedFb)+'</span></div>'
+          +(_hasTotalFb?'<div class="summary-row" style="border:none;padding:6px 0"><span class="summary-row-label">Payslip net pay</span><span class="summary-row-val" style="color:var(--success)">'+money(_slipFb)+'</span></div>':'')
+          +'<div style="padding:10px 0;font-weight:700;font-size:13px;color:'+_sColorFb+'">'+_sTextFb+'</div>';
+      }
+    }
+    payslipHTML+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'
+      +'<button class="import-btn" onclick="document.getElementById(\'payslipfile\').click()" style="margin-bottom:0;flex:1;min-width:100px"><span>&#x1F504;</span> Replace</button>'
+      +(_psPeriod?'<button class="import-btn" onclick="showPayslipPeriodPrompt()" style="margin-bottom:0;flex:1;min-width:100px"><span>&#x1F4C5;</span> Period</button>':'')
+      +'<button class="import-btn" onclick="editPayslipTotal()" style="margin-bottom:0;flex:1;min-width:100px"><span>&#x270F;&#xFE0F;</span> Edit Total</button>'
+      +'<button class="import-btn" onclick="removePayslip()" style="margin-bottom:0;flex:1;min-width:100px;color:var(--danger);border-color:var(--danger)"><span>&#x1F5D1;&#xFE0F;</span> Remove</button>'
       +'</div></div>';
   }
   payslipHTML+='</div>';
