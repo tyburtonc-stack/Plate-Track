@@ -2778,6 +2778,8 @@ function openSheet(type,id){
       imgPreview='<div style="margin-top:8px"><img src="'+fimg+'" style="width:72px;height:72px;object-fit:cover;border-radius:var(--r-md);cursor:pointer;border:1px solid var(--border)" onclick="viewReceipt(\''+fimg+'\')" alt="Receipt"></div>';
     }
     html='<input type="hidden" id="f_cat" value="'+fcat+'">'
+      +'<input type="hidden" id="f_exco" value="'+fco2+'">'
+      +'<div class="field"><label class="field-label">Company <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label>'+expCoChips+'</div>'
       +'<div class="field"><label class="field-label">Category</label><div class="cat-chips" id="cat-chips-wrap">'+catChips+'</div></div>'
       +'<div id="travel-subtypes" style="'+(isTravelCat(fcat)?'':'display:none')+'"><div class="field"><label class="field-label">Travel Type</label>'
       +'<div class="cat-chips" id="travel-chips-wrap">'
@@ -2790,19 +2792,21 @@ function openSheet(type,id){
       +'</div><div class="field-hint" id="reimb-hint">'+(isReimb?'Won\'t reduce your tax bill (already paid back)':'Will reduce your tax bill as a deductible expense')+'</div></div>'
       +'<div class="field"><label class="field-label">Amount</label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
       +'<div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+fd2+'"></div>'
-      +'<input type="hidden" id="f_exco" value="'+fco2+'">'
-      +'<div class="field"><label class="field-label">Company <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label>'+expCoChips+'</div>'
       +'<div class="field"><label class="field-label">Link to Job <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label>'
       +'<input type="text" id="f4c" class="std-input" list="joblist" placeholder="Type to search jobs..." value="'+fjr2+'" autocomplete="off">'
       +'<datalist id="joblist">'+dlOpts+'</datalist>'
       +'<div class="field-hint">Suggestions sorted by same date, then same company</div></div>'
+      +'<div style="border-top:1px solid var(--border);margin:16px 0"></div>'
+      +'<div class="optional-toggle" onclick="this.nextElementSibling.className=\'optional-body\'+(this.nextElementSibling.className.indexOf(\'open\')>=0?\'\':\'open\');this.querySelector(\'.optional-chevron\').className=\'optional-chevron\'+(this.nextElementSibling.className.indexOf(\'open\')>=0?\' open\':\'\')"><span>&#x25B6; More details</span><span class="optional-chevron'+(fimg||frc||fds?' open':'')+'">&#x25B6;</span></div>'
+      +'<div class="optional-body'+(fimg||frc||fds?' open':'')+'">'
       +'<div class="field"><label class="field-label">Receipt Photo <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label>'
       +'<input type="file" id="f_img" accept="image/*,.heic,.heif">'
       +imgPreview
       +(fimg?'<button type="button" style="margin-top:8px;background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border);border-radius:var(--r-sm);padding:5px 12px;font-size:12px;cursor:pointer" onclick="deleteReceiptImage(\''+EID+'\')">&#x2715; Remove photo</button>':'')
       +'<div class="field-hint">Stored locally on this device only.</div></div>'
       +'<div class="field"><label class="field-label">Receipt Ref <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f4" class="std-input" placeholder="e.g. REC-001" value="'+frc+'"></div>'
-      +'<div class="field"><label class="field-label">Description <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f5" class="std-input" placeholder="What was this for?" value="'+fds+'"></div>';
+      +'<div class="field"><label class="field-label">Description <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f5" class="std-input" placeholder="What was this for?" value="'+fds+'"></div>'
+      +'</div>';
   }
   var saveLabel=type==='income'?'Save Job':'Save Expense';
   html+='<button class="save-btn" id="save-btn" onclick="doSave()" style="margin-top:22px">'+saveLabel+(fam?' &mdash; '+(type==='income'?'+':'-')+'\u00a3'+parseFloat(fam).toFixed(2):'')+'</button>';
