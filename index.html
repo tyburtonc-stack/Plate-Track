@@ -187,7 +187,7 @@ body.dark .fab-action-scan .fab-action-circle{background:rgba(255,255,255,0.1);b
 .pg.on{display:block;padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 /* ── Dashboard greeting section ───────────────────────────────── */
-.dash-greeting-section{padding:calc(env(safe-area-inset-top) + 52px) 22px 0}
+.dash-greeting-section{padding:calc(env(safe-area-inset-top) + 72px) 22px 0}
 .dash-greeting-line1{font-size:26px;font-weight:700;color:var(--text);letter-spacing:-.02em;line-height:1.2}
 .dash-greeting-line2{font-size:15px;color:var(--text3);font-weight:400;margin-top:3px}
 /* ── Dashboard hero ───────────────────────────────────────────── */
@@ -1450,8 +1450,8 @@ function debugSync(){
 
 var DB={income:[],expenses:[]};
 var FYR='All',FCO='All',FDFROM='',FDTO='';
-var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly',PROFIT_CHART_OPEN=false;
-var SEARCH_INCOME='',SEARCH_EXP='',JOB_SEARCH='',JOB_SECTION_OPEN=true;
+var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly';
+var SEARCH_INCOME='',SEARCH_EXP='',JOB_SEARCH='',JOB_SECTION_OPEN=false;
 var PAYSLIP={image:'',manualTotal:'',status:''};
 
 // --- Storage ---
@@ -2497,7 +2497,7 @@ function rIncome(){
   var allItems=getIncome().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
   var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_INCOME);});
   var html=buildIncomeListHTML(items);
-  var content='<div style="padding:0 16px 14px">'
+  var content='<div style="padding:0 16px 14px;background:linear-gradient(180deg,rgba(22,163,74,0.07) 0%,transparent 100%)">'
     +'<div class="tab-hdr"><span class="tab-hdr-title">Income</span><button class="add-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add</button></div>'
     +'</div>'
     +limitBannerHTML()
@@ -2550,7 +2550,7 @@ function rExpenses(){
   var allItems=getExp().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
   var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_EXP);});
   var html=buildExpenseListHTML(items);
-  var content='<div style="padding:0 16px 14px">'
+  var content='<div style="padding:0 16px 14px;background:linear-gradient(180deg,rgba(220,38,38,0.07) 0%,transparent 100%)">'
     +'<div class="tab-hdr"><span class="tab-hdr-title">Expenses</span><button class="add-btn" onclick="openSheet(\'expense\',\'\')">&#x2B; Add</button></div></div>'
     +limitBannerHTML()
     +filtersHTML()
@@ -2685,15 +2685,16 @@ function rSummary(){
     +'<div style="font-size:11px;color:var(--text4);margin-top:4px;font-weight:500">Total Tax Bill</div>'
     +'</div>'
     +'</div>'
-    // Profit Over Time (collapsible)
-    +'<div class="summary-card"><div class="summary-card-hdr" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="PROFIT_CHART_OPEN=!PROFIT_CHART_OPEN;rSummary()">Profit Over Time<span style="font-size:13px;opacity:0.5">'+(PROFIT_CHART_OPEN?'&#x25B2;':'&#x25BC;')+'</span></div>'
-    +(PROFIT_CHART_OPEN?'<div style="padding:0 16px 16px"><div class="chart-tabs"><button class="ctab'+(CHART_VIEW==='monthly'?' on':'')+'" onclick="event.stopPropagation();CHART_VIEW=\'monthly\';rSummary()">Monthly</button><button class="ctab'+(CHART_VIEW==='weekly'?' on':'')+'" onclick="event.stopPropagation();CHART_VIEW=\'weekly\';rSummary()">Weekly</button></div>'+(CHART_VIEW==='monthly'?(months6.length>0?monthRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'):(weeks8.length>0?weekRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'))+'</div>':'')
-    +'</div>'
+    // Jobs (collapsible, starts retracted)
+    +jobSectionHTML
+    // Profit Over Time (always expanded)
+    +'<div class="summary-card"><div class="summary-card-hdr">Profit Over Time</div>'
+    +'<div style="padding:0 16px 16px"><div class="chart-tabs"><button class="ctab'+(CHART_VIEW==='monthly'?' on':'')+'" onclick="CHART_VIEW=\'monthly\';rSummary()">Monthly</button><button class="ctab'+(CHART_VIEW==='weekly'?' on':'')+'" onclick="CHART_VIEW=\'weekly\';rSummary()">Weekly</button></div>'
+    +(CHART_VIEW==='monthly'?(months6.length>0?monthRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'):(weeks8.length>0?weekRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'))
+    +'</div></div>'
     // SA breakdown
     +'<div class="summary-card"><div class="summary-card-hdr">Self Assessment Breakdown</div>'+rowsHTML
     +'<div class="disc" style="padding:14px 16px;border-top:1px solid var(--border)">Estimates only &mdash; 2024/25 UK tax rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p). Consult an accountant.</div></div>'
-    // Jobs
-    +jobSectionHTML
     // Payslip
     +payslipHTML
     // Export
