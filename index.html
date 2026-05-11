@@ -1571,11 +1571,15 @@ function fabAddIncome(){closeFAB();openSheet('income','');}
 function fabAddExpense(){closeFAB();openSheet('expense','');}
 function fabScanReceipt(){
   closeFAB();
-  // Open expense sheet with receipt scanning focus
   openSheet('expense','');
-  // Attempt to trigger payslip file input after sheet opens
   setTimeout(function(){
-    var pf=document.getElementById('payslipfile');
+    var optBody=document.querySelector('.optional-body');
+    var optChev=document.querySelector('.optional-chevron');
+    if(optBody&&optBody.className.indexOf('open')<0){
+      optBody.className='optional-body open';
+      if(optChev)optChev.className='optional-chevron open';
+    }
+    var pf=document.getElementById('f_img');
     if(pf)pf.click();
   },350);
 }
@@ -2881,10 +2885,10 @@ function ocrReceipt(file){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           model:'claude-sonnet-4-5',
-          max_tokens:200,
+          max_tokens:250,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-            {type:'text',text:'Extract data from this receipt. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","description":"2-5 word summary or null","category":"one of Fuel/Travel/EV Charging/Cleaning/Parking/Tolls/Other or null"}. Amount is the GBP total as a plain number.'}
+            {type:'text',text:'Extract data from this receipt. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","description":"2-5 word summary or null","category":"one of Fuel/Travel/EV Charging/Cleaning/Parking/Tolls/Other or null","receipt_ref":"receipt/transaction number printed on receipt or null"}. Amount is the GBP total as a plain number.'}
           ]}]
         })
       })
@@ -2899,6 +2903,7 @@ function ocrReceipt(file){
         if(data.amount!=null){var amtEl=document.getElementById('f3');if(amtEl&&!amtEl.value){amtEl.value=data.amount;updateSaveBtn();filled++;}}
         if(data.date){var dtEl=document.getElementById('f1');if(dtEl&&!dtEl.value){dtEl.value=data.date;filled++;}}
         if(data.description){var dsEl=document.getElementById('f5');if(dsEl&&!dsEl.value){dsEl.value=data.description;filled++;}}
+        if(data.receipt_ref){var rfEl=document.getElementById('f4');if(rfEl&&!rfEl.value){rfEl.value=data.receipt_ref;filled++;}}
         if(data.category){
           var catMap={'Fuel':'Fuel (Reimbursed)','Travel':'Travel (Not Reimbursed)','EV Charging':'EV Charging (Reimbursed)','Cleaning':'Cleaning (Reimbursed)','Parking':'Parking (Reimbursed)','Tolls':'Tolls (Reimbursed)','Other':'Other'};
           var target=catMap[data.category]||'Other';
