@@ -2644,7 +2644,7 @@ function rSummary(){
       +'<div class="summary-row" style="border:none;padding:6px 0"><span class="summary-row-label">Payslip</span><span class="summary-row-val" style="color:var(--success)">'+money(slip)+'</span></div>'
       +'<div style="padding:10px 0;font-weight:700;font-size:13px;color:'+sColor+'">'+sText+'</div>'
       +'<button class="import-btn" onclick="document.getElementById(\'payslipfile\').click()" style="margin-bottom:0;margin-top:6px"><span>&#x1F504;</span> Replace Payslip</button>'
-      +'<div class="disc">OCR auto-extraction coming in a future update.</div></div>';
+      +'<div class="disc">Payslip OCR is not yet available.</div></div>';
   }
   payslipHTML+='</div>';
 
@@ -2815,6 +2815,16 @@ function openSheet(type,id){
   document.getElementById('overlay').className='overlay open';
   // Focus amount if new
   if(!isEdit){setTimeout(function(){var a=document.getElementById('f3');if(a)a.focus();},300);}
+  if(type==='expense'){
+    var fimgEl=document.getElementById('f_img');
+    if(fimgEl){
+      var statusSpan=document.createElement('span');
+      statusSpan.id='ocr-status';
+      statusSpan.style.cssText='display:block;font-size:11px;color:var(--text4);margin-top:4px';
+      fimgEl.parentNode.insertBefore(statusSpan,fimgEl.nextSibling);
+      fimgEl.onchange=function(e){if(e.target.files&&e.target.files[0])ocrReceipt(e.target.files[0]);};
+    }
+  }
 }
 
 function updateSaveBtn(){
@@ -2857,6 +2867,53 @@ function updateReimbToggle(cat){
 
 function deleteReceiptImage(expId){
   for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===String(expId)){DB.expenses[i].receiptImage='';saveDB();render(CTAB);showToast('Receipt removed');return;}}
+}
+
+function ocrReceipt(file){
+  var statusEl=document.getElementById('ocr-status');
+  if(statusEl)statusEl.textContent='Scanning receipt…';
+  compressImage(file,800,0.7,function(blob){
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var base64=ev.target.result.split(',')[1];
+      fetch('https://platetrack-ai.tyburtonc.workers.dev/',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          model:'claude-sonnet-4-5',
+          max_tokens:200,
+          messages:[{role:'user',content:[
+            {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
+            {type:'text',text:'Extract data from this receipt. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","description":"2-5 word summary or null","category":"one of Fuel/Travel/EV Charging/Cleaning/Parking/Tolls/Other or null"}. Amount is the GBP total as a plain number.'}
+          ]}]
+        })
+      })
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(statusEl)statusEl.textContent='';
+        var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
+        var m=txt.match(/\{[\s\S]*\}/);
+        if(!m){showToast('Could not read receipt');return;}
+        var data;try{data=JSON.parse(m[0]);}catch(e){showToast('Could not read receipt');return;}
+        var filled=0;
+        if(data.amount!=null){var amtEl=document.getElementById('f3');if(amtEl&&!amtEl.value){amtEl.value=data.amount;updateSaveBtn();filled++;}}
+        if(data.date){var dtEl=document.getElementById('f1');if(dtEl&&!dtEl.value){dtEl.value=data.date;filled++;}}
+        if(data.description){var dsEl=document.getElementById('f5');if(dsEl&&!dsEl.value){dsEl.value=data.description;filled++;}}
+        if(data.category){
+          var catMap={'Fuel':'Fuel (Reimbursed)','Travel':'Travel (Not Reimbursed)','EV Charging':'EV Charging (Reimbursed)','Cleaning':'Cleaning (Reimbursed)','Parking':'Parking (Reimbursed)','Tolls':'Tolls (Reimbursed)','Other':'Other'};
+          var target=catMap[data.category]||'Other';
+          var chips=document.querySelectorAll('#cat-chips-wrap .cat-chip');
+          chips.forEach(function(btn){if(btn.textContent.indexOf(data.category)>=0||btn.textContent.indexOf(target)>=0){btn.click();filled++;}});
+        }
+        if(filled>0)showToast('Receipt scanned — '+filled+' field'+(filled>1?'s':'')+' filled');
+      })
+      .catch(function(){
+        if(statusEl)statusEl.textContent='';
+        showToast('Could not scan receipt');
+      });
+    };
+    reader.readAsDataURL(blob);
+  });
 }
 
 function doSave(){
