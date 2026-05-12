@@ -889,6 +889,17 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
   </div>
 </div>
 
+<!-- Company expense defaults modal -->
+<div class="modal-overlay" id="coDefaultsModal" style="z-index:160" onclick="closeCoDefaultsOutside(event)">
+  <div class="modal-box" style="max-height:80vh;overflow-y:auto">
+    <div class="modal-title" id="co-def-title">&#x2699;&#xFE0F; Expense Defaults</div>
+    <p style="font-size:12px;color:var(--text4);margin:-8px 0 16px;line-height:1.5">Set the default reimbursement status per category for this company. You can still change it on each expense.</p>
+    <div id="co-def-list"></div>
+    <button class="modal-save" onclick="saveCoDefaults()">Save Defaults</button>
+    <button class="modal-cancel" onclick="closeCoDefaults()">Cancel</button>
+  </div>
+</div>
+
 <!-- Name modal -->
 
 <div class="modal-overlay" id="nameModal" onclick="closeNameModal(event)">
@@ -1119,6 +1130,7 @@ loadCompanies();
 function getCO(name){ for(var i=0;i<COMPANIES.length;i++){if(COMPANIES[i].name===name)return COMPANIES[i];} return null; }
 function getCOPalette(co){ var p=co?CO_PALETTE[co.paletteIdx%CO_PALETTE.length]:CO_PALETTE[0]; return p; }
 function coNames(){ return COMPANIES.map(function(c){return c.name;}); }
+function getCoDefault(coName,catKey){var co=getCO(coName);if(!co||!co.expenseDefaults)return true;var v=co.expenseDefaults[catKey];return(v===false)?false:true;}
 
 // --- Expense categories ---
 var CATS=['Fuel (Reimbursed)','Travel (Not Reimbursed)','Travel (Reimbursed)','EV Charging (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Tolls (Reimbursed)','Other'];
@@ -1138,6 +1150,14 @@ function isTravelCat(cat){return cat&&(cat.indexOf('Travel')>=0);}
 function travelTypeKey(desc){if(!desc)return '';for(var i=0;i<TRAVEL_TYPES.length;i++){if(desc.indexOf(TRAVEL_TYPES[i].key)>=0)return TRAVEL_TYPES[i].key;}return '';}
 var INCOME_TYPES=['Delivery','Waiting Time','Charging Time','Bonus'];
 var REIMBURSED_CATS=['Fuel (Reimbursed)','Travel (Reimbursed)','EV Charging (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Tolls (Reimbursed)'];
+var CO_DEF_CATS=[
+  {key:'fuel',    label:'Fuel',        icon:'&#x26FD;',          reimb:'Fuel (Reimbursed)',        nonreimb:null},
+  {key:'travel',  label:'Travel',      icon:'&#x1F68C;',         reimb:'Travel (Reimbursed)',       nonreimb:'Travel (Not Reimbursed)'},
+  {key:'ev',      label:'EV Charging', icon:'&#x26A1;',          reimb:'EV Charging (Reimbursed)',  nonreimb:null},
+  {key:'cleaning',label:'Cleaning',    icon:'&#x1F9F9;',         reimb:'Cleaning (Reimbursed)',     nonreimb:null},
+  {key:'parking', label:'Parking',     icon:'&#x1F17F;&#xFE0F;', reimb:'Parking (Reimbursed)',      nonreimb:null},
+  {key:'tolls',   label:'Tolls',       icon:'&#x1F6E3;&#xFE0F;', reimb:'Tolls (Reimbursed)',        nonreimb:null}
+];
 var ALLOC={invest:20,bills:10};
 
 // --- State ---
@@ -1462,6 +1482,7 @@ function debugSync(){
 var DB={income:[],expenses:[]};
 var FYR='All',FCO='All',FDFROM='',FDTO='';
 var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly',PROFIT_CHART_OPEN=true;
+var _CO_DEF_IDX=-1,_CO_DEF_TMP={};
 var SEARCH_INCOME='',SEARCH_EXP='',JOB_SEARCH='',JOB_SECTION_OPEN=false;
 var PAYSLIP={image:'',manualTotal:'',status:'',periodFrom:'',periodTo:'',items:[]};
 var PAYSLIP_GRP_MATCHED=true,PAYSLIP_GRP_MISSING=true,PAYSLIP_GRP_EXTRA=false;
@@ -2335,8 +2356,12 @@ function renderCoList(){
   var el=document.getElementById('co-list');if(!el)return;
   el.innerHTML=COMPANIES.map(function(co,i){
     var p=getCOPalette(co);
-    return '<div class="co-modal-item"><div class="co-modal-dot" style="background:'+p.dot+'"></div><span class="co-modal-name">'+co.name+'</span>'
-      +(COMPANIES.length>1?'<button class="co-modal-remove" onclick="removeCompany('+i+')">Remove</button>':'<span style="font-size:11px;color:var(--text4)">Last</span>')+'</div>';
+    return '<div class="co-modal-item" onclick="openCoDefaults('+i+')" style="cursor:pointer">'
+      +'<div class="co-modal-dot" style="background:'+p.dot+'"></div>'
+      +'<span class="co-modal-name">'+co.name+'</span>'
+      +'<span style="font-size:11px;color:var(--text4);margin-left:auto;margin-right:8px">Defaults &#x276F;</span>'
+      +(COMPANIES.length>1?'<button class="co-modal-remove" onclick="event.stopPropagation();removeCompany('+i+')">Remove</button>':'<span style="font-size:11px;color:var(--text4)">Last</span>')
+      +'</div>';
   }).join('');
 }
 function addCompany(){
@@ -2353,6 +2378,48 @@ function removeCompany(idx){
   if(!confirm('Remove '+name+'?'))return;
   COMPANIES.splice(idx,1);saveCompanies();renderCoList();render(CTAB);showToast(name+' removed');
 }
+function openCoDefaults(idx){
+  _CO_DEF_IDX=idx;
+  var co=COMPANIES[idx];
+  _CO_DEF_TMP={};
+  CO_DEF_CATS.forEach(function(cd){_CO_DEF_TMP[cd.key]=getCoDefault(co.name,cd.key);});
+  var titleEl=document.getElementById('co-def-title');
+  if(titleEl)titleEl.textContent='⚙️ '+co.name+' — Expense Defaults';
+  var list=document.getElementById('co-def-list');if(!list)return;
+  list.innerHTML=CO_DEF_CATS.map(function(cd){
+    var isR=_CO_DEF_TMP[cd.key];
+    return '<div style="margin-bottom:14px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+      +'<span style="font-size:16px">'+cd.icon+'</span>'
+      +'<span style="font-size:13px;font-weight:700;color:var(--text)">'+cd.label+'</span>'
+      +'</div>'
+      +'<div class="reimb-toggle">'
+      +'<button type="button" class="reimb-opt'+(isR?' selected-yes':'')+'" id="co-def-yes-'+cd.key+'" onclick="coDefaultToggle(\''+cd.key+'\',true)">&#x2705; Reimbursed</button>'
+      +'<button type="button" class="reimb-opt'+(!isR?' selected-no':'')+'" id="co-def-no-'+cd.key+'" onclick="coDefaultToggle(\''+cd.key+'\',false)">&#x1F4B8; Not Reimbursed</button>'
+      +'</div></div>';
+  }).join('');
+  document.getElementById('coDefaultsModal').className='modal-overlay open';
+}
+function coDefaultToggle(catKey,isR){
+  _CO_DEF_TMP[catKey]=isR;
+  var y=document.getElementById('co-def-yes-'+catKey),n=document.getElementById('co-def-no-'+catKey);
+  if(y)y.className='reimb-opt'+(isR?' selected-yes':'');
+  if(n)n.className='reimb-opt'+(!isR?' selected-no':'');
+}
+function saveCoDefaults(){
+  if(_CO_DEF_IDX<0||_CO_DEF_IDX>=COMPANIES.length)return;
+  COMPANIES[_CO_DEF_IDX].expenseDefaults=Object.assign({},_CO_DEF_TMP);
+  var name=COMPANIES[_CO_DEF_IDX].name;
+  saveCompanies();
+  document.getElementById('coDefaultsModal').className='modal-overlay';
+  showToast(name+' defaults saved');
+  _CO_DEF_IDX=-1;_CO_DEF_TMP={};
+}
+function closeCoDefaults(){
+  document.getElementById('coDefaultsModal').className='modal-overlay';
+  _CO_DEF_IDX=-1;_CO_DEF_TMP={};
+}
+function closeCoDefaultsOutside(e){if(e.target===document.getElementById('coDefaultsModal'))closeCoDefaults();}
 
 // --- Alloc modal ---
 function openNameModal(){
@@ -3071,7 +3138,7 @@ function openSheet(type,id){
     var catChips=CATS.map(function(c){var icon=CAT_ICONS[c]||'&#x1F4CB;',sel=fcat===c;return '<button type="button" class="cat-chip'+(sel?' selected':'')+'" onclick="var all=this.parentNode.querySelectorAll(\'.cat-chip\');all.forEach(function(b){b.className=\'cat-chip\';});this.className=\'cat-chip selected\';document.getElementById(\'f_cat\').value=\''+c+'\';updateReimbToggle(\''+c+'\')">'+icon+' '+c+'</button>';}).join('');
     // Company chips (like income form)
     var expCoChips='<div class="co-chips"><button type="button" class="co-chip'+(fco2===''?' selected':'')+'" style="'+(fco2===''?'background:var(--bg3);border-color:var(--border2)':'')+'" onclick="document.getElementById(\'f_exco\').value=\'\';this.parentNode.querySelectorAll(\'.co-chip\').forEach(function(b){b.className=\'co-chip\';b.style.cssText=\'\';});this.className=\'co-chip selected\';this.style.background=\'var(--bg3)\';this.style.borderColor=\'var(--border2)\';">None</button>';
-    COMPANIES.forEach(function(c){var p=getCOPalette(c),sel=fco2===c.name;expCoChips+='<button type="button" class="co-chip'+(sel?' selected':'')+'" style="'+(sel?'background:'+p.bg+';color:'+p.fg+';border-color:'+p.dot:'')+'" onclick="this.parentNode.querySelectorAll(\'.co-chip\').forEach(function(b){b.className=\'co-chip\';b.style.cssText=\'\';});this.className=\'co-chip selected\';this.style.background=\''+p.bg+'\';this.style.color=\''+p.fg+'\';this.style.borderColor=\''+p.dot+'\';document.getElementById(\'f_exco\').value=\''+c.name+'\'">'+c.name+'</button>';});
+    COMPANIES.forEach(function(c){var p=getCOPalette(c),sel=fco2===c.name;expCoChips+='<button type="button" class="co-chip'+(sel?' selected':'')+'" style="'+(sel?'background:'+p.bg+';color:'+p.fg+';border-color:'+p.dot:'')+'" onclick="this.parentNode.querySelectorAll(\'.co-chip\').forEach(function(b){b.className=\'co-chip\';b.style.cssText=\'\';});this.className=\'co-chip selected\';this.style.background=\''+p.bg+'\';this.style.color=\''+p.fg+'\';this.style.borderColor=\''+p.dot+'\';document.getElementById(\'f_exco\').value=\''+c.name+'\';applyCoExpenseDefaults(\''+c.name+'\')">'+c.name+'</button>';});
     expCoChips+='</div>';
     // Job ref autocomplete
     var sortedRefs=sortedJobRefs(fd2,fco2);
@@ -3172,6 +3239,15 @@ function updateReimbToggle(cat){
   document.getElementById('reimb-no').className='reimb-opt'+(isR?'':' selected-no');
   var hint=document.getElementById('reimb-hint');
   if(hint)hint.textContent=isR?'Won\'t reduce your tax bill (already paid back)':'Will reduce your tax bill as a deductible expense';
+}
+function applyCoExpenseDefaults(coName){
+  if(EID)return;
+  var catEl=document.getElementById('f_cat');if(!catEl)return;
+  var cat=catEl.value||'';
+  var currentKey=null;
+  CO_DEF_CATS.forEach(function(cd){if(cat===cd.reimb||cat===cd.nonreimb)currentKey=cd.key;});
+  if(!currentKey)return;
+  setReimb(coName?getCoDefault(coName,currentKey):true);
 }
 
 function deleteReceiptImage(expId){
