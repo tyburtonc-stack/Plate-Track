@@ -3272,10 +3272,10 @@ function ocrReceipt(file){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           model:'claude-sonnet-4-5',
-          max_tokens:250,
+          max_tokens:300,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-            {type:'text',text:'Extract data from this receipt. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","description":"2-5 word summary or null","category":"one of Fuel/Travel/EV Charging/Cleaning/Parking/Tolls/Other or null","receipt_ref":"receipt/transaction number printed on receipt or null"}. Amount is the GBP total as a plain number.'}
+            {type:'text',text:'Extract data from this receipt. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","description":"2-5 word summary or null","category":"one of Fuel/Travel/EV Charging/Cleaning/Parking/Tolls/Other or null","travel_type":"use exactly one of Train/Bus/Taxi/Uber/Tube/Ferry/Other or null (only set when category is Travel)","receipt_ref":"receipt/transaction number printed on receipt or null"}. Amount is the GBP total as a plain number.'}
           ]}]
         })
       })
@@ -3292,10 +3292,19 @@ function ocrReceipt(file){
         if(data.description){var dsEl=document.getElementById('f5');if(dsEl&&!dsEl.value){dsEl.value=data.description;filled++;}}
         if(data.receipt_ref){var rfEl=document.getElementById('f4');if(rfEl&&!rfEl.value){rfEl.value=data.receipt_ref;filled++;}}
         if(data.category){
-          var catMap={'Fuel':'Fuel (Reimbursed)','Travel':'Travel (Not Reimbursed)','EV Charging':'EV Charging (Reimbursed)','Cleaning':'Cleaning (Reimbursed)','Parking':'Parking (Reimbursed)','Tolls':'Tolls (Reimbursed)','Other':'Other'};
-          var target=catMap[data.category]||'Other';
           var chips=document.querySelectorAll('#cat-chips-wrap .cat-chip');
-          chips.forEach(function(btn){if(btn.textContent.indexOf(data.category)>=0||btn.textContent.indexOf(target)>=0){btn.click();filled++;}});
+          chips.forEach(function(btn){if(btn.textContent.indexOf(data.category)>=0){btn.click();filled++;}});
+        }
+        if(data.travel_type){
+          var tcat=document.getElementById('f_cat');
+          if(tcat&&isTravelCat(tcat.value)){
+            var tType=data.travel_type.toLowerCase();
+            var tChips=document.querySelectorAll('#travel-chips-wrap .cat-chip');
+            tChips.forEach(function(btn){
+              var key=(btn.getAttribute('data-tt')||'').toLowerCase();
+              if(key===tType||btn.textContent.toLowerCase().indexOf(tType)>=0){btn.click();filled++;}
+            });
+          }
         }
         if(filled>0)showToast('Receipt scanned — '+filled+' field'+(filled>1?'s':'')+' filled');
       })
