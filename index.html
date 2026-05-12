@@ -799,9 +799,9 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
   </button>
   <button class="tb" id="tab1" onclick="showTab(1)">
     <span class="tb-icon">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
     </span>
-    <span class="tb-label">Income</span>
+    <span class="tb-label">Jobs</span>
   </button>
 
   <!-- FAB center -->
@@ -1484,6 +1484,7 @@ var FYR='All',FCO='All',FDFROM='',FDTO='';
 var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly',PROFIT_CHART_OPEN=true;
 var _CO_DEF_IDX=-1,_CO_DEF_TMP={};
 var SEARCH_INCOME='',SEARCH_EXP='',JOB_SEARCH='',JOB_SECTION_OPEN=false;
+var JOBS_VIEW='overview';
 var PAYSLIP={image:'',manualTotal:'',status:'',periodFrom:'',periodTo:'',items:[]};
 var PAYSLIP_GRP_MATCHED=true,PAYSLIP_GRP_MISSING=true,PAYSLIP_GRP_EXTRA=false;
 
@@ -2471,7 +2472,7 @@ function moveTabIndicator(n){
   indicator.style.left=(btnRect.left-tabsRect.left)+'px';
   indicator.style.width=btnRect.width+'px';
 }
-function render(n){if(n===0)rDash();if(n===1)rIncome();if(n===2)rExpenses();if(n===3)rSummary();if(n===4)rAI();}
+function render(n){if(n===0)rDash();if(n===1)rJobsOverview();if(n===2)rExpenses();if(n===3)rSummary();if(n===4)rAI();}
 
 // --- DASHBOARD ---
 function dashOpenJob(el){var id=el.getAttribute('data-jid');if(id)openSheet('income',id);}
@@ -2829,6 +2830,230 @@ function rIncome(){
     +(items.length===0?'<div class="empty-state"><div class="empty-state-icon">&#x1F4B0;</div><div class="empty-state-title">'+(SEARCH_INCOME?'No results':'No income yet')+'</div><div class="empty-state-sub">'+(SEARCH_INCOME?'Try a different search':'Tap + Add to log your first job')+'</div>'+(SEARCH_INCOME?'':'<button class="empty-state-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add Income</button>')+'</div>':html)
     +'</div></div>';
   document.getElementById('pg1').innerHTML=content;
+}
+
+// --- JOBS OVERVIEW ---
+function rJobsOverview(){
+  if(JOBS_VIEW==='entries'){
+    var allItems=getIncome().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
+    var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_INCOME);});
+    var html=buildIncomeListHTML(items);
+    var content='<div style="padding:0 16px 14px">'
+      +'<div class="tab-hdr"><span class="tab-hdr-title">Jobs</span><button class="add-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add</button></div>'
+      +'</div>'
+      +'<div style="padding:0 16px 10px;display:flex;gap:8px">'
+      +'<button onclick="JOBS_VIEW=\'overview\';rJobsOverview()" style="flex:1;padding:8px 0;border-radius:var(--r-full);font-size:13px;font-weight:700;border:1.5px solid var(--border);background:var(--bg3);color:var(--text4);cursor:pointer">Overview</button>'
+      +'<button style="flex:1;padding:8px 0;border-radius:var(--r-full);font-size:13px;font-weight:700;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer">Entries</button>'
+      +'</div>'
+      +limitBannerHTML()
+      +filtersHTML()
+      +'<div class="search-bar"><div class="search-inner"><span class="search-icon-left">&#x1F50D;</span>'
+      +'<input type="text" id="income-search-input" class="std-input" placeholder="Search job ref, reg, postcode..." value="'+SEARCH_INCOME+'" oninput="filterIncome(this.value)" style="padding-left:36px">'
+      +(SEARCH_INCOME?'<button class="search-clear" onclick="filterIncome(\'\')">&#x2715;</button>':'')+'</div></div>'
+      +'<div style="padding:10px 16px 16px"><div id="income-results">'
+      +(items.length===0?'<div class="empty-state"><div class="empty-state-icon">&#x1F4B0;</div><div class="empty-state-title">'+(SEARCH_INCOME?'No results':'No income yet')+'</div><div class="empty-state-sub">'+(SEARCH_INCOME?'Try a different search':'Tap + Add to log your first job')+'</div>'+(SEARCH_INCOME?'':'<button class="empty-state-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add Income</button>')+'</div>':html)
+      +'</div></div>';
+    document.getElementById('pg1').innerHTML=content;
+    return;
+  }
+  // Overview mode – group income by jobRef
+  var allItems=getIncome().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
+  var groups={},groupOrder=[];
+  allItems.forEach(function(x){
+    var key=x.jobRef||('__'+x.id);
+    if(!groups[key]){
+      groups[key]={ref:x.jobRef||'',company:x.company,date:x.date,items:[],grossIncome:0,incomeByType:{},reimbTotal:0,deductTotal:0,linkedExpenses:[]};
+      groupOrder.push(key);
+    }
+    groups[key].items.push(x);
+    groups[key].grossIncome+=parseFloat(x.amount||0);
+    var t=x.incomeType||'Delivery';
+    groups[key].incomeByType[t]=(groups[key].incomeByType[t]||0)+parseFloat(x.amount||0);
+    if(x.date>groups[key].date)groups[key].date=x.date;
+  });
+  groupOrder.forEach(function(key){
+    var g=groups[key];
+    if(!g.ref)return;
+    DB.expenses.forEach(function(e){
+      if(e.jobRef===g.ref){
+        g.linkedExpenses.push(e);
+        var a=parseFloat(e.amount||0);
+        if(isReimbursedCat(e.category))g.reimbTotal+=a; else g.deductTotal+=a;
+      }
+    });
+  });
+  var cardsHTML=groupOrder.length>0
+    ?groupOrder.map(function(k){return jobOverviewCardHTML(groups[k]);}).join('')
+    :'<div class="empty-state"><div class="empty-state-icon">&#x1F4BC;</div><div class="empty-state-title">No jobs yet</div><div class="empty-state-sub">Tap + Add to log your first job</div><button class="empty-state-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add Job</button></div>';
+  var content='<div style="padding:0 16px 14px">'
+    +'<div class="tab-hdr"><span class="tab-hdr-title">Jobs</span><button class="add-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add</button></div>'
+    +'</div>'
+    +'<div style="padding:0 16px 10px;display:flex;gap:8px">'
+    +'<button style="flex:1;padding:8px 0;border-radius:var(--r-full);font-size:13px;font-weight:700;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer">Overview</button>'
+    +'<button onclick="JOBS_VIEW=\'entries\';rJobsOverview()" style="flex:1;padding:8px 0;border-radius:var(--r-full);font-size:13px;font-weight:700;border:1.5px solid var(--border);background:var(--bg3);color:var(--text4);cursor:pointer">Entries</button>'
+    +'</div>'
+    +limitBannerHTML()
+    +filtersHTML()
+    +'<div style="padding:10px 16px 80px">'
+    +cardsHTML
+    +'</div>';
+  document.getElementById('pg1').innerHTML=content;
+}
+
+function jobOverviewCardHTML(g){
+  var net=g.grossIncome-g.deductTotal;
+  var hasExps=g.reimbTotal>0||g.deductTotal>0;
+  var expPills='';
+  if(hasExps){
+    expPills='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">';
+    if(g.reimbTotal>0)expPills+='<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:100px;background:var(--success-bg);color:var(--success);border:1px solid var(--success-border)">&#x2B50; '+money(g.reimbTotal)+' reimb.</span>';
+    if(g.deductTotal>0)expPills+='<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:100px;background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-border)">&#x1F9FE; '+money(g.deductTotal)+' exp.</span>';
+    expPills+='</div>';
+  }
+  var firstItem=g.items[0]||{};
+  var miles=firstItem.miles||'';
+  var detailRef=g.ref?g.ref:('__'+firstItem.id);
+  var fallbackId=String(firstItem.id||'');
+  return '<div class="job-card" data-detail-ref="'+detailRef+'" data-detail-fid="'+fallbackId+'" onclick="openJobDetail(this.dataset.detailRef,this.dataset.detailFid)" style="flex-direction:column;align-items:stretch;gap:0;cursor:pointer;margin-bottom:10px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center">'
+    +'<div class="job-card-left"><div class="job-card-top">'+cobadge(g.company)+'<span class="job-card-ref">'+(g.ref||'Job')+'</span></div>'
+    +'<div class="job-card-meta">'+fdateShort(g.date)+(miles?' &middot; '+miles+' mi':'')+(g.items.length>1?' &middot; '+g.items.length+' entries':'')+'</div></div>'
+    +'<div class="job-card-right">'
+    +(g.deductTotal>0
+      ?'<div style="text-align:right"><div class="job-card-amount">'+money(g.grossIncome)+'</div><div style="font-size:11px;font-weight:700;color:var(--success);margin-top:1px">'+money(net)+' net</div></div>'
+      :'<div class="job-card-amount">'+money(g.grossIncome)+'</div>'
+    )
+    +'</div></div>'
+    +expPills
+    +'</div>';
+}
+
+function openJobDetail(jobRef,fallbackId){
+  var isSingleton=jobRef&&jobRef.indexOf('__')===0;
+  var incomeEntries;
+  if(isSingleton){
+    var sid=jobRef.replace('__','');
+    incomeEntries=DB.income.filter(function(i){return String(i.id)===sid;});
+  } else {
+    incomeEntries=DB.income.filter(function(i){return i.jobRef===jobRef;});
+  }
+  if(!incomeEntries.length&&fallbackId){
+    incomeEntries=DB.income.filter(function(i){return String(i.id)===String(fallbackId);});
+  }
+  if(!incomeEntries.length)return;
+  var firstEntry=incomeEntries[0];
+  var company=firstEntry.company,date=firstEntry.date,miles=firstEntry.miles,registration=firstEntry.registration;
+  var startPostcode=firstEntry.startPostcode,endPostcode=firstEntry.endPostcode;
+  var totalMins=0;
+  incomeEntries.forEach(function(x){totalMins+=parseDuration(x.startTime,x.endTime);});
+  var incByType={},totalGross=0;
+  incomeEntries.forEach(function(x){
+    var t=x.incomeType||'Delivery';
+    incByType[t]=(incByType[t]||0)+parseFloat(x.amount||0);
+    totalGross+=parseFloat(x.amount||0);
+  });
+  var linkedExpenses=(!isSingleton&&jobRef)?DB.expenses.filter(function(e){return e.jobRef===jobRef;}):[];
+  var TRAVEL_ICONS={'Bus':'&#x1F68C;','Train':'&#x1F686;','Taxi':'&#x1F695;','Uber':'&#x1F697;','Tube':'&#x1F687;','Ferry':'&#x26F4;&#xFE0F;','Other':'&#x1F697;'};
+  var expsBySubtype={},expSubOrder=[],totalReimb=0,totalDeduct=0,totalExp=0;
+  linkedExpenses.forEach(function(e){
+    var a=parseFloat(e.amount||0),reimb=isReimbursedCat(e.category);
+    totalExp+=a;
+    if(reimb)totalReimb+=a; else totalDeduct+=a;
+    var label,icon;
+    if(isTravelCat(e.category)&&e.description&&TRAVEL_ICONS[e.description]!==undefined){
+      label=e.description+(reimb?' (Reimb.)':'');
+      icon=TRAVEL_ICONS[e.description]||'&#x1F697;';
+    } else {
+      label=e.category;
+      icon=CAT_ICONS[e.category]||'&#x1F4CB;';
+    }
+    if(!expsBySubtype[label]){expsBySubtype[label]={icon:icon,total:0,reimb:reimb};expSubOrder.push(label);}
+    expsBySubtype[label].total+=a;
+  });
+  var netIncome=totalGross-totalDeduct;
+  var INCOME_ICONS={'Delivery':'&#x1F4E6;','Bonus':'&#x1F4B0;','Waiting Time':'&#x23F1;&#xFE0F;','Charging Time':'&#x26A1;'};
+  var incomeRowsHTML='';
+  ['Delivery','Bonus','Waiting Time','Charging Time'].forEach(function(t){
+    if(incByType[t]){
+      incomeRowsHTML+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'
+        +'<span style="font-size:14px;color:var(--text2)">'+(INCOME_ICONS[t]||'&#x1F4B0;')+' '+t+'</span>'
+        +'<span style="font-size:15px;font-weight:700;color:var(--text)">'+money(incByType[t])+'</span>'
+        +'</div>';
+    }
+  });
+  Object.keys(incByType).forEach(function(t){
+    if(['Delivery','Bonus','Waiting Time','Charging Time'].indexOf(t)<0){
+      incomeRowsHTML+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'
+        +'<span style="font-size:14px;color:var(--text2)">&#x1F4B0; '+t+'</span>'
+        +'<span style="font-size:15px;font-weight:700;color:var(--text)">'+money(incByType[t])+'</span>'
+        +'</div>';
+    }
+  });
+  incomeRowsHTML+='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0 0">'
+    +'<span style="font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Total Gross</span>'
+    +'<span style="font-size:17px;font-weight:800;color:var(--text)">'+money(totalGross)+'</span>'
+    +'</div>';
+  var expRowsHTML='';
+  if(linkedExpenses.length>0){
+    expSubOrder.forEach(function(label){
+      var entry=expsBySubtype[label];
+      var color=entry.reimb?'var(--success)':'var(--orange)';
+      expRowsHTML+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'
+        +'<span style="font-size:14px;color:var(--text2)">'+entry.icon+' '+label+'</span>'
+        +'<span style="font-size:15px;font-weight:700;color:'+color+'">'+money(entry.total)+'</span>'
+        +'</div>';
+    });
+    expRowsHTML+='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0 0">'
+      +'<span style="font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Total Expenses</span>'
+      +'<span style="font-size:17px;font-weight:800;color:var(--orange)">'+money(totalExp)+'</span>'
+      +'</div>';
+  } else {
+    expRowsHTML='<div style="font-size:13px;color:var(--text4);padding:8px 0">No expenses linked to this job.</div>';
+  }
+  var metaHTML='<div style="font-size:13px;color:var(--text4);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap">'
+    +'<span>'+fdateShort(date)+'</span>'
+    +(miles?'<span>&#x1F4CD; '+miles+' mi</span>':'')
+    +(totalMins>0?'<span>&#x23F1; '+fmtHours(totalMins)+'</span>':'')
+    +(registration?'<span>&#x1F697; '+registration+'</span>':'')
+    +((startPostcode||endPostcode)?'<span>'+(startPostcode||'?')+' &rarr; '+(endPostcode||'?')+'</span>':'')
+    +'</div>';
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:flex-end;justify-content:center;padding:0;overflow:hidden';
+  overlay.innerHTML='<div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 -4px 32px rgba(0,0,0,.35)">'
+    +'<div style="padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0">'
+    +'<div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+cobadge(company)+(!isSingleton&&jobRef?'<span style="font-size:17px;font-weight:800;color:var(--text)">'+jobRef+'</span>':'')+'</div>'
+    +metaHTML
+    +'</div>'
+    +'<button class="jd-close" style="background:var(--bg3);border:none;border-radius:100px;width:32px;height:32px;font-size:18px;color:var(--text3);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;line-height:1">&#x2715;</button>'
+    +'</div>'
+    +'<div style="overflow-y:auto;flex:1;padding:0 20px 8px">'
+    +'<div style="padding-top:16px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Income</div>'
+    +incomeRowsHTML
+    +'</div>'
+    +'<div style="padding-top:20px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Expenses</div>'
+    +expRowsHTML
+    +'</div>'
+    +'<div style="margin-top:20px;padding:14px 16px;background:var(--success-bg);border-radius:var(--r-md);border:1px solid var(--success-border);display:flex;justify-content:space-between;align-items:center">'
+    +'<span style="font-size:14px;font-weight:700;color:var(--success)">Net Income</span>'
+    +'<span style="font-size:20px;font-weight:800;color:var(--success)">'+money(netIncome)+'</span>'
+    +'</div>'
+    +'<div style="height:20px"></div>'
+    +'</div>'
+    +'<div style="padding:12px 20px 32px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0">'
+    +'<button class="jd-edit" style="flex:1;padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-weight:700;color:var(--text2);cursor:pointer">Edit Job</button>'
+    +'<button class="jd-addexp" style="flex:1;padding:14px;background:var(--accent);border:none;border-radius:var(--r-md);font-size:14px;font-weight:700;color:#fff;cursor:pointer">+ Add Expense</button>'
+    +'</div>'
+    +'</div>';
+  document.body.appendChild(overlay);
+  var editId=fallbackId||(firstEntry&&String(firstEntry.id))||'';
+  var prefillRef=(!isSingleton&&jobRef)?jobRef:'';
+  overlay.querySelector('.jd-close').addEventListener('click',function(){overlay.remove();});
+  overlay.querySelector('.jd-edit').addEventListener('click',function(){overlay.remove();openSheet('income',editId);});
+  overlay.querySelector('.jd-addexp').addEventListener('click',function(){overlay.remove();openSheet('expense','');});
+  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
 }
 
 // --- EXPENSES ---
