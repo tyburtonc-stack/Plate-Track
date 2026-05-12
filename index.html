@@ -289,13 +289,13 @@ body.dark .filter-chip.active{background:var(--gold);color:#1A1A2E;border-color:
 body.dark .overlay{background:rgba(0,0,0,.7)}
 .overlay.open{display:flex;animation:overlayIn .2s ease-out}
 @keyframes overlayIn{from{opacity:0}to{opacity:1}}
-.sheet{background:var(--sheet);border-radius:24px 24px 0 0;padding:0 0 max(env(safe-area-inset-bottom),20px);width:100%;max-height:92vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:sheetIn .28s cubic-bezier(.34,1.56,.64,1)}
+.sheet{background:var(--sheet);border-radius:24px 24px 0 0;padding:0 0 max(env(safe-area-inset-bottom),20px);width:100%;max-height:92vh;overflow-y:auto;overflow-x:hidden;box-shadow:var(--shadow-lg);animation:sheetIn .28s cubic-bezier(.34,1.56,.64,1)}
 @keyframes sheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .sheet-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 0}
 .sheet-hdr{padding:14px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
 .sheet-title{font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--text)}
 .sheet-close{width:30px;height:30px;background:var(--bg3);border:none;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--text3)}
-.sheet-body{padding:18px 20px 28px}
+.sheet-body{padding:18px 20px 28px;overflow-x:hidden}
 /* ── Form fields ──────────────────────────────────────────────── */
 .field{margin-bottom:16px}
 .field-label{font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px}
