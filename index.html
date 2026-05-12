@@ -3135,7 +3135,13 @@ function openSheet(type,id){
     var fco2=rec?(rec.company||''):'',fjr2=rec?(rec.jobRef||''):'',fimg=rec?(rec.receiptImage||''):'';
     var isReimb=isReimbursedCat(fcat);
     // Category chips
-    var catChips=CATS.map(function(c){var icon=CAT_ICONS[c]||'&#x1F4CB;',sel=fcat===c;return '<button type="button" class="cat-chip'+(sel?' selected':'')+'" onclick="var all=this.parentNode.querySelectorAll(\'.cat-chip\');all.forEach(function(b){b.className=\'cat-chip\';});this.className=\'cat-chip selected\';document.getElementById(\'f_cat\').value=\''+c+'\';updateReimbToggle(\''+c+'\')">'+icon+' '+c+'</button>';}).join('');
+    var CHIP_DEFS=CO_DEF_CATS.concat([{label:'Other',icon:'&#x1F4CB;',reimb:'Other',nonreimb:null}]);
+    var catChips=CHIP_DEFS.map(function(cd){
+      var sel=fcat===cd.reimb||(cd.nonreimb&&fcat===cd.nonreimb);
+      return '<button type="button" class="cat-chip'+(sel?' selected':'')+'" data-base="'+cd.label+'" '
+        +'onclick="var all=this.parentNode.querySelectorAll(\'.cat-chip\');all.forEach(function(b){b.className=\'cat-chip\';});this.className=\'cat-chip selected\';document.getElementById(\'f_cat\').value=\''+cd.reimb+'\';updateReimbToggle(\''+cd.reimb+'\');var _cn=document.getElementById(\'f_exco\').value;if(_cn)applyCoExpenseDefaults(_cn);">'
+        +cd.icon+' '+cd.label+'</button>';
+    }).join('');
     // Company chips (like income form)
     var expCoChips='<div class="co-chips"><button type="button" class="co-chip'+(fco2===''?' selected':'')+'" style="'+(fco2===''?'background:var(--bg3);border-color:var(--border2)':'')+'" onclick="document.getElementById(\'f_exco\').value=\'\';this.parentNode.querySelectorAll(\'.co-chip\').forEach(function(b){b.className=\'co-chip\';b.style.cssText=\'\';});this.className=\'co-chip selected\';this.style.background=\'var(--bg3)\';this.style.borderColor=\'var(--border2)\';">None</button>';
     COMPANIES.forEach(function(c){var p=getCOPalette(c),sel=fco2===c.name;expCoChips+='<button type="button" class="co-chip'+(sel?' selected':'')+'" style="'+(sel?'background:'+p.bg+';color:'+p.fg+';border-color:'+p.dot:'')+'" onclick="this.parentNode.querySelectorAll(\'.co-chip\').forEach(function(b){b.className=\'co-chip\';b.style.cssText=\'\';});this.className=\'co-chip selected\';this.style.background=\''+p.bg+'\';this.style.color=\''+p.fg+'\';this.style.borderColor=\''+p.dot+'\';document.getElementById(\'f_exco\').value=\''+c.name+'\';applyCoExpenseDefaults(\''+c.name+'\')">'+c.name+'</button>';});
@@ -3228,7 +3234,7 @@ function setReimb(yes){
   if(hint)hint.textContent=yes?'Won\'t reduce your tax bill (already paid back)':'Will reduce your tax bill as a deductible expense';
   // Update chip selection
   var chips=document.querySelectorAll('#cat-chips-wrap .cat-chip');
-  chips.forEach(function(c){c.className=c.textContent.indexOf(cat)>=0?'cat-chip selected':'cat-chip';});
+  chips.forEach(function(c){var base=c.getAttribute('data-base')||'';c.className=(base&&(cat===base||cat.indexOf(base+' ')===0))?'cat-chip selected':'cat-chip';});
 }
 
 function updateReimbToggle(cat){
