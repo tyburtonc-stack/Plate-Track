@@ -3275,7 +3275,7 @@ function ocrReceipt(file){
           max_tokens:300,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-            {type:'text',text:'Extract data from this receipt. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","description":"2-5 word summary or null","category":"one of Fuel/Travel/EV Charging/Cleaning/Parking/Tolls/Other or null","travel_type":"one of Train/Bus/Taxi/Uber/Tube/Ferry/Other or null (only when category is Travel)","receipt_ref":"receipt/transaction number printed on receipt or null"}. Amount is the GBP total as a plain number.'}
+            {type:'text',text:'Extract data from this receipt. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","description":"2-5 word summary or null","category":"one of Fuel/Travel/EV Charging/Cleaning/Parking/Tolls/Other or null","travel_type":"use exactly one of Train/Bus/Taxi/Uber/Tube/Ferry/Other or null (only set when category is Travel)","receipt_ref":"receipt/transaction number printed on receipt or null"}. Amount is the GBP total as a plain number.'}
           ]}]
         })
       })
@@ -3298,8 +3298,12 @@ function ocrReceipt(file){
         if(data.travel_type){
           var tcat=document.getElementById('f_cat');
           if(tcat&&isTravelCat(tcat.value)){
+            var tType=data.travel_type.toLowerCase();
             var tChips=document.querySelectorAll('#travel-chips-wrap .cat-chip');
-            tChips.forEach(function(btn){if(btn.getAttribute('data-tt')===data.travel_type){btn.click();filled++;}});
+            tChips.forEach(function(btn){
+              var key=(btn.getAttribute('data-tt')||'').toLowerCase();
+              if(key===tType||btn.textContent.toLowerCase().indexOf(tType)>=0){btn.click();filled++;}
+            });
           }
         }
         if(filled>0)showToast('Receipt scanned — '+filled+' field'+(filled>1?'s':'')+' filled');
