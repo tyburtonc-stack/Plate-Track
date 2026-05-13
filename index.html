@@ -915,6 +915,20 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
   </div>
 </div>
 
+<!-- Income Types modal -->
+<div class="modal-overlay" id="incomeTypesModal" onclick="closeIncomeTypesModal(event)">
+  <div class="modal-box" style="max-height:80vh;overflow-y:auto">
+    <div class="modal-title">&#x1F4B0; Income Types</div>
+    <p style="font-size:12px;color:var(--text4);margin:-8px 0 16px;line-height:1.5">Customise the income type categories used when logging jobs.</p>
+    <div class="co-modal-list" id="income-types-list"></div>
+    <div class="co-modal-add-row">
+      <input type="text" class="std-input" id="income-type-new-input" placeholder="New type name..." maxlength="30">
+      <button class="co-modal-add-btn" onclick="addIncomeType()">+ Add</button>
+    </div>
+    <button class="co-modal-done" onclick="document.getElementById('incomeTypesModal').className='modal-overlay'">Done</button>
+  </div>
+</div>
+
 <!-- Paywall -->
 
 <div class="paywall-overlay" id="paywallOverlay">
@@ -1012,6 +1026,10 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
         </div>
         <div class="profile-row" onclick="document.getElementById('profileOverlay').className='side-panel-overlay';openCoModal()">
           <span class="profile-row-left"><span class="profile-row-icon">🏢</span>Manage companies</span>
+          <span class="profile-row-chev">›</span>
+        </div>
+        <div class="profile-row" onclick="document.getElementById('profileOverlay').className='side-panel-overlay';openIncomeTypesModal()">
+          <span class="profile-row-left"><span class="profile-row-icon">&#x1F4B0;</span>Manage income types</span>
           <span class="profile-row-chev">›</span>
         </div>
       </div>
@@ -1149,7 +1167,17 @@ var TRAVEL_TYPES=[
 ];
 function isTravelCat(cat){return cat&&(cat.indexOf('Travel')>=0);}
 function travelTypeKey(desc){if(!desc)return '';for(var i=0;i<TRAVEL_TYPES.length;i++){if(desc.indexOf(TRAVEL_TYPES[i].key)>=0)return TRAVEL_TYPES[i].key;}return '';}
-var INCOME_TYPES=['Delivery','Waiting Time','Charging Time','Bonus'];
+var DEFAULT_INCOME_TYPES=['Delivery','Waiting Time','Charging Time','Bonus'];
+var INCOME_TYPES=DEFAULT_INCOME_TYPES.slice();
+function loadIncomeTypes(){
+  try{var s=localStorage.getItem('pt_income_types');if(s){var arr=JSON.parse(s);if(Array.isArray(arr)&&arr.length){INCOME_TYPES=arr;return;}}}catch(e){}
+  INCOME_TYPES=DEFAULT_INCOME_TYPES.slice();
+}
+function saveIncomeTypes(){
+  try{localStorage.setItem('pt_income_types',JSON.stringify(INCOME_TYPES));}catch(e){}
+  if(SUPA_USER&&SUPA_SESSION){supaIncomeTypesPush(null);}
+}
+loadIncomeTypes();
 var REIMBURSED_CATS=['Fuel (Reimbursed)','Travel (Reimbursed)','EV Charging (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Tolls (Reimbursed)','Hotel (Reimbursed)'];
 var CO_DEF_CATS=[
   {key:'travel',  label:'Travel',      icon:'&#x1F68C;',         reimb:'Travel (Reimbursed)',       nonreimb:'Travel (Not Reimbursed)'},
@@ -1248,8 +1276,25 @@ function supaEnsureUser(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
   fetch(SUPA_URL+'/rest/v1/users',{method:'POST',
     headers:Object.assign(_supaHdr(),{'Prefer':'resolution=merge-duplicates'}),
-    body:JSON.stringify({id:SUPA_USER.id,name:getUserName()||''})
+    body:JSON.stringify({id:SUPA_USER.id,name:getUserName()||'',income_types:INCOME_TYPES})
   }).then(function(){if(cb)cb(null);}).catch(function(e){if(cb)cb(e.message);});
+}
+
+function supaNamePull(cb){
+  if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
+  var h=_supaHdr();delete h['Content-Type'];
+  fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id)+'&select=name',{headers:h})
+    .then(function(r){return r.ok?r.json():[];})
+    .then(function(rows){
+      if(rows&&rows.length&&rows[0].name&&!getUserName()){
+        setUserName(rows[0].name);
+        var nameEl=document.getElementById('profilePanelName');
+        if(nameEl)nameEl.textContent=rows[0].name;
+        if(CTAB===0)rDash();
+      }
+      if(cb)cb(null);
+    })
+    .catch(function(e){if(cb)cb(e.message);});
 }
 
 function supaCompaniesPush(cb){
@@ -1271,6 +1316,30 @@ function supaCompaniesPull(cb){
         COMPANIES=rows[0].companies;
         try{localStorage.setItem('pt_companies',JSON.stringify(COMPANIES));}catch(e){}
         render(CTAB);
+      }
+      if(cb)cb(null);
+    })
+    .catch(function(e){if(cb)cb(e.message);});
+}
+
+function supaIncomeTypesPush(cb){
+  if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
+  fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id),{
+    method:'PATCH',
+    headers:Object.assign(_supaHdr(),{'Prefer':'return=minimal'}),
+    body:JSON.stringify({income_types:INCOME_TYPES})
+  }).then(function(){if(cb)cb(null);}).catch(function(e){if(cb)cb(e.message);});
+}
+
+function supaIncomeTypesPull(cb){
+  if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
+  var h=_supaHdr();delete h['Content-Type'];
+  fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id)+'&select=income_types',{headers:h})
+    .then(function(r){return r.ok?r.json():[];})
+    .then(function(rows){
+      if(rows&&rows.length&&Array.isArray(rows[0].income_types)&&rows[0].income_types.length){
+        INCOME_TYPES=rows[0].income_types;
+        try{localStorage.setItem('pt_income_types',JSON.stringify(INCOME_TYPES));}catch(e){}
       }
       if(cb)cb(null);
     })
@@ -1309,7 +1378,7 @@ function supaPullAll(cb){
     if(inc.length===0&&exp.length===0){console.log('cloud empty, pushing local');supaPushAll(cb);return;}
     DB.income=inc.map(function(x){return{id:x.id,date:x.date||'',company:x.company||'',incomeType:x.income_type||'',amount:String(x.amount||0),jobRef:x.job_ref||'',startTime:x.start_time||'',endTime:x.end_time||'',miles:x.miles!=null?String(x.miles):'',registration:x.registration||'',startPostcode:x.start_postcode||'',endPostcode:x.end_postcode||'',description:x.description||''};});
     DB.expenses=exp.map(function(x){return{id:x.id,date:x.date||'',category:x.category||'',amount:String(x.amount||0),company:x.company||'',jobRef:x.job_ref||'',receipt:x.receipt||'',description:x.description||'',receiptImage:x.receipt_image||''};});
-    saveDB();render(CTAB);showToast('☁️ Data loaded');supaCompaniesPull(cb);return;
+    saveDB();render(CTAB);showToast('☁️ Data loaded');supaCompaniesPull(function(e){supaIncomeTypesPull(cb);});return;
   }).catch(function(e){console.warn('pull err',e);if(cb)cb(e.message);});
 }
 
@@ -2304,8 +2373,8 @@ function cobadge(co){
 }
 function typebadge(t){
   var map={Delivery:'type-delivery Delivery','Waiting Time':'type-waiting \u23F1 Waiting','Charging Time':'type-charging \u26A1 Charging','Bonus':'type-bonus \uD83D\uDCB0 Bonus'};
-  var v=map[t]||('type-delivery Delivery');var parts=v.split(' ');var cls=parts[0];var lbl=parts.slice(1).join(' ');
-  return '<span class="type-badge '+cls+'">'+lbl+'</span>';
+  if(map[t]){var parts=map[t].split(' ');return '<span class="type-badge '+parts[0]+'">'+parts.slice(1).join(' ')+'</span>';}
+  return '<span class="type-badge type-delivery">'+(t||'Delivery')+'</span>';
 }
 function matchesSearch(x,q){
   if(!q)return true;q=q.toLowerCase();
@@ -2464,6 +2533,53 @@ function saveName(){
   document.getElementById('nameModal').className='modal-overlay';
   showToast(name?'Name saved as '+name:'Name cleared');
   if(CTAB===0)rDash();
+}
+
+function openIncomeTypesModal(){renderIncomeTypesList();document.getElementById('incomeTypesModal').className='modal-overlay open';}
+function closeIncomeTypesModal(e){if(e.target===document.getElementById('incomeTypesModal'))document.getElementById('incomeTypesModal').className='modal-overlay';}
+function renderIncomeTypesList(){
+  var el=document.getElementById('income-types-list');if(!el)return;
+  el.innerHTML=INCOME_TYPES.map(function(tp,i){
+    var inUse=DB.income.some(function(x){return x.incomeType===tp;});
+    return '<div class="co-modal-item" style="cursor:default">'
+      +'<span class="co-modal-name">'+tp+'</span>'
+      +(inUse?'<span style="font-size:11px;color:var(--text4);margin-right:6px">in use</span>':'')
+      +'<button class="co-modal-remove" onclick="editIncomeType('+i+')" style="margin-right:4px">Edit</button>'
+      +(INCOME_TYPES.length>1?'<button class="co-modal-remove" onclick="removeIncomeType('+i+')">Remove</button>':'<span style="font-size:11px;color:var(--text4)">last</span>')
+      +'</div>';
+  }).join('');
+}
+function addIncomeType(){
+  var inp=document.getElementById('income-type-new-input'),name=(inp?inp.value:'').trim();
+  if(!name){alert('Please enter a type name.');return;}
+  if(name.length>30){alert('Name must be 30 characters or fewer.');return;}
+  for(var i=0;i<INCOME_TYPES.length;i++){if(INCOME_TYPES[i].toLowerCase()===name.toLowerCase()){alert('"'+name+'" already exists.');return;}}
+  INCOME_TYPES.push(name);
+  saveIncomeTypes();if(inp)inp.value='';renderIncomeTypesList();showToast('"'+name+'" added');
+}
+function removeIncomeType(idx){
+  if(INCOME_TYPES.length<=1){alert('You need at least one income type.');return;}
+  var name=INCOME_TYPES[idx];
+  var inUse=DB.income.some(function(x){return x.incomeType===name;});
+  if(inUse){alert('"'+name+'" is used by existing job records. Rename those records first before removing this type.');return;}
+  if(!confirm('Remove "'+name+'"?'))return;
+  INCOME_TYPES.splice(idx,1);saveIncomeTypes();renderIncomeTypesList();showToast('"'+name+'" removed');
+}
+function editIncomeType(idx){
+  var oldName=INCOME_TYPES[idx];
+  var newName=window.prompt('Rename "'+oldName+'":', oldName);
+  if(!newName||!newName.trim())return;
+  newName=newName.trim();
+  if(newName===oldName)return;
+  if(newName.length>30){alert('Name must be 30 characters or fewer.');return;}
+  for(var i=0;i<INCOME_TYPES.length;i++){if(i!==idx&&INCOME_TYPES[i].toLowerCase()===newName.toLowerCase()){alert('"'+newName+'" already exists.');return;}}
+  var updated=0;
+  DB.income.forEach(function(x){if(x.incomeType===oldName){x.incomeType=newName;updated++;}});
+  INCOME_TYPES[idx]=newName;
+  saveIncomeTypes();
+  if(updated>0){saveDB();if(SUPA_USER&&SUPA_SESSION)supaPushAll(null);}
+  renderIncomeTypesList();render(CTAB);
+  showToast('Renamed to "'+newName+'"'+(updated>0?' — '+updated+' record'+(updated>1?'s':'')+' updated':''));
 }
 
 function openAllocModal(){document.getElementById('al_invest').value=ALLOC.invest;document.getElementById('al_bills').value=ALLOC.bills;document.getElementById('allocModal').className='modal-overlay open';}
@@ -3001,7 +3117,7 @@ function openJobDetail(jobRef,fallbackId){
   var netIncome=totalGross-totalDeduct;
   var INCOME_ICONS={'Delivery':'&#x1F4E6;','Bonus':'&#x1F4B0;','Waiting Time':'&#x23F1;&#xFE0F;','Charging Time':'&#x26A1;'};
   var incomeRowsHTML='';
-  ['Delivery','Bonus','Waiting Time','Charging Time'].forEach(function(t){
+  INCOME_TYPES.forEach(function(t){
     if(incByType[t]){
       incomeRowsHTML+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'
         +'<span style="font-size:14px;color:var(--text2)">'+(INCOME_ICONS[t]||'&#x1F4B0;')+' '+t+'</span>'
@@ -3010,7 +3126,7 @@ function openJobDetail(jobRef,fallbackId){
     }
   });
   Object.keys(incByType).forEach(function(t){
-    if(['Delivery','Bonus','Waiting Time','Charging Time'].indexOf(t)<0){
+    if(INCOME_TYPES.indexOf(t)<0){
       incomeRowsHTML+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'
         +'<span style="font-size:14px;color:var(--text2)">&#x1F4B0; '+t+'</span>'
         +'<span style="font-size:15px;font-weight:700;color:var(--text)">'+money(incByType[t])+'</span>'
@@ -3326,6 +3442,7 @@ function rSummary(){
     +'<button class="report-btn" style="background:#F0FDF4;color:#16A34A;border-color:#BBF7D0" onclick="generateCSV()"><span>&#x1F4CA;</span> Export to CSV <span style="font-size:11px;font-weight:500;opacity:.7;margin-left:4px">Income &amp; Expenses</span>'+(isPro()?'':'<span style="background:#F59E0B;color:#fff;font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px;margin-left:6px;vertical-align:middle">PRO</span>')+'</button>'
     +'<button class="settings-btn" onclick="openProfilePanel()"><span>&#x1F464;</span> Account &amp; Settings</button>'
     +'<button class="settings-btn" onclick="openCoModal()"><span>&#x1F3E2;</span> Manage Companies</button>'
+    +'<button class="settings-btn" onclick="openIncomeTypesModal()"><span>&#x1F4B0;</span> Manage Income Types</button>'
     +'<button class="settings-btn" onclick="openNameModal()"><span>&#x2712;</span> Change Your Name</button>'
     +'</div></div>'
     // Tips
@@ -3351,12 +3468,12 @@ function openSheet(type,id){
     var fd2=rec?rec.date:today(),fco=rec?rec.company:COMPANIES[0].name;
     var fam=rec?(rec.amount||''):'',fjr=rec?(rec.jobRef||''):'',fml=rec?(rec.miles||''):'';
     var fds=rec?(rec.description||''):'',fst=rec?(rec.startTime||''):'',fet=rec?(rec.endTime||''):'';
-    var fit=rec?(rec.incomeType||'Delivery'):'Delivery',freg=rec?(rec.registration||''):'';
+    var fit=rec?(rec.incomeType||INCOME_TYPES[0]||'Delivery'):INCOME_TYPES[0]||'Delivery',freg=rec?(rec.registration||''):'';
     var fsp=rec?(rec.startPostcode||''):'',fep=rec?(rec.endPostcode||''):'';
     // Company chips
     var coChips=COMPANIES.map(function(c){var p=getCOPalette(c),sel=fco===c.name;return '<button type="button" class="co-chip'+(sel?' selected':'')+'" style="'+(sel?'background:'+p.bg+';color:'+p.fg+';border-color:'+p.dot:'')+';" onclick="this.parentNode.querySelectorAll(\'.co-chip\').forEach(function(b){b.className=\'co-chip\';b.style.cssText=\'\';});this.className=\'co-chip selected\';this.style.background=\''+p.bg+'\';this.style.color=\''+p.fg+'\';this.style.borderColor=\''+p.dot+'\';document.getElementById(\'f_co\').value=\''+c.name+'\'">'+c.name+'</button>';}).join('');
     // Type chips
-    var typeOpts=['Delivery','Waiting Time','Charging Time','Bonus'];
+    var typeOpts=INCOME_TYPES;
     var typeChips=typeOpts.map(function(tp){var sel=fit===tp;return '<button type="button" class="cat-chip'+(sel?' selected':'')+'" onclick="this.parentNode.querySelectorAll(\'.cat-chip\').forEach(function(b){b.className=\'cat-chip\';});this.className=\'cat-chip selected\';document.getElementById(\'f_type\').value=\''+tp+'\'">'+tp+'</button>';}).join('');
     html='<input type="hidden" id="f_co" value="'+fco+'">'
       +'<input type="hidden" id="f_type" value="'+fit+'">'
@@ -3375,7 +3492,7 @@ function openSheet(type,id){
       +'<div class="field"><label class="field-label">Notes</label><input type="text" id="f6" class="std-input" placeholder="Optional notes" value="'+fds+'"></div>'
       +'</div>';
   } else {
-    var fd2=rec?rec.date:today(),fcat=rec?rec.category:'Fuel (Reimbursed)';
+    var fd2=rec?rec.date:today(),fcat=rec?rec.category:'';
     var fam=rec?(rec.amount||''):'',frc=rec?(rec.receipt||''):'',fds=rec?(rec.description||''):'';
     var fco2=rec?(rec.company||''):'',fjr2=rec?(rec.jobRef||''):'',fimg=rec?(rec.receiptImage||''):'';
     var isReimb=isReimbursedCat(fcat);
@@ -3414,9 +3531,9 @@ function openSheet(type,id){
       +'</div></div></div>'
       +'<div class="field"><label class="field-label">Reimbursed?</label>'
       +'<div class="reimb-toggle" id="reimb-toggle">'
-      +'<button type="button" class="reimb-opt'+(isReimb?' selected-yes':'')+'" id="reimb-yes" onclick="setReimb(true)">&#x2705; YES &mdash; Company pays</button>'
-      +'<button type="button" class="reimb-opt'+(isReimb?'':' selected-no')+'" id="reimb-no" onclick="setReimb(false)">&#x1F4B8; NO &mdash; My cost</button>'
-      +'</div><div class="field-hint" id="reimb-hint">'+(isReimb?'Won\'t reduce your tax bill (already paid back)':'Will reduce your tax bill as a deductible expense')+'</div></div>'
+      +'<button type="button" class="reimb-opt'+(fcat&&isReimb?' selected-yes':'')+'" id="reimb-yes" onclick="setReimb(true)">&#x2705; YES &mdash; Company pays</button>'
+      +'<button type="button" class="reimb-opt'+(fcat&&!isReimb?' selected-no':'')+'" id="reimb-no" onclick="setReimb(false)">&#x1F4B8; NO &mdash; My cost</button>'
+      +'</div><div class="field-hint" id="reimb-hint">'+(fcat?(isReimb?'Won\'t reduce your tax bill (already paid back)':'Will reduce your tax bill as a deductible expense'):'Select a category first')+'</div></div>'
       +'<div class="field"><label class="field-label">Amount</label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
       +'<div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+fd2+'"></div>'
       +'<div class="field"><label class="field-label">Link to Job <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label>'
@@ -3467,7 +3584,7 @@ function setReimb(yes){
   var cat=document.getElementById('f_cat').value||'';
   if(yes){
     if(cat==='Travel (Not Reimbursed)')cat='Travel (Reimbursed)';
-    else if(!isReimbursedCat(cat)&&cat!=='Other')cat='Fuel (Reimbursed)';
+    else if(cat&&!isReimbursedCat(cat)&&cat!=='Other')cat='Fuel (Reimbursed)';
   } else {
     if(cat==='Travel (Reimbursed)')cat='Travel (Not Reimbursed)';
     else if(isReimbursedCat(cat))cat='Other';
@@ -3565,6 +3682,7 @@ function ocrReceipt(file){
 function doSave(){
   var date=document.getElementById('f1').value,amount=document.getElementById('f3').value;
   if(!date||!amount){alert('Please enter a date and amount.');return;}
+  if(ETYP==='expense'){var _catVal=document.getElementById('f_cat').value;if(!_catVal){alert('Please select a category.');return;}}
   // Duplicate detection (new records only)
   if(!EID&&!window._dupOk){
     var _amt=parseFloat(amount||0);
@@ -3839,7 +3957,11 @@ function authSubmit(){
     hideAuthModal();
     updateSyncBar();
     supaEnsureUser(function(){
-      supaPullAll(function(e){if(e&&e!=='bad_response')supaPushAll(null);});
+      supaNamePull(function(){
+        supaIncomeTypesPull(function(){
+          supaPullAll(function(e){if(e&&e!=='bad_response')supaPushAll(null);});
+        });
+      });
     });
   });
 }
@@ -3930,9 +4052,9 @@ if(supaRestoreSession()){
   var tokenExpiry=SUPA_SESSION&&SUPA_SESSION.expires_at?SUPA_SESSION.expires_at*1000:0;
   var tenMins=10*60*1000;
   if(tokenExpiry&&(tokenExpiry-Date.now())<tenMins){
-    supaRefreshToken(function(){supaPullAll(function(){});});
+    supaRefreshToken(function(){supaNamePull(function(){supaIncomeTypesPull(function(){supaPullAll(function(){});});});});
   } else {
-    supaPullAll(function(){});
+    supaNamePull(function(){supaIncomeTypesPull(function(){supaPullAll(function(){});});});
   }
 } else {
   setTimeout(function(){if(!SUPA_USER&&document.getElementById('onboarding').className.indexOf('show')<0)showAuthModal();},1500);
