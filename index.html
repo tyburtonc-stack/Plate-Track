@@ -3168,17 +3168,6 @@ function rSummary(){
   var rowsHTML=coRows.map(function(r){return '<div class="summary-row"><span class="summary-row-label">'+r.label+'</span><span class="summary-row-val" style="color:'+r.color+'">'+r.val+'</span></div>';}).join('');
   rowsHTML+=rows.map(function(r){return '<div class="summary-row'+(r.indent?' indent':'')+'"><span class="summary-row-label">'+r.label+'</span><span class="summary-row-val '+(r.cls||'')+'" style="'+(r.bold?'font-size:16px':'')+'">'+r.val+'</span></div>';}).join('');
 
-  // Job section
-  var jobSectionHTML='';
-  if(jobArr.length>0){
-    var jobBody=buildJobSearchHTML(jobArr,'');
-    jobSectionHTML='<div class="job-profit-card">'
-      +'<div class="collapsible-hdr" onclick="toggleJobSection()">'
-      +'<span class="collapsible-title">Profit per Job ('+jobArr.length+')</span>'
-      +'<span class="collapsible-chevron'+(JOB_SECTION_OPEN?' open':'')+'" id="job-chevron">&#x25BE;</span></div>'
-      +'<div class="collapsible-body'+(JOB_SECTION_OPEN?' open':'')+'" id="job-section-body">'+jobBody+'</div></div>';
-  }
-
   // Payslip
   var payslipHTML='<div class="summary-card"><div class="summary-card-hdr">&#x1F4C4; Payslip Cross-Check</div>';
   var _psEmpty=!PAYSLIP.image&&!PAYSLIP.manualTotal&&!PAYSLIP.items.length&&PAYSLIP.status!=='scanning';
@@ -3291,11 +3280,9 @@ function rSummary(){
     +'<div style="font-size:11px;color:var(--text4);margin-top:4px;font-weight:500">Total Tax Bill</div>'
     +'</div>'
     +'</div>'
-    // Jobs (collapsible, starts collapsed)
-    +jobSectionHTML
-    // Profit Over Time (collapsible)
-    +'<div class="summary-card"><div class="summary-card-hdr" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="PROFIT_CHART_OPEN=!PROFIT_CHART_OPEN;rSummary()">Profit Over Time<span style="font-size:13px;opacity:0.5">'+(PROFIT_CHART_OPEN?'&#x25B2;':'&#x25BC;')+'</span></div>'
-    +(PROFIT_CHART_OPEN?'<div style="padding:0 16px 16px"><div class="chart-tabs"><button class="ctab'+(CHART_VIEW==='monthly'?' on':'')+'" onclick="event.stopPropagation();CHART_VIEW=\'monthly\';rSummary()">Monthly</button><button class="ctab'+(CHART_VIEW==='weekly'?' on':'')+'" onclick="event.stopPropagation();CHART_VIEW=\'weekly\';rSummary()">Weekly</button></div>'+(CHART_VIEW==='monthly'?(months6.length>0?monthRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'):(weeks8.length>0?weekRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'))+'</div>':'')
+    // Profit Over Time (always visible)
+    +'<div class="summary-card"><div class="summary-card-hdr">Profit Over Time</div>'
+    +'<div style="padding:0 16px 16px"><div class="chart-tabs"><button class="ctab'+(CHART_VIEW==='monthly'?' on':'')+'" onclick="CHART_VIEW=\'monthly\';rSummary()">Monthly</button><button class="ctab'+(CHART_VIEW==='weekly'?' on':'')+'" onclick="CHART_VIEW=\'weekly\';rSummary()">Weekly</button></div>'+(CHART_VIEW==='monthly'?(months6.length>0?monthRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'):(weeks8.length>0?weekRows:'<div style="text-align:center;padding:16px;color:var(--text4)">No data yet.</div>'))+'</div>'
     +'</div>'
     // SA breakdown
     +'<div class="summary-card"><div class="summary-card-hdr">Self Assessment Breakdown</div>'+rowsHTML
