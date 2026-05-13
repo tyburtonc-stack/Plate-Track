@@ -3029,6 +3029,10 @@ function openJobDetail(jobRef,fallbackId){
     +'<button class="jd-close" style="background:var(--bg3);border:none;border-radius:100px;width:32px;height:32px;font-size:18px;color:var(--text3);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;line-height:1">&#x2715;</button>'
     +'</div>'
     +'<div style="overflow-y:auto;flex:1;padding:0 20px 8px">'
+    +(notes.length>0
+      ?'<div style="padding-top:16px"><div style="font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Notes</div>'
+      +'<div style="font-size:14px;color:var(--text2);line-height:1.6;white-space:pre-wrap">'+notes.join('\n')+'</div></div>'
+      :'')
     +'<div style="padding-top:16px">'
     +'<div style="font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Income</div>'
     +incomeRowsHTML
@@ -3041,10 +3045,6 @@ function openJobDetail(jobRef,fallbackId){
     +'<span style="font-size:14px;font-weight:700;color:var(--success)">Net Income</span>'
     +'<span style="font-size:20px;font-weight:800;color:var(--success)">'+money(netIncome)+'</span>'
     +'</div>'
-    +(notes.length>0
-      ?'<div style="padding-top:16px"><div style="font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Notes</div>'
-      +'<div style="font-size:14px;color:var(--text2);line-height:1.6;white-space:pre-wrap">'+notes.join('\n')+'</div></div>'
-      :'')
     +'<div style="height:20px"></div>'
     +'</div>'
     +'<div style="padding:12px 20px 32px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0">'
