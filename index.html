@@ -1125,7 +1125,7 @@ var CO_PALETTE=[
 var DEFAULT_COMPANIES=[{name:'BCA',paletteIdx:0},{name:'Engineius',paletteIdx:1},{name:'DriiveMe',paletteIdx:2}];
 var COMPANIES=[];
 function loadCompanies(){ try{var s=localStorage.getItem('pt_companies');if(s){COMPANIES=JSON.parse(s);return;}}catch(e){} COMPANIES=DEFAULT_COMPANIES.map(function(c){return Object.assign({},c);}); }
-function saveCompanies(){ try{localStorage.setItem('pt_companies',JSON.stringify(COMPANIES));}catch(e){} }
+function saveCompanies(){ try{localStorage.setItem('pt_companies',JSON.stringify(COMPANIES));}catch(e){} if(SUPA_USER&&SUPA_SESSION){supaCompaniesPush(null);} }
 loadCompanies();
 function getCO(name){ for(var i=0;i<COMPANIES.length;i++){if(COMPANIES[i].name===name)return COMPANIES[i];} return null; }
 function getCOPalette(co){ var p=co?CO_PALETTE[co.paletteIdx%CO_PALETTE.length]:CO_PALETTE[0]; return p; }
@@ -1133,15 +1133,16 @@ function coNames(){ return COMPANIES.map(function(c){return c.name;}); }
 function getCoDefault(coName,catKey){var co=getCO(coName);if(!co||!co.expenseDefaults)return true;var v=co.expenseDefaults[catKey];return(v===false)?false:true;}
 
 // --- Expense categories ---
-var CATS=['Fuel (Reimbursed)','Travel (Not Reimbursed)','Travel (Reimbursed)','EV Charging (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Tolls (Reimbursed)','Other'];
-var CAT_ICONS={'Fuel (Reimbursed)':'&#x26FD;','Travel (Not Reimbursed)':'&#x1F68C;','Travel (Reimbursed)':'&#x1F68C;','EV Charging (Reimbursed)':'&#x26A1;','Cleaning (Reimbursed)':'&#x1F9F9;','Parking (Reimbursed)':'&#x1F17F;&#xFE0F;','Tolls (Reimbursed)':'&#x1F6E3;&#xFE0F;','Other':'&#x1F4CB;'};
-var CAT_COLORS={'Fuel (Reimbursed)':'#EA580C','Travel (Not Reimbursed)':'#2563EB','Travel (Reimbursed)':'#16A34A','EV Charging (Reimbursed)':'#7C3AED','Cleaning (Reimbursed)':'#0891B2','Parking (Reimbursed)':'#D97706','Tolls (Reimbursed)':'#DC2626','Other':'#57606A'};
+var CATS=['Travel (Reimbursed)','Travel (Not Reimbursed)','Fuel (Reimbursed)','EV Charging (Reimbursed)','Tolls (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Hotel (Reimbursed)','Other'];
+var CAT_ICONS={'Fuel (Reimbursed)':'&#x26FD;','Travel (Not Reimbursed)':'&#x1F68C;','Travel (Reimbursed)':'&#x1F68C;','EV Charging (Reimbursed)':'&#x26A1;','Cleaning (Reimbursed)':'&#x1F9F9;','Parking (Reimbursed)':'&#x1F17F;&#xFE0F;','Tolls (Reimbursed)':'&#x1F6E3;&#xFE0F;','Hotel (Reimbursed)':'&#x1F3E8;','Other':'&#x1F4CB;'};
+var CAT_COLORS={'Fuel (Reimbursed)':'#EA580C','Travel (Not Reimbursed)':'#2563EB','Travel (Reimbursed)':'#16A34A','EV Charging (Reimbursed)':'#7C3AED','Cleaning (Reimbursed)':'#0891B2','Parking (Reimbursed)':'#D97706','Tolls (Reimbursed)':'#DC2626','Hotel (Reimbursed)':'#0EA5E9','Other':'#57606A'};
 // Travel sub-types (shown when a Travel category is selected)
 var TRAVEL_TYPES=[
   {key:'Train',icon:'&#x1F686;',label:'Train'},
   {key:'Bus',icon:'&#x1F68D;',label:'Bus'},
-  {key:'Taxi',icon:'&#x1F695;',label:'Taxi'},
   {key:'Uber',icon:'&#x1F697;',label:'Uber'},
+  {key:'Taxi',icon:'&#x1F695;',label:'Taxi'},
+  {key:'TFL',icon:'&#x1F68C;',label:'TFL'},
   {key:'Tube',icon:'&#x24C2;&#xFE0F;',label:'Tube'},
   {key:'Ferry',icon:'&#x26F4;&#xFE0F;',label:'Ferry'},
   {key:'Other',icon:'&#x1F6F6;',label:'Other'},
@@ -1149,14 +1150,15 @@ var TRAVEL_TYPES=[
 function isTravelCat(cat){return cat&&(cat.indexOf('Travel')>=0);}
 function travelTypeKey(desc){if(!desc)return '';for(var i=0;i<TRAVEL_TYPES.length;i++){if(desc.indexOf(TRAVEL_TYPES[i].key)>=0)return TRAVEL_TYPES[i].key;}return '';}
 var INCOME_TYPES=['Delivery','Waiting Time','Charging Time','Bonus'];
-var REIMBURSED_CATS=['Fuel (Reimbursed)','Travel (Reimbursed)','EV Charging (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Tolls (Reimbursed)'];
+var REIMBURSED_CATS=['Fuel (Reimbursed)','Travel (Reimbursed)','EV Charging (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Tolls (Reimbursed)','Hotel (Reimbursed)'];
 var CO_DEF_CATS=[
-  {key:'fuel',    label:'Fuel',        icon:'&#x26FD;',          reimb:'Fuel (Reimbursed)',        nonreimb:null},
   {key:'travel',  label:'Travel',      icon:'&#x1F68C;',         reimb:'Travel (Reimbursed)',       nonreimb:'Travel (Not Reimbursed)'},
+  {key:'fuel',    label:'Fuel',        icon:'&#x26FD;',          reimb:'Fuel (Reimbursed)',        nonreimb:null},
   {key:'ev',      label:'EV Charging', icon:'&#x26A1;',          reimb:'EV Charging (Reimbursed)',  nonreimb:null},
+  {key:'tolls',   label:'Tolls',       icon:'&#x1F6E3;&#xFE0F;', reimb:'Tolls (Reimbursed)',        nonreimb:null},
   {key:'cleaning',label:'Cleaning',    icon:'&#x1F9F9;',         reimb:'Cleaning (Reimbursed)',     nonreimb:null},
   {key:'parking', label:'Parking',     icon:'&#x1F17F;&#xFE0F;', reimb:'Parking (Reimbursed)',      nonreimb:null},
-  {key:'tolls',   label:'Tolls',       icon:'&#x1F6E3;&#xFE0F;', reimb:'Tolls (Reimbursed)',        nonreimb:null}
+  {key:'hotel',   label:'Hotel',       icon:'&#x1F3E8;',         reimb:'Hotel (Reimbursed)',        nonreimb:null}
 ];
 var ALLOC={invest:20,bills:10};
 
@@ -1250,6 +1252,31 @@ function supaEnsureUser(cb){
   }).then(function(){if(cb)cb(null);}).catch(function(e){if(cb)cb(e.message);});
 }
 
+function supaCompaniesPush(cb){
+  if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
+  fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id),{
+    method:'PATCH',
+    headers:Object.assign(_supaHdr(),{'Prefer':'return=minimal'}),
+    body:JSON.stringify({companies:COMPANIES})
+  }).then(function(){if(cb)cb(null);}).catch(function(e){if(cb)cb(e.message);});
+}
+
+function supaCompaniesPull(cb){
+  if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
+  var h=_supaHdr();delete h['Content-Type'];
+  fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id)+'&select=companies',{headers:h})
+    .then(function(r){return r.ok?r.json():[];})
+    .then(function(rows){
+      if(rows&&rows.length&&Array.isArray(rows[0].companies)&&rows[0].companies.length){
+        COMPANIES=rows[0].companies;
+        try{localStorage.setItem('pt_companies',JSON.stringify(COMPANIES));}catch(e){}
+        render(CTAB);
+      }
+      if(cb)cb(null);
+    })
+    .catch(function(e){if(cb)cb(e.message);});
+}
+
 function supaPushAll(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
   var uid=SUPA_USER.id;
@@ -1282,7 +1309,7 @@ function supaPullAll(cb){
     if(inc.length===0&&exp.length===0){console.log('cloud empty, pushing local');supaPushAll(cb);return;}
     DB.income=inc.map(function(x){return{id:x.id,date:x.date||'',company:x.company||'',incomeType:x.income_type||'',amount:String(x.amount||0),jobRef:x.job_ref||'',startTime:x.start_time||'',endTime:x.end_time||'',miles:x.miles!=null?String(x.miles):'',registration:x.registration||'',startPostcode:x.start_postcode||'',endPostcode:x.end_postcode||'',description:x.description||''};});
     DB.expenses=exp.map(function(x){return{id:x.id,date:x.date||'',category:x.category||'',amount:String(x.amount||0),company:x.company||'',jobRef:x.job_ref||'',receipt:x.receipt||'',description:x.description||'',receiptImage:x.receipt_image||''};});
-    saveDB();render(CTAB);showToast('☁️ Data loaded');if(cb)cb(null);
+    saveDB();render(CTAB);showToast('☁️ Data loaded');supaCompaniesPull(cb);return;
   }).catch(function(e){console.warn('pull err',e);if(cb)cb(e.message);});
 }
 
@@ -3288,6 +3315,8 @@ function rSummary(){
     // SA breakdown
     +'<div class="summary-card"><div class="summary-card-hdr">Self Assessment Breakdown</div>'+rowsHTML
     +'<div class="disc" style="padding:14px 16px;border-top:1px solid var(--border)">Estimates only &mdash; 2024/25 UK tax rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p). Consult an accountant.</div></div>'
+    // Payslip
+    +payslipHTML
     // Export
     +'<div class="summary-card"><div class="summary-card-hdr">Export &amp; Reports</div>'
     +'<div style="padding:12px 16px 16px">'
@@ -3299,8 +3328,6 @@ function rSummary(){
     +'<button class="settings-btn" onclick="openCoModal()"><span>&#x1F3E2;</span> Manage Companies</button>'
     +'<button class="settings-btn" onclick="openNameModal()"><span>&#x2712;</span> Change Your Name</button>'
     +'</div></div>'
-    // Payslip
-    +payslipHTML
     // Tips
     +'<div style="padding-bottom:8px">'
     +'<div class="tip-card"><div class="tip-icon">&#x1F9E5;</div><div><div class="tip-title">Uniform &amp; PPE</div><div class="tip-body">Hi-vis, safety boots and trade plate uniforms are all claimable.</div></div></div>'
