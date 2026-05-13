@@ -2946,6 +2946,7 @@ function openJobDetail(jobRef,fallbackId){
   var startPostcode=firstEntry.startPostcode,endPostcode=firstEntry.endPostcode;
   var totalMins=0;
   incomeEntries.forEach(function(x){totalMins+=parseDuration(x.startTime,x.endTime);});
+  var notes=incomeEntries.filter(function(x){return x.description;}).map(function(x){return x.description;});
   var incByType={},totalGross=0;
   incomeEntries.forEach(function(x){
     var t=x.incomeType||'Delivery';
@@ -3040,6 +3041,10 @@ function openJobDetail(jobRef,fallbackId){
     +'<span style="font-size:14px;font-weight:700;color:var(--success)">Net Income</span>'
     +'<span style="font-size:20px;font-weight:800;color:var(--success)">'+money(netIncome)+'</span>'
     +'</div>'
+    +(notes.length>0
+      ?'<div style="padding-top:16px"><div style="font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Notes</div>'
+      +'<div style="font-size:14px;color:var(--text2);line-height:1.6;white-space:pre-wrap">'+notes.join('\n')+'</div></div>'
+      :'')
     +'<div style="height:20px"></div>'
     +'</div>'
     +'<div style="padding:12px 20px 32px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0">'
