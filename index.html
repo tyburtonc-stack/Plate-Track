@@ -240,6 +240,9 @@ body.dark .week-bar-inner.future{background:rgba(255,255,255,0.05)}
 .job-card-amount{font-size:18px;font-weight:800;color:var(--success);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .job-card-time{font-size:11px;color:var(--text4);margin-top:2px}
 .job-card-rate{font-size:11px;color:var(--purple);font-weight:600;margin-top:2px}
+.job-card-drag-ghost{position:fixed;pointer-events:none;z-index:9999;opacity:.92;transform:scale(1.03) rotate(0.8deg);box-shadow:0 10px 32px rgba(0,0,0,.22);transition:none;border-radius:var(--r-xl)}
+.job-card-dragging{opacity:.3;transition:opacity .15s}
+.drag-insert-line{height:3px;background:var(--accent);border-radius:2px;margin:4px 0;pointer-events:none}
 /* ── Expense list ─────────────────────────────────────────────── */
 .exp-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r-lg);padding:13px 14px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-sm);cursor:pointer;transition:transform .12s}
 .exp-card:active{transform:scale(.98)}
@@ -1575,7 +1578,7 @@ function debugSync(){
   .catch(function(e){alert('Error: '+e.message);});
 }
 
-var DB={income:[],expenses:[]};
+var DB={income:[],expenses:[],jobOrder:{}};
 var FYR='All',FCO='All',FDFROM='',FDTO='';
 var CTAB=0,EID=null,ETYP=null,GOAL={active:false,type:'weekly',amount:0},CHART_VIEW='monthly',PROFIT_CHART_OPEN=true;
 var _CO_DEF_IDX=-1,_CO_DEF_TMP={};
@@ -1595,6 +1598,7 @@ function loadDB(){
   if(!raw){try{var m=document.cookie.match(/pt9=([^;]+)/);if(m)raw=decodeURIComponent(m[1]);}catch(e){}}
   if(!raw){try{raw=localStorage.getItem('pt7');}catch(e){}}
   if(raw){try{var p=JSON.parse(raw);if(p&&p.income&&p.expenses)DB=p;}catch(e){}}
+  if(!DB.jobOrder)DB.jobOrder={};
 }
 function saveDB(){
   var s=JSON.stringify(DB);
@@ -3025,8 +3029,21 @@ function rJobsOverview(){
       }
     });
   });
+  groupOrder.sort(function(a,b){
+    var ga=groups[a],gb=groups[b];
+    var dd=new Date(gb.date)-new Date(ga.date);
+    if(dd!==0)return dd;
+    var ord=DB.jobOrder[ga.date]||[];
+    var ia=ord.indexOf(a),ib=ord.indexOf(b);
+    if(ia!==-1&&ib!==-1)return ia-ib;
+    if(ia!==-1)return -1;
+    if(ib!==-1)return 1;
+    var aId=ga.items[0]?Number(ga.items[0].id):0;
+    var bId=gb.items[0]?Number(gb.items[0].id):0;
+    return bId-aId;
+  });
   var cardsHTML=groupOrder.length>0
-    ?groupOrder.map(function(k){return jobOverviewCardHTML(groups[k]);}).join('')
+    ?groupOrder.map(function(k){return jobOverviewCardHTML(groups[k],k);}).join('')
     :'<div class="empty-state"><div class="empty-state-icon">&#x1F4BC;</div><div class="empty-state-title">No jobs yet</div><div class="empty-state-sub">Tap + Add to log your first job</div><button class="empty-state-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add Job</button></div>';
   var content='<div style="padding:0 16px 14px">'
     +'<div class="tab-hdr"><span class="tab-hdr-title">Jobs</span><button class="add-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add</button></div>'
@@ -3037,13 +3054,173 @@ function rJobsOverview(){
     +'</div>'
     +limitBannerHTML()
     +filtersHTML()
-    +'<div style="padding:10px 16px 80px">'
+    +'<div id="job-cards-list" style="padding:10px 16px 80px">'
     +cardsHTML
     +'</div>';
   document.getElementById('pg1').innerHTML=content;
+  initJobCardDrag();
 }
 
-function jobOverviewCardHTML(g){
+function initJobCardDrag(){
+  var container=document.getElementById('job-cards-list');
+  if(!container)return;
+  var LONG_PRESS_MS=400;
+  var ds=null; // drag state
+  var ghost=null;
+  var insertLine=null;
+
+  function getCards(){
+    return Array.from(container.querySelectorAll('.job-card:not(.job-card-drag-ghost)'));
+  }
+
+  function startDrag(card,clientX,clientY){
+    if(ds&&ds.dragging)return;
+    ds.dragging=true;
+    var rect=card.getBoundingClientRect();
+    ds.offsetY=clientY-rect.top;
+    ds.offsetX=clientX-rect.left;
+
+    // ghost
+    ghost=card.cloneNode(true);
+    ghost.className='job-card job-card-drag-ghost';
+    ghost.style.width=rect.width+'px';
+    ghost.style.left=rect.left+'px';
+    ghost.style.top=rect.top+'px';
+    document.body.appendChild(ghost);
+
+    // dim original
+    card.classList.add('job-card-dragging');
+
+    // insert line
+    insertLine=document.createElement('div');
+    insertLine.className='drag-insert-line';
+
+    if(navigator.vibrate)navigator.vibrate(30);
+  }
+
+  function moveDrag(clientX,clientY){
+    if(!ghost||!ds||!ds.dragging)return;
+    ghost.style.top=(clientY-ds.offsetY)+'px';
+    ghost.style.left=(clientX-ds.offsetX)+'px';
+
+    // find insertion point among visible (non-dragged) cards
+    var cards=getCards().filter(function(c){return c!==ds.card;});
+    var before=null;
+    for(var i=0;i<cards.length;i++){
+      var r=cards[i].getBoundingClientRect();
+      if(clientY<r.top+r.height/2){before=cards[i];break;}
+    }
+    if(before){
+      container.insertBefore(insertLine,before);
+    } else {
+      container.appendChild(insertLine);
+    }
+  }
+
+  function endDrag(){
+    if(!ds||!ds.dragging){cleanDrag();return;}
+
+    // move original card to where insert line is
+    if(insertLine&&insertLine.parentNode===container){
+      container.insertBefore(ds.card,insertLine);
+    }
+
+    window._dragJustFinished=true;
+    setTimeout(function(){window._dragJustFinished=false;},300);
+    cleanDrag();
+
+    // save new order grouped by date
+    var cards=getCards();
+    var dateGroups={};
+    cards.forEach(function(c){
+      var key=c.dataset.key;
+      var date=c.dataset.date;
+      if(!key||!date)return;
+      if(!dateGroups[date])dateGroups[date]=[];
+      dateGroups[date].push(key);
+    });
+    Object.keys(dateGroups).forEach(function(date){
+      DB.jobOrder[date]=dateGroups[date];
+    });
+    saveDB();
+    // re-render to confirm stable sorted state
+    rJobsOverview();
+  }
+
+  function cleanDrag(){
+    if(ghost){document.body.removeChild(ghost);ghost=null;}
+    if(insertLine&&insertLine.parentNode){insertLine.parentNode.removeChild(insertLine);insertLine=null;}
+    if(ds&&ds.card)ds.card.classList.remove('job-card-dragging');
+    ds=null;
+  }
+
+  // suppress synthetic click that fires after touchend on mobile
+  container.addEventListener('click',function(e){
+    if(window._dragJustFinished){
+      e.stopPropagation();
+      window._dragJustFinished=false;
+    }
+  },true);
+
+  // --- Touch events ---
+  container.addEventListener('touchstart',function(e){
+    var card=e.target.closest('.job-card');
+    if(!card)return;
+    var touch=e.touches[0];
+    ds={card:card,startX:touch.clientX,startY:touch.clientY,dragging:false,timer:null};
+    ds.timer=setTimeout(function(){startDrag(card,touch.clientX,touch.clientY);},LONG_PRESS_MS);
+  },{passive:true});
+
+  container.addEventListener('touchmove',function(e){
+    if(!ds)return;
+    var touch=e.touches[0];
+    if(!ds.dragging){
+      var dx=touch.clientX-ds.startX,dy=touch.clientY-ds.startY;
+      if(Math.abs(dx)>8||Math.abs(dy)>8){clearTimeout(ds.timer);ds=null;}
+      return;
+    }
+    e.preventDefault();
+    moveDrag(touch.clientX,touch.clientY);
+  },{passive:false});
+
+  container.addEventListener('touchend',function(){
+    if(!ds)return;
+    clearTimeout(ds.timer);
+    if(ds.dragging)endDrag(); else ds=null;
+  });
+
+  container.addEventListener('touchcancel',function(){
+    if(!ds)return;
+    clearTimeout(ds.timer);
+    cleanDrag();
+  });
+
+  // --- Mouse events (desktop) ---
+  container.addEventListener('mousedown',function(e){
+    var card=e.target.closest('.job-card');
+    if(!card)return;
+    ds={card:card,startX:e.clientX,startY:e.clientY,dragging:false,timer:null};
+    ds.timer=setTimeout(function(){startDrag(card,e.clientX,e.clientY);},LONG_PRESS_MS);
+  });
+
+  document.addEventListener('mousemove',function(e){
+    if(!ds)return;
+    if(!ds.dragging){
+      var dx=e.clientX-ds.startX,dy=e.clientY-ds.startY;
+      if(Math.abs(dx)>8||Math.abs(dy)>8){clearTimeout(ds.timer);ds=null;}
+      return;
+    }
+    moveDrag(e.clientX,e.clientY);
+  });
+
+  document.addEventListener('mouseup',function(){
+    if(!ds)return;
+    clearTimeout(ds.timer);
+    if(ds.dragging)endDrag(); else ds=null;
+  });
+}
+
+function jobOverviewCardHTML(g,key){
   var net=g.grossIncome-g.deductTotal;
   var hasExps=g.reimbTotal>0||g.deductTotal>0;
   var expPills='';
@@ -3057,7 +3234,7 @@ function jobOverviewCardHTML(g){
   var miles=firstItem.miles||'';
   var detailRef=g.ref?g.ref:('__'+firstItem.id);
   var fallbackId=String(firstItem.id||'');
-  return '<div class="job-card" data-detail-ref="'+detailRef+'" data-detail-fid="'+fallbackId+'" onclick="openJobDetail(this.dataset.detailRef,this.dataset.detailFid)" style="flex-direction:column;align-items:stretch;gap:0;cursor:pointer;margin-bottom:10px">'
+  return '<div class="job-card" data-key="'+(key||detailRef)+'" data-date="'+g.date+'" data-detail-ref="'+detailRef+'" data-detail-fid="'+fallbackId+'" onclick="openJobDetail(this.dataset.detailRef,this.dataset.detailFid)" style="flex-direction:column;align-items:stretch;gap:0;cursor:pointer;margin-bottom:10px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center">'
     +'<div class="job-card-left"><div class="job-card-top">'+cobadge(g.company)+'<span class="job-card-ref">'+(g.ref||'Job')+'</span></div>'
     +'<div class="job-card-meta">'+fdateShort(g.date)+(miles?' &middot; '+miles+' mi':'')+(g.items.length>1?' &middot; '+g.items.length+' entries':'')+'</div></div>'
