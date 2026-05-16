@@ -104,7 +104,7 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;background:linear-grad
 .util-btn:active{transform:scale(.91)}
 .util-btn-ai{box-shadow:0 4px 16px var(--ai-glow),0 1px 3px rgba(0,0,0,0.08),inset 0 1px 0 rgba(255,255,255,0.85)}
 .util-btn-ai-inner{font-size:20px;background:linear-gradient(135deg,var(--accent),#C084FC);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700;line-height:1}
-.util-notif-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#EF4444;border:2px solid white}
+.util-notif-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#EF4444;border:2px solid var(--bg)}
 /* ── Sync bar (hidden, kept for JS refs) ─────────────────────── */
 .sync-bar{display:none}
 /* ── Old header (hidden) ──────────────────────────────────────── */
@@ -324,6 +324,7 @@ body.dark .cat-chip.selected{background:var(--gold);color:#1A1A2E;border-color:v
 .std-input{background:var(--input);border:1.5px solid transparent;color:var(--text);padding:12px 14px;border-radius:var(--r-lg);font-size:15px;width:100%;transition:border .2s;-webkit-appearance:none;appearance:none;box-sizing:border-box;min-height:44px}
 .std-input:focus{border-color:var(--gold);outline:none;background:var(--bg2)}
 input[type=date].std-input{-webkit-appearance:textfield;appearance:textfield;max-width:100%;min-width:0}
+input[type=date].std-input::-webkit-calendar-picker-indicator{border-top-right-radius:calc(var(--r-lg) - 1.5px);border-bottom-right-radius:calc(var(--r-lg) - 1.5px)}
 /* Select */
 .std-select{background-color:var(--input);background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="%238B949E" d="M6 8L1 3h10z"/></svg>');background-repeat:no-repeat;background-position:right 12px center;border:1.5px solid transparent;color:var(--text);padding:12px 36px 12px 14px;border-radius:var(--r-lg);font-size:15px;width:100%;-webkit-appearance:none;appearance:none;transition:border .2s;color-scheme:light}
 body.dark .std-select{color-scheme:dark;background-color:var(--input);color:var(--text);background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="%23C9D1D9" d="M6 8L1 3h10z"/></svg>');background-repeat:no-repeat;background-position:right 12px center;}
@@ -514,7 +515,7 @@ input[type=file]{padding:6px;font-size:13px;background:var(--input);border:1.5px
 .donut-legend-val{font-weight:700;font-variant-numeric:tabular-nums;color:var(--text)}
 .donut-centre-label{font-size:10px;fill:var(--text4-hex,#8B949E);text-anchor:middle;font-family:-apple-system,sans-serif;font-weight:500}
 .donut-centre-amount{font-size:16px;fill:var(--text-hex,#0D1117);text-anchor:middle;font-family:-apple-system,sans-serif;font-weight:800}
-body.dark .donut-centre-label{fill:#57606A}
+body.dark .donut-centre-label{fill:#9490B8}
 body.dark .donut-centre-amount{fill:#F0F6FF}
 /* ── Name input in onboarding ─────────────────────────────────── */
 .ob-name-input{background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.25);color:var(--text);padding:14px 16px;border-radius:var(--r-lg);font-size:16px;width:100%;max-width:320px;text-align:center;margin-bottom:16px;font-weight:500}
@@ -561,10 +562,6 @@ body.dark .dchip.active{background:var(--gold);color:#1A1A2E;border-color:var(--
 .dash-chips-clear{font-size:11px;font-weight:600;color:var(--text4);background:none;border:none;cursor:pointer;padding:4px 0 0;display:inline-flex;align-items:center;gap:3px}
 
 /* ── Targeted dark mode fixes ─────────────────────────────────── */
-body.dark .overlay{background:rgba(0,0,0,.7)}
-body.dark .week-bar-inner.past{background:#2d3748}
-body.dark .deadline-card{background:linear-gradient(135deg,#0D1117 0%,#161B22 100%);border:1px solid var(--border)}
-body.dark .report-btn{background:#1E1B4B;color:#A78BFA;border-color:#3730A3}
 body.dark input[type=date],body.dark input[type=time]{color-scheme:dark}
 body.dark .std-input{border-color:var(--input-border)}
 body.dark select option{background:var(--card);color:var(--text)}
@@ -4720,8 +4717,8 @@ rAI();
     <div id="auth-err" style="color:#EF4444;font-size:13px;text-align:center;margin-bottom:10px;min-height:18px;font-weight:600"></div>
     <button id="auth-btn" onclick="authSubmit()"
       style="width:100%;padding:16px;background:#E8C94A;color:#1A1A2E;font-size:17px;font-weight:800;border:none;border-radius:12px;cursor:pointer;letter-spacing:-.01em;box-shadow:0 4px 16px rgba(232,201,74,.45);-webkit-tap-highlight-color:transparent">Sign In</button>
-    <div style="text-align:center;margin-top:16px;font-size:13px;color:#57606A;line-height:1.6">
-      No account? <span onclick="authToggleMode()" style="color:#E8C94A;font-weight:700;cursor:pointer" id="auth-toggle-lbl">Sign up free</span>
+    <div id="auth-toggle" class="auth-toggle">
+      No account? <span onclick="authToggleMode()">Sign up free</span>
     </div>
     <div style="text-align:center;margin-top:10px">
       <button onclick="hideAuthModal()" style="background:none;border:none;color:#8B949E;font-size:13px;cursor:pointer">Maybe later</button>
