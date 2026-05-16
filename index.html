@@ -3712,7 +3712,7 @@ function openSheet(type,id){
       +'<button type="button" class="reimb-opt'+(fcat&&isReimb?' selected-yes':'')+'" id="reimb-yes" onclick="setReimb(true)">&#x2705; YES &mdash; Company pays</button>'
       +'<button type="button" class="reimb-opt'+(fcat&&!isReimb?' selected-no':'')+'" id="reimb-no" onclick="setReimb(false)">&#x1F4B8; NO &mdash; My cost</button>'
       +'</div><div class="field-hint" id="reimb-hint">'+(fcat?(isReimb?'Won\'t reduce your tax bill (already paid back)':'Will reduce your tax bill as a deductible expense'):'Select a category first')+'</div></div>'
-      +'<div class="field"><label class="field-label">Amount</label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
+      +'<div class="field"><label class="field-label">Amount <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
       +'<div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+fd2+'"></div>'
       +'<div class="field"><label class="field-label">Link to Job</label>'
       +'<input type="text" id="f4c" class="std-input" list="joblist" placeholder="Type to search jobs..." value="'+fjr2+'" autocomplete="off">'
@@ -3853,13 +3853,15 @@ function ocrReceipt(file){
 
 function doSave(){
   var date=document.getElementById('f1').value,amount=document.getElementById('f3').value;
+  if(!date){alert('Please enter a date.');return;}
   if(ETYP==='income'){
-    if(!date||!amount){alert('Please enter a date and amount.');return;}
+    if(!amount){alert('Please enter an amount.');return;}
   } else {
-    if(!date){alert('Please enter a date.');return;}
-    var _jobRefVal=document.getElementById('f4c').value;
+    var _jobRefEl=document.getElementById('f4c');
+    var _jobRefVal=_jobRefEl?_jobRefEl.value.trim():'';
     if(!_jobRefVal){alert('Please link this expense to a job.');return;}
-    var _catVal=document.getElementById('f_cat').value;
+    var _catEl=document.getElementById('f_cat');
+    var _catVal=_catEl?_catEl.value:'';
     if(!_catVal){alert('Please select a category.');return;}
   }
   // Duplicate detection (new records only)
