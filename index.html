@@ -1154,9 +1154,9 @@ function coNames(){ return COMPANIES.map(function(c){return c.name;}); }
 function getCoDefault(coName,catKey){var co=getCO(coName);if(!co||!co.expenseDefaults)return true;var v=co.expenseDefaults[catKey];return(v===false)?false:true;}
 
 // --- Expense categories ---
-var CATS=['Travel (Reimbursed)','Travel (Not Reimbursed)','Fuel (Reimbursed)','EV Charging (Reimbursed)','Tolls (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Hotel (Reimbursed)','Other'];
-var CAT_ICONS={'Fuel (Reimbursed)':'&#x26FD;','Travel (Not Reimbursed)':'&#x1F68C;','Travel (Reimbursed)':'&#x1F68C;','EV Charging (Reimbursed)':'&#x26A1;','Cleaning (Reimbursed)':'&#x1F9F9;','Parking (Reimbursed)':'&#x1F17F;&#xFE0F;','Tolls (Reimbursed)':'&#x1F6E3;&#xFE0F;','Hotel (Reimbursed)':'&#x1F3E8;','Other':'&#x1F4CB;'};
-var CAT_COLORS={'Fuel (Reimbursed)':'#EA580C','Travel (Not Reimbursed)':'#2563EB','Travel (Reimbursed)':'#16A34A','EV Charging (Reimbursed)':'#7C3AED','Cleaning (Reimbursed)':'#0891B2','Parking (Reimbursed)':'#D97706','Tolls (Reimbursed)':'#DC2626','Hotel (Reimbursed)':'#0EA5E9','Other':'#57606A'};
+var CATS=['Travel (Reimbursed)','Travel (Not Reimbursed)','Fuel (Reimbursed)','Fuel (Not Reimbursed)','EV Charging (Reimbursed)','EV Charging (Not Reimbursed)','Tolls (Reimbursed)','Tolls (Not Reimbursed)','Cleaning (Reimbursed)','Cleaning (Not Reimbursed)','Parking (Reimbursed)','Parking (Not Reimbursed)','Hotel (Reimbursed)','Hotel (Not Reimbursed)','Other'];
+var CAT_ICONS={'Fuel (Reimbursed)':'&#x26FD;','Fuel (Not Reimbursed)':'&#x26FD;','Travel (Not Reimbursed)':'&#x1F68C;','Travel (Reimbursed)':'&#x1F68C;','EV Charging (Reimbursed)':'&#x26A1;','EV Charging (Not Reimbursed)':'&#x26A1;','Cleaning (Reimbursed)':'&#x1F9F9;','Cleaning (Not Reimbursed)':'&#x1F9F9;','Parking (Reimbursed)':'&#x1F17F;&#xFE0F;','Parking (Not Reimbursed)':'&#x1F17F;&#xFE0F;','Tolls (Reimbursed)':'&#x1F6E3;&#xFE0F;','Tolls (Not Reimbursed)':'&#x1F6E3;&#xFE0F;','Hotel (Reimbursed)':'&#x1F3E8;','Hotel (Not Reimbursed)':'&#x1F3E8;','Other':'&#x1F4CB;'};
+var CAT_COLORS={'Fuel (Reimbursed)':'#EA580C','Fuel (Not Reimbursed)':'#B45309','Travel (Not Reimbursed)':'#2563EB','Travel (Reimbursed)':'#16A34A','EV Charging (Reimbursed)':'#7C3AED','EV Charging (Not Reimbursed)':'#5B21B6','Cleaning (Reimbursed)':'#0891B2','Cleaning (Not Reimbursed)':'#0E7490','Parking (Reimbursed)':'#D97706','Parking (Not Reimbursed)':'#B45309','Tolls (Reimbursed)':'#DC2626','Tolls (Not Reimbursed)':'#B91C1C','Hotel (Reimbursed)':'#0EA5E9','Hotel (Not Reimbursed)':'#0284C7','Other':'#57606A'};
 // Travel sub-types (shown when a Travel category is selected)
 var TRAVEL_TYPES=[
   {key:'Train',icon:'&#x1F686;',label:'Train'},
@@ -1184,12 +1184,12 @@ loadIncomeTypes();
 var REIMBURSED_CATS=['Fuel (Reimbursed)','Travel (Reimbursed)','EV Charging (Reimbursed)','Cleaning (Reimbursed)','Parking (Reimbursed)','Tolls (Reimbursed)','Hotel (Reimbursed)'];
 var CO_DEF_CATS=[
   {key:'travel',  label:'Travel',      icon:'&#x1F68C;',         reimb:'Travel (Reimbursed)',       nonreimb:'Travel (Not Reimbursed)'},
-  {key:'fuel',    label:'Fuel',        icon:'&#x26FD;',          reimb:'Fuel (Reimbursed)',        nonreimb:null},
-  {key:'ev',      label:'EV Charging', icon:'&#x26A1;',          reimb:'EV Charging (Reimbursed)',  nonreimb:null},
-  {key:'tolls',   label:'Tolls',       icon:'&#x1F6E3;&#xFE0F;', reimb:'Tolls (Reimbursed)',        nonreimb:null},
-  {key:'cleaning',label:'Cleaning',    icon:'&#x1F9F9;',         reimb:'Cleaning (Reimbursed)',     nonreimb:null},
-  {key:'parking', label:'Parking',     icon:'&#x1F17F;&#xFE0F;', reimb:'Parking (Reimbursed)',      nonreimb:null},
-  {key:'hotel',   label:'Hotel',       icon:'&#x1F3E8;',         reimb:'Hotel (Reimbursed)',        nonreimb:null}
+  {key:'fuel',    label:'Fuel',        icon:'&#x26FD;',          reimb:'Fuel (Reimbursed)',        nonreimb:'Fuel (Not Reimbursed)'},
+  {key:'ev',      label:'EV Charging', icon:'&#x26A1;',          reimb:'EV Charging (Reimbursed)',  nonreimb:'EV Charging (Not Reimbursed)'},
+  {key:'tolls',   label:'Tolls',       icon:'&#x1F6E3;&#xFE0F;', reimb:'Tolls (Reimbursed)',        nonreimb:'Tolls (Not Reimbursed)'},
+  {key:'cleaning',label:'Cleaning',    icon:'&#x1F9F9;',         reimb:'Cleaning (Reimbursed)',     nonreimb:'Cleaning (Not Reimbursed)'},
+  {key:'parking', label:'Parking',     icon:'&#x1F17F;&#xFE0F;', reimb:'Parking (Reimbursed)',      nonreimb:'Parking (Not Reimbursed)'},
+  {key:'hotel',   label:'Hotel',       icon:'&#x1F3E8;',         reimb:'Hotel (Reimbursed)',        nonreimb:'Hotel (Not Reimbursed)'}
 ];
 var ALLOC={invest:20,bills:10};
 
@@ -3377,7 +3377,7 @@ function openJobDetail(jobRef,fallbackId){
   var prefillRef=(!isSingleton&&jobRef)?jobRef:'';
   overlay.querySelector('.jd-close').addEventListener('click',function(){overlay.remove();});
   overlay.querySelector('.jd-edit').addEventListener('click',function(){overlay.remove();openSheet('income',editId);});
-  overlay.querySelector('.jd-addexp').addEventListener('click',function(){overlay.remove();openSheet('expense','');});
+  overlay.querySelector('.jd-addexp').addEventListener('click',function(){window._expensePrefill={company:company,jobRef:prefillRef};overlay.remove();openSheet('expense','');});
   overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
 }
 
@@ -3672,6 +3672,7 @@ function openSheet(type,id){
     var fd2=rec?rec.date:today(),fcat=rec?rec.category:'';
     var fam=rec?(rec.amount||''):'',frc=rec?(rec.receipt||''):'',fds=rec?(rec.description||''):'';
     var fco2=rec?(rec.company||''):'',fjr2=rec?(rec.jobRef||''):'',fimg=rec?(rec.receiptImage||''):'';
+    if(!isEdit&&window._expensePrefill){fco2=window._expensePrefill.company||fco2;fjr2=window._expensePrefill.jobRef||fjr2;window._expensePrefill=null;}
     var isReimb=isReimbursedCat(fcat);
     // Category chips
     var CHIP_DEFS=CO_DEF_CATS.concat([{label:'Other',icon:'&#x1F4CB;',reimb:'Other',nonreimb:null}]);
@@ -3713,7 +3714,7 @@ function openSheet(type,id){
       +'</div><div class="field-hint" id="reimb-hint">'+(fcat?(isReimb?'Won\'t reduce your tax bill (already paid back)':'Will reduce your tax bill as a deductible expense'):'Select a category first')+'</div></div>'
       +'<div class="field"><label class="field-label">Amount</label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
       +'<div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+fd2+'"></div>'
-      +'<div class="field"><label class="field-label">Link to Job <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label>'
+      +'<div class="field"><label class="field-label">Link to Job</label>'
       +'<input type="text" id="f4c" class="std-input" list="joblist" placeholder="Type to search jobs..." value="'+fjr2+'" autocomplete="off">'
       +'<datalist id="joblist">'+dlOpts+'</datalist>'
       +'<div class="field-hint">Suggestions sorted by same date, then same company</div></div>'
@@ -3757,21 +3758,15 @@ function updateSaveBtn(){
 }
 
 function setReimb(yes){
-  // Find which category is selected and flip between reimbursed/non-reimbursed version
   var cat=document.getElementById('f_cat').value||'';
-  if(yes){
-    if(cat==='Travel (Not Reimbursed)')cat='Travel (Reimbursed)';
-    else if(cat&&!isReimbursedCat(cat)&&cat!=='Other')cat='Fuel (Reimbursed)';
-  } else {
-    if(cat==='Travel (Reimbursed)')cat='Travel (Not Reimbursed)';
-    else if(isReimbursedCat(cat))cat='Other';
-  }
+  var found=null;
+  CO_DEF_CATS.forEach(function(cd){if(cat===cd.reimb||cat===cd.nonreimb)found=cd;});
+  if(found){cat=yes?(found.reimb||cat):(found.nonreimb||cat);}
   document.getElementById('f_cat').value=cat;
   document.getElementById('reimb-yes').className='reimb-opt'+(yes?' selected-yes':'');
   document.getElementById('reimb-no').className='reimb-opt'+(yes?'':' selected-no');
   var hint=document.getElementById('reimb-hint');
   if(hint)hint.textContent=yes?'Won\'t reduce your tax bill (already paid back)':'Will reduce your tax bill as a deductible expense';
-  // Update chip selection
   var chips=document.querySelectorAll('#cat-chips-wrap .cat-chip');
   chips.forEach(function(c){var base=c.getAttribute('data-base')||'';c.className=(base&&(cat===base||cat.indexOf(base+' ')===0))?'cat-chip selected':'cat-chip';});
 }
@@ -3826,8 +3821,8 @@ function ocrReceipt(file){
         if(!m){showToast('Could not read receipt');return;}
         var data;try{data=JSON.parse(m[0]);}catch(e){showToast('Could not read receipt');return;}
         var filled=0;
-        if(data.amount!=null){var amtEl=document.getElementById('f3');if(amtEl&&!amtEl.value){amtEl.value=data.amount;updateSaveBtn();filled++;}}
-        if(data.date){var dtEl=document.getElementById('f1');if(dtEl&&!dtEl.value){dtEl.value=data.date;filled++;}}
+        if(data.amount!=null){var amtEl=document.getElementById('f3');if(amtEl&&!amtEl.value){amtEl.value=parseFloat(data.amount).toFixed(2);updateSaveBtn();filled++;}}
+        if(data.date){var dtEl=document.getElementById('f1');if(dtEl){dtEl.value=data.date;filled++;}}
         if(data.description){var dsEl=document.getElementById('f5');if(dsEl&&!dsEl.value){dsEl.value=data.description;filled++;}}
         if(data.receipt_ref){var rfEl=document.getElementById('f4');if(rfEl&&!rfEl.value){rfEl.value=data.receipt_ref;filled++;}}
         if(data.category){
@@ -3858,8 +3853,15 @@ function ocrReceipt(file){
 
 function doSave(){
   var date=document.getElementById('f1').value,amount=document.getElementById('f3').value;
-  if(!date||!amount){alert('Please enter a date and amount.');return;}
-  if(ETYP==='expense'){var _catVal=document.getElementById('f_cat').value;if(!_catVal){alert('Please select a category.');return;}}
+  if(ETYP==='income'){
+    if(!date||!amount){alert('Please enter a date and amount.');return;}
+  } else {
+    if(!date){alert('Please enter a date.');return;}
+    var _jobRefVal=document.getElementById('f4c').value;
+    if(!_jobRefVal){alert('Please link this expense to a job.');return;}
+    var _catVal=document.getElementById('f_cat').value;
+    if(!_catVal){alert('Please select a category.');return;}
+  }
   // Duplicate detection (new records only)
   if(!EID&&!window._dupOk){
     var _amt=parseFloat(amount||0);
@@ -3870,8 +3872,9 @@ function doSave(){
       if(_sim.length>0)_dupMsg='You already have a '+_co+' job on '+fdateShort(date)+' for '+money(_sim[0].amount)+'.<br>Add another?';
     } else {
       var _cat=document.getElementById('f_cat').value;
-      var _ex=DB.expenses.filter(function(x){return x.date===date&&x.category===_cat&&parseFloat(x.amount||0)===_amt;});
-      if(_ex.length>0)_dupMsg='You already have a '+_cat+' expense for '+money(_amt)+' on '+fdateShort(date)+'.<br>Add another?';
+      var _jobRef=document.getElementById('f4c').value;
+      var _ex=DB.expenses.filter(function(x){return _jobRef&&x.jobRef===_jobRef&&x.category===_cat&&parseFloat(x.amount||0)===_amt;});
+      if(_ex.length>0)_dupMsg='You already have a '+_cat+' expense for '+money(_amt)+' linked to job '+_jobRef+'.<br>Add another?';
     }
     if(_dupMsg){
       swipeConfirm(_dupMsg,function(){window._dupOk=true;doSave();window._dupOk=false;},'➕ Add Anyway','Cancel');
