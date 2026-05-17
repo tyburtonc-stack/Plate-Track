@@ -2115,7 +2115,18 @@ function ocrPayslip(file,idx){
         var msg='Payslip scanned';
         if(PAYSLIPS[idx].manualTotal)msg+=' — net pay: £'+parseFloat(PAYSLIPS[idx].manualTotal).toFixed(2);
         showToast(msg);
-        if(!PAYSLIPS[idx].periodFrom||!PAYSLIPS[idx].periodTo)showPayslipPeriodPrompt(idx);
+        if(!PAYSLIPS[idx].periodFrom||!PAYSLIPS[idx].periodTo){
+          var _detected=autoDetectPayslipPeriod(PAYSLIPS[idx].items);
+          if(_detected.periodFrom&&_detected.periodTo){
+            PAYSLIPS[idx].periodFrom=_detected.periodFrom;
+            PAYSLIPS[idx].periodTo=_detected.periodTo;
+            savePayslips();
+            if(CTAB===3)rSummary();
+            showToast('Pay period auto-detected: '+fdateShort(_detected.periodFrom)+' – '+fdateShort(_detected.periodTo));
+          } else {
+            showPayslipPeriodPrompt(idx);
+          }
+        }
       })
       .catch(function(){
         PAYSLIPS[idx].status='error';
@@ -2199,6 +2210,28 @@ function showPayslipPeriodPrompt(idx){
   overlay.onclick=function(e){if(e.target===overlay)close();};
 }
 
+function autoDetectPayslipPeriod(psItems){
+  if(!psItems||!psItems.length)return{periodFrom:null,periodTo:null};
+  var allExp=DB.expenses.filter(function(e){return isReimbursedCat(e.category);});
+  var pool=DB.income.concat(allExp);
+  var result=fuzzyMatchPayslip(psItems,pool);
+  var dates=result.matched.map(function(m){return m.entry.date;}).filter(Boolean).sort();
+  if(!dates.length)return{periodFrom:null,periodTo:null};
+  return{periodFrom:dates[0],periodTo:dates[dates.length-1]};
+}
+function tryAutoDetectPeriod(idx){
+  var detected=autoDetectPayslipPeriod(PAYSLIPS[idx].items);
+  if(detected.periodFrom&&detected.periodTo){
+    PAYSLIPS[idx].periodFrom=detected.periodFrom;
+    PAYSLIPS[idx].periodTo=detected.periodTo;
+    savePayslips();
+    if(CTAB===3)rSummary();
+    showToast('Pay period auto-detected: '+fdateShort(detected.periodFrom)+' – '+fdateShort(detected.periodTo));
+  } else {
+    showToast('Could not auto-detect — no matching income found');
+    showPayslipPeriodPrompt(idx);
+  }
+}
 var _PS_STOPWORDS={a:1,the:1,and:1,for:1,to:1,of:1,in:1,on:1,at:1,by:1,job:1,delivery:1,pay:1,ltd:1,limited:1};
 function _psNorm(s){return(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();}
 function _psTok(s){return _psNorm(s).split(' ').filter(function(t){return t.length>1&&!_PS_STOPWORDS[t];});}
@@ -3520,7 +3553,9 @@ function rSummary(){
             +'<span class="summary-row-val" style="font-size:13px;color:var(--text3)">'+fdateShort(ps.periodFrom)+' \u2013 '+fdateShort(ps.periodTo)+'</span></div>';
         } else {
           payslipHTML+='<div style="background:var(--orange-bg);border:1px solid var(--orange-border);border-radius:var(--r-md);padding:9px 12px;margin-bottom:10px;font-size:13px;color:var(--orange)">'
-            +'&#x26A0;&#xFE0F; Pay period not detected &mdash; <button onclick="showPayslipPeriodPrompt('+i+')" style="background:none;border:none;color:var(--orange);font-weight:700;cursor:pointer;font-size:13px;padding:0;text-decoration:underline">set dates</button></div>';
+            +'&#x26A0;&#xFE0F; Pay period not detected &mdash; '
+            +(_psHasItems?'<button onclick="tryAutoDetectPeriod('+i+')" style="background:none;border:none;color:var(--orange);font-weight:700;cursor:pointer;font-size:13px;padding:0;text-decoration:underline">auto-detect</button> or ':'')
+            +'<button onclick="showPayslipPeriodPrompt('+i+')" style="background:none;border:none;color:var(--orange);font-weight:700;cursor:pointer;font-size:13px;padding:0;text-decoration:underline">set dates</button></div>';
         }
         if(_psHasItems&&_psPeriod){
           var _periodInc=DB.income.filter(function(e){return inDateRange(e.date,ps.periodFrom,ps.periodTo);});
