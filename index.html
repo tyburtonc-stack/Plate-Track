@@ -2267,7 +2267,7 @@ function fuzzyMatchPayslip(items,entries){
         if(overlap>=0.5)score=overlap;
       }
       if(score>0&&_psCoMatch(item.company,e.company))score+=1;
-      if(score>bestScore){bestScore=score;best=e;}
+      if(score>bestScore||(score===bestScore&&best&&Math.abs(parseFloat(e.amount||0)-item.amount)<Math.abs(parseFloat(best.amount||0)-item.amount))){bestScore=score;best=e;}
     });
     if(best&&bestScore>0){
       used[best.id]=true;
