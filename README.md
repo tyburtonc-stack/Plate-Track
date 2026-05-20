@@ -47,7 +47,7 @@ PlateTrack is a Progressive Web App (PWA) that helps gig economy trade plate dri
 
 ### Other
 - CSV export of income and expenses
-- Dark / Light / Gold / Purple themes
+- Dark / Light / Gold / Purple / Blue themes
 - Installable PWA (iOS & Android home screen)
 - Free tier: 10 income + 10 expense entries; Pro unlocks unlimited
 
@@ -267,7 +267,7 @@ FREE_EXPENSE_LIMIT = 10      // max free tier expense entries
 | `pt_pro` | `"true"` if Pro unlocked |
 | `pt_sess` | Supabase session token |
 | `pt_theme` | `"dark"` or `"light"` |
-| `pt_color_theme` | `"purple"` or `"gold"` |
+| `pt_color_theme` | `"purple"`, `"gold"`, or `"blue"` |
 
 ---
 

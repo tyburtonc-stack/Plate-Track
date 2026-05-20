@@ -91,6 +91,21 @@ body.dark.theme-gold{
   --ai-glow:rgba(232,201,74,0.65);
   --scan-glow:rgba(232,201,74,0.44);--tab-active-glow:rgba(232,201,74,0.2);--tab-pill-bg:rgba(232,201,74,0.08);
 }
+/* Blue theme */
+body.theme-blue{
+  --grad-start:#E3F2FD;--grad-mid1:#E8F4FD;--grad-mid2:#E1F5FE;--grad-mid3:#E0F7FA;--grad-end:#F0F9FF;
+  --accent:#2563EB;--accent-glow:rgba(37,99,235,0.25);
+  --fab-bg:linear-gradient(135deg,#93C5FD,#2563EB 55%,#1D4ED8);--fab-glow:rgba(37,99,235,0.48);
+  --ai-glow:rgba(37,99,235,0.6);
+  --scan-glow:rgba(37,99,235,0.32);--tab-active-glow:rgba(37,99,235,0.16);--tab-pill-bg:rgba(37,99,235,0.06);
+}
+body.dark.theme-blue{
+  --grad-start:#0A0F1A;--grad-mid1:#0C1424;--grad-mid2:#0E1A2E;--grad-end:#0A0F1A;
+  --accent:#60A5FA;--accent-glow:rgba(96,165,250,0.3);
+  --fab-bg:linear-gradient(135deg,#93C5FD,#2563EB 55%,#1E3A8A);--fab-glow:rgba(37,99,235,0.55);
+  --ai-glow:rgba(96,165,250,0.7);
+  --scan-glow:rgba(96,165,250,0.42);--tab-active-glow:rgba(96,165,250,0.2);--tab-pill-bg:rgba(96,165,250,0.08);
+}
 /* ── Reset & base ─────────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overscroll-behavior:none}
@@ -166,7 +181,7 @@ body.dark .fab-action-scan .fab-action-circle{background:rgba(255,255,255,0.1);b
 .profile-row-chev{font-size:12px;color:var(--text4)}
 .theme-chips{display:flex;gap:8px;margin-top:4px}
 .theme-chip-btn{flex:1;padding:10px 8px;border-radius:var(--r-md);border:2px solid var(--border);background:var(--bg3);cursor:pointer;font-size:12px;font-weight:700;color:var(--text3);transition:all .18s;text-align:center}
-.theme-chip-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(139,92,246,0.08)}
+.theme-chip-btn.active{border-color:var(--accent);color:var(--accent);background:var(--tab-pill-bg)}
 /* ── Smart actions panel ──────────────────────────────────────── */
 .smart-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0);backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px);pointer-events:none;transition:background .3s}
 .smart-overlay.open{background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);pointer-events:all}
@@ -1011,6 +1026,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
           <div class="theme-chips">
             <button class="theme-chip-btn" id="themeBtnPurple" onclick="setTheme('purple')">&#x1F538; Purple</button>
             <button class="theme-chip-btn" id="themeBtnGold" onclick="setTheme('gold')">&#x1F7E1; Gold</button>
+            <button class="theme-chip-btn" id="themeBtnBlue" onclick="setTheme('blue')">&#x1F535; Blue</button>
           </div>
         </div>
         <div class="profile-row" onclick="toggleTheme()">
@@ -1657,18 +1673,21 @@ function applyTheme(dark){
 }
 function toggleTheme(){applyTheme(!document.body.classList.contains('dark'));}
 function setTheme(name){
-  document.body.classList.remove('theme-purple','theme-gold');
+  document.body.classList.remove('theme-purple','theme-gold','theme-blue');
   if(name==='gold')document.body.classList.add('theme-gold');
+  else if(name==='blue')document.body.classList.add('theme-blue');
   else document.body.classList.add('theme-purple');
   try{localStorage.setItem('pt_color_theme',name||'purple');}catch(e){}
   updateThemeChips();
 }
 function updateThemeChips(){
-  var isGold=document.body.classList.contains('theme-gold');
-  var p=document.getElementById('themeBtnPurple');
-  var g=document.getElementById('themeBtnGold');
-  if(p)p.className='theme-chip-btn'+(isGold?'':' active');
-  if(g)g.className='theme-chip-btn'+(isGold?' active':'');
+  var theme='purple';
+  if(document.body.classList.contains('theme-gold'))theme='gold';
+  else if(document.body.classList.contains('theme-blue'))theme='blue';
+  ['purple','gold','blue'].forEach(function(t){
+    var btn=document.getElementById('themeBtn'+t.charAt(0).toUpperCase()+t.slice(1));
+    if(btn)btn.className='theme-chip-btn'+(theme===t?' active':'');
+  });
 }
 function updateProfileDarkLabel(){
   var isDark=document.body.classList.contains('dark');
