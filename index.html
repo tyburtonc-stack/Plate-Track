@@ -310,7 +310,8 @@ body.dark .overlay{background:rgba(0,0,0,.7)}
 .sheet{background:var(--sheet);border-radius:24px 24px 0 0;padding:0;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-lg);animation:sheetIn .28s cubic-bezier(.34,1.56,.64,1)}
 @keyframes sheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .sheet-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 0}
-.sheet-hdr{padding:14px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.sheet-cam-row{display:flex;justify-content:center;padding:10px 0 2px}
+.sheet-hdr{padding:10px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
 .sheet-title{font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--text)}
 .sheet-close{width:30px;height:30px;background:var(--bg3);border:none;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--text3)}
 .sheet-hdr-actions{display:flex;align-items:center;gap:8px}
@@ -876,9 +877,11 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 <div class="overlay" id="overlay" onclick="closeSheetOutside(event)">
   <div class="sheet">
     <div class="sheet-handle"></div>
+    <div class="sheet-cam-row">
+      <button class="sheet-camera-btn" id="sheet-camera-btn" style="display:none" onclick="document.getElementById('f_img').click()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
+    </div>
     <div class="sheet-hdr">
       <span class="sheet-title" id="sheet-title"></span>
-      <button class="sheet-camera-btn" id="sheet-camera-btn" style="display:none" onclick="document.getElementById('f_img').click()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
       <div class="sheet-hdr-actions" id="sheet-hdr-actions">
         <button class="sheet-close" onclick="closeSheet()">&#x2715;</button>
       </div>
