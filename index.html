@@ -3435,9 +3435,10 @@ function openJobDetail(jobRef,fallbackId){
     +'</div>'
     +'<div style="height:20px"></div>'
     +'</div>'
-    +'<div style="padding:12px 20px 32px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0">'
-    +'<button class="jd-edit" style="flex:1;padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-weight:700;color:var(--text2);cursor:pointer">Edit Job</button>'
-    +'<button class="jd-addexp" style="flex:1;padding:14px;background:var(--accent);border:none;border-radius:var(--r-md);font-size:14px;font-weight:700;color:#fff;cursor:pointer">+ Add Expense</button>'
+    +'<div style="padding:12px 20px 32px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">'
+    +'<button class="jd-edit" style="flex:1;padding:13px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">Edit Job</button>'
+    +'<button class="jd-addinc" style="flex:1;padding:13px 8px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--success);cursor:pointer">+ Add Income</button>'
+    +'<button class="jd-addexp" style="flex:1;padding:13px 8px;background:var(--accent);border:none;border-radius:var(--r-md);font-size:13px;font-weight:700;color:#fff;cursor:pointer">+ Add Expense</button>'
     +'</div>'
     +'</div>';
   document.body.appendChild(overlay);
@@ -3445,6 +3446,7 @@ function openJobDetail(jobRef,fallbackId){
   var prefillRef=(!isSingleton&&jobRef)?jobRef:'';
   overlay.querySelector('.jd-close').addEventListener('click',function(){overlay.remove();});
   overlay.querySelector('.jd-edit').addEventListener('click',function(){overlay.remove();openSheet('income',editId);});
+  overlay.querySelector('.jd-addinc').addEventListener('click',function(){window._incomePrefill={company:company,jobRef:prefillRef};overlay.remove();openSheet('income','');});
   overlay.querySelector('.jd-addexp').addEventListener('click',function(){window._expensePrefill={company:company,jobRef:prefillRef};overlay.remove();openSheet('expense','');});
   overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
 }
@@ -3719,6 +3721,7 @@ function openSheet(type,id){
   if(type==='income'){
     var fd2=rec?rec.date:today(),fco=rec?rec.company:COMPANIES[0].name;
     var fam=rec?(rec.amount||''):'',fjr=rec?(rec.jobRef||''):'',fml=rec?(rec.miles||''):'';
+    if(!isEdit&&window._incomePrefill){fco=window._incomePrefill.company||fco;fjr=window._incomePrefill.jobRef||fjr;window._incomePrefill=null;}
     var fds=rec?(rec.description||''):'',fst=rec?(rec.startTime||''):'',fet=rec?(rec.endTime||''):'';
     var fit=rec?(rec.incomeType||INCOME_TYPES[0]||'Delivery'):INCOME_TYPES[0]||'Delivery',freg=rec?(rec.registration||''):'';
     var fsp=rec?(rec.startPostcode||''):'',fep=rec?(rec.endPostcode||''):'';
