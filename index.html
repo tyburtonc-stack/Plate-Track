@@ -344,8 +344,8 @@ body.dark .cat-chip.selected{background:var(--gold);color:#1A1A2E;border-color:v
 /* Standard input */
 .std-input{background:var(--input);border:1.5px solid transparent;color:var(--text);padding:12px 14px;border-radius:var(--r-lg);font-size:15px;width:100%;transition:border .2s;-webkit-appearance:none;appearance:none;box-sizing:border-box;min-height:44px}
 .std-input:focus{border-color:var(--gold);outline:none;background:var(--bg2)}
-input[type=date].std-input{-webkit-appearance:textfield;appearance:textfield;max-width:100%;min-width:0}
-input[type=date].std-input::-webkit-calendar-picker-indicator{border-top-right-radius:calc(var(--r-lg) - 1.5px);border-bottom-right-radius:calc(var(--r-lg) - 1.5px)}
+input[type=date].std-input{-webkit-appearance:none;appearance:none;max-width:100%;min-width:0;border-radius:var(--r-lg)}
+input[type=date].std-input::-webkit-calendar-picker-indicator{display:none}
 /* Select */
 .std-select{background-color:var(--input);background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="%238B949E" d="M6 8L1 3h10z"/></svg>');background-repeat:no-repeat;background-position:right 12px center;border:1.5px solid transparent;color:var(--text);padding:12px 36px 12px 14px;border-radius:var(--r-lg);font-size:15px;width:100%;-webkit-appearance:none;appearance:none;transition:border .2s;color-scheme:light}
 body.dark .std-select{color-scheme:dark;background-color:var(--input);color:var(--text);background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="%23C9D1D9" d="M6 8L1 3h10z"/></svg>');background-repeat:no-repeat;background-position:right 12px center;}
@@ -2417,8 +2417,8 @@ function filtersHTML(){
   var co='<option value="All"'+(FCO==='All'?' selected':'')+'>All Companies</option>';
   COMPANIES.forEach(function(c){co+='<option value="'+c.name+'"'+(FCO===c.name?' selected':'')+'>'+c.name+'</option>';});
   var clearBtn=(FDFROM||FDTO)?'<button onclick="clearDates()" style="background:none;border:none;color:var(--gold-dim);font-size:12px;cursor:pointer;font-weight:600;padding:4px 0;display:block;text-align:right;width:100%">Clear dates</button>':'';
-  var colStyle='flex:1;min-width:0;overflow:hidden';
-  var inputStyle='width:100%;min-width:0;box-sizing:border-box;padding:9px 8px;font-size:13px;-webkit-appearance:none;appearance:none';
+  var colStyle='flex:1;min-width:0';
+  var inputStyle='width:100%;min-width:0;box-sizing:border-box;padding:9px 8px;font-size:13px;-webkit-appearance:none;appearance:none;border-radius:var(--r-lg)';
   var labelStyle='font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;font-weight:600;white-space:nowrap';
   return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;margin:0 16px 14px;box-shadow:var(--shadow-sm);overflow:hidden">'
     +'<div style="display:flex;gap:8px;margin-bottom:10px">'
@@ -4372,11 +4372,11 @@ function dashChipFilterHTML(){
   h+='<div style="display:flex;gap:8px">';
   h+='<div style="flex:1;min-width:0">';
   h+='<label style="font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;font-weight:600">From</label>';
-  h+='<input type="date" class="std-input" value="'+FDFROM+'" onchange="dashSetFrom(this.value)" style="width:100%;box-sizing:border-box;padding:9px 8px;font-size:13px;-webkit-appearance:none;appearance:none">';
+  h+='<input type="date" class="std-input" value="'+FDFROM+'" onchange="dashSetFrom(this.value)" style="width:100%;box-sizing:border-box;padding:9px 8px;font-size:13px;-webkit-appearance:none;appearance:none;border-radius:var(--r-lg)">';
   h+='</div>';
   h+='<div style="flex:1;min-width:0">';
   h+='<label style="font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;font-weight:600">To</label>';
-  h+='<input type="date" class="std-input" value="'+FDTO+'" onchange="dashSetTo(this.value)" style="width:100%;box-sizing:border-box;padding:9px 8px;font-size:13px;-webkit-appearance:none;appearance:none">';
+  h+='<input type="date" class="std-input" value="'+FDTO+'" onchange="dashSetTo(this.value)" style="width:100%;box-sizing:border-box;padding:9px 8px;font-size:13px;-webkit-appearance:none;appearance:none;border-radius:var(--r-lg)">';
   h+='</div>';
   h+='</div>';
   h+=clearBtn;
