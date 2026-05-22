@@ -2310,26 +2310,37 @@ function _psCoMatch(a,b){
   return na.indexOf(nb)>=0||nb.indexOf(na)>=0||_psOverlap(_psTok(na),_psTok(nb))>=0.6;
 }
 
-function _psAggregateByRef(items){
+function _psAggregateByRef(items,entries){
   if(!items||!items.length)return items||[];
+  var entryRefCounts={};
+  (entries||[]).forEach(function(e){
+    var r=_psNorm(e.jobRef||'');
+    if(r)entryRefCounts[r]=(entryRefCounts[r]||0)+1;
+  });
   var groups={},order=[],out=[];
   items.forEach(function(it){
     var r=_psNorm(it.ref||'');
     if(!r||(it.amount||0)<=0){out.push(it);return;}
-    if(!groups[r]){groups[r]={ref:it.ref,description:it.description||'',company:it.company||'',amount:0,_count:0};order.push(r);}
+    if(!groups[r]){groups[r]={ref:it.ref,description:it.description||'',company:it.company||'',amount:0,_count:0,_items:[]};order.push(r);}
     var g=groups[r];
     g.amount+=parseFloat(it.amount||0);
     g._count++;
+    g._items.push(it);
     var d=(it.description||'').trim();
     if(d&&d.length>(g.description||'').length)g.description=d;
     if(!g.company&&it.company)g.company=it.company;
   });
-  order.forEach(function(r){var g=groups[r];delete g._count;out.push(g);});
+  order.forEach(function(r){
+    var g=groups[r];
+    var logCount=entryRefCounts[r]||0;
+    if(g._count>1&&g._count>logCount){delete g._count;delete g._items;out.push(g);}
+    else{g._items.forEach(function(it){out.push(it);});}
+  });
   return out;
 }
 
 function fuzzyMatchPayslip(items,entries){
-  items=_psAggregateByRef(items);
+  items=_psAggregateByRef(items,entries);
   var used={};
   var matched=[],missing=[];
   items.forEach(function(item){
