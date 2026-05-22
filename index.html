@@ -3735,14 +3735,12 @@ function openSheet(type,id){
       +'<div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+fd2+'"></div>'
       +'<div class="field"><label class="field-label">Job Reference <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f4" class="std-input" placeholder="e.g. BCA-1234" value="'+fjr+'"><div class="field-hint">Same ref groups entries & links expenses</div></div>'
       +'<div style="border-top:1px solid var(--border);margin:16px 0"></div>'
-      +'<div class="optional-toggle" onclick="this.nextElementSibling.className=\'optional-body\'+(this.nextElementSibling.className.indexOf(\'open\')>=0?\'\':\'open\');this.querySelector(\'.optional-chevron\').className=\'optional-chevron\'+(this.nextElementSibling.className.indexOf(\'open\')>=0?\' open\':\'\')"><span>&#x25B6; More details</span><span class="optional-chevron'+(fst||fml||freg||fsp||fep?' open':'')+'">&#x25B6;</span></div>'
-      +'<div class="optional-body'+(fst||fml||freg||fsp||fep?' open':'')+'">'
       +'<div class="field-row"><div class="field"><label class="field-label">Start Time</label><input type="time" id="f_start" class="std-input" value="'+fst+'"></div><div class="field"><label class="field-label">End Time</label><input type="time" id="f_end" class="std-input" value="'+fet+'"></div></div>'
       +'<div class="field-row"><div class="field"><label class="field-label">Miles</label><input type="number" id="f5" class="std-input" placeholder="0" value="'+fml+'" inputmode="numeric"></div><div class="field"><label class="field-label">Registration</label><input type="text" id="f_reg" class="std-input" placeholder="AB12 CDE" value="'+freg+'" style="text-transform:uppercase"></div></div>'
       +'<div class="field-row"><div class="field"><label class="field-label">Start Postcode</label><input type="text" id="f_sp" class="std-input" placeholder="LU1 2AB" value="'+fsp+'" style="text-transform:uppercase"></div><div class="field"><label class="field-label">End Postcode</label><input type="text" id="f_ep" class="std-input" placeholder="M1 4BT" value="'+fep+'" style="text-transform:uppercase"></div></div>'
       +'<button type="button" id="miles-calc-btn" class="miles-calc-btn" onclick="calcMilesFromPostcodes()">&#x1F4CD; Calculate miles from postcodes</button>'
       +'<div class="field"><label class="field-label">Notes</label><input type="text" id="f6" class="std-input" placeholder="Optional notes" value="'+fds+'"></div>'
-      +'</div>';
+      +'<input type="file" id="f_img" accept="image/*,.heic,.heif" style="display:none">';
   } else {
     var fd2=rec?rec.date:today(),fcat=rec?rec.category:'';
     var fam=rec?(rec.amount||''):'',frc=rec?(rec.receipt||''):'',fds=rec?(rec.description||''):'';
@@ -3807,31 +3805,37 @@ function openSheet(type,id){
   document.getElementById('sheet-footer').innerHTML=footerHtml;
   document.getElementById('overlay').className='overlay open';
   var uh=document.getElementById('util-hdr');if(uh)uh.style.display='none';
-  // Show camera button only for expense forms
+  // Show camera button for both income and expense forms
   var camBtn=document.getElementById('sheet-camera-btn');
   if(camBtn){
-    if(type==='expense'){
-      camBtn.innerHTML=fimg?'&#x1F4F7;<span class="receipt-badge"></span>':'&#x1F4F7;';
-      camBtn.style.display='flex';
-    } else {
-      camBtn.style.display='none';
-    }
+    var _camImg=type==='income'?(rec?(rec.receiptImage||''):''):fimg;
+    camBtn.innerHTML=_camImg?'&#x1F4F7;<span class="receipt-badge"></span>':'&#x1F4F7;';
+    camBtn.style.display='flex';
   }
   // Focus amount if new
   if(!isEdit){setTimeout(function(){var a=document.getElementById('f3');if(a)a.focus();},300);}
-  if(type==='expense'){
-    var fimgEl=document.getElementById('f_img');
-    if(fimgEl){
-      var statusSpan=document.createElement('div');
-      statusSpan.id='ocr-status';
-      statusSpan.style.cssText='font-size:10px;color:var(--text4);min-width:0;text-align:right';
-      var hdrActions=document.getElementById('sheet-hdr-actions');
-      if(hdrActions&&camBtn)hdrActions.insertBefore(statusSpan,camBtn);
+  var fimgEl=document.getElementById('f_img');
+  if(fimgEl){
+    var statusSpan=document.createElement('div');
+    statusSpan.id='ocr-status';
+    statusSpan.style.cssText='font-size:10px;color:var(--text4);min-width:0;text-align:right';
+    var hdrActions=document.getElementById('sheet-hdr-actions');
+    if(hdrActions&&camBtn)hdrActions.insertBefore(statusSpan,camBtn);
+    if(type==='expense'){
       fimgEl.onchange=function(e){
         if(e.target.files&&e.target.files[0]){
           var cb=document.getElementById('sheet-camera-btn');
           if(cb){cb.innerHTML='&#x1F4F7;<span class="receipt-badge"></span>';}
           ocrReceipt(e.target.files[0]);
+        }
+      };
+    } else if(type==='income'){
+      window._incomeImgData=null;
+      fimgEl.onchange=function(e){
+        if(e.target.files&&e.target.files[0]){
+          var cb=document.getElementById('sheet-camera-btn');
+          if(cb){cb.innerHTML='&#x1F4F7;<span class="receipt-badge"></span>';}
+          ocrIncomeReceipt(e.target.files[0]);
         }
       };
     }
@@ -3940,6 +3944,45 @@ function ocrReceipt(file){
   });
 }
 
+function ocrIncomeReceipt(file){
+  var statusEl=document.getElementById('ocr-status');
+  if(statusEl)statusEl.textContent='Scanning…';
+  compressImage(file,800,0.7,function(blob){
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      window._incomeImgData=ev.target.result;
+      var base64=ev.target.result.split(',')[1];
+      fetch('https://platetrack-ai.tyburtonc.workers.dev/',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          model:'claude-sonnet-4-5',
+          max_tokens:200,
+          messages:[{role:'user',content:[
+            {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
+            {type:'text',text:'Extract data from this job or delivery confirmation. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","job_ref":"reference or job number printed on document or null"}. Amount is GBP total as a plain number.'}
+          ]}]
+        })
+      })
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(statusEl)statusEl.textContent='';
+        var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
+        var m=txt.match(/\{[\s\S]*\}/);
+        if(!m)return;
+        var data;try{data=JSON.parse(m[0]);}catch(e){return;}
+        var filled=0;
+        if(data.amount!=null){var amtEl=document.getElementById('f3');if(amtEl&&!amtEl.value){amtEl.value=parseFloat(data.amount).toFixed(2);updateSaveBtn();filled++;}}
+        if(data.date){var dtEl=document.getElementById('f1');if(dtEl){dtEl.value=data.date;filled++;}}
+        if(data.job_ref){var jrEl=document.getElementById('f4');if(jrEl&&!jrEl.value){jrEl.value=data.job_ref;filled++;}}
+        if(filled>0)showToast('Scanned — '+filled+' field'+(filled>1?'s':'')+' filled');
+      })
+      .catch(function(){if(statusEl)statusEl.textContent='';});
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
 function doSave(){
   var date=document.getElementById('f1').value,amount=document.getElementById('f3').value;
   if(ETYP==='income'){
@@ -3985,7 +4028,9 @@ function doSave(){
       registration:regEl?regEl.value.toUpperCase():'',
       startPostcode:spEl?spEl.value.toUpperCase():'',
       endPostcode:epEl?epEl.value.toUpperCase():'',
-      description:document.getElementById('f6')?document.getElementById('f6').value:''};
+      description:document.getElementById('f6')?document.getElementById('f6').value:'',
+      receiptImage:window._incomeImgData||(EID?(function(){for(var i=0;i<DB.income.length;i++){if(String(DB.income[i].id)===EID)return DB.income[i].receiptImage||'';}return '';})():'')};
+    window._incomeImgData=null;
     if(EID){for(var i=0;i<DB.income.length;i++){if(String(DB.income[i].id)===EID){DB.income[i]=item;break;}}}else DB.income.unshift(item);
   } else {
     var imgEl=document.getElementById('f_img');
