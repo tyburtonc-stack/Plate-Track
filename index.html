@@ -310,11 +310,11 @@ body.dark .overlay{background:rgba(0,0,0,.7)}
 .sheet{background:var(--sheet);border-radius:24px 24px 0 0;padding:0;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-lg);animation:sheetIn .28s cubic-bezier(.34,1.56,.64,1)}
 @keyframes sheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .sheet-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 0}
-.sheet-hdr{padding:14px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.sheet-hdr{padding:14px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);position:relative}
 .sheet-title{font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--text)}
 .sheet-close{width:30px;height:30px;background:var(--bg3);border:none;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--text3)}
 .sheet-hdr-actions{display:flex;align-items:center;gap:8px}
-.sheet-camera-btn{width:34px;height:34px;background:var(--bg3);border:1.5px solid var(--accent);border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;color:var(--accent);position:relative;padding:0;box-shadow:0 0 0 3px rgba(0,0,0,0.04),0 4px 14px var(--scan-glow)}
+.sheet-camera-btn{width:34px;height:34px;background:var(--bg3);border:1.5px solid var(--accent);border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;color:var(--accent);position:absolute;left:50%;transform:translateX(-50%);padding:0;box-shadow:0 0 0 3px rgba(0,0,0,0.04),0 4px 14px var(--scan-glow)}
 .receipt-badge{position:absolute;top:-2px;right:-2px;width:9px;height:9px;background:var(--success);border-radius:50%;border:1.5px solid var(--sheet)}
 .sheet-body{padding:18px 20px 8px;overflow-x:hidden;overflow-y:auto;flex:1}
 .sheet-footer{padding:10px 20px max(env(safe-area-inset-bottom),16px);border-top:1px solid var(--border);background:var(--sheet)}
@@ -3438,7 +3438,7 @@ function openJobDetail(jobRef,fallbackId){
     +'<div style="padding:12px 20px 32px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">'
     +'<button class="jd-edit" style="flex:1;padding:13px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">Edit Job</button>'
     +'<button class="jd-addinc" style="flex:1;padding:13px 8px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--success);cursor:pointer">+ Add Income</button>'
-    +'<button class="jd-addexp" style="flex:1;padding:13px 8px;background:#dc2626;border:none;border-radius:var(--r-md);font-size:13px;font-weight:700;color:#fff;cursor:pointer">+ Add Expense</button>'
+    +'<button class="jd-addexp" style="flex:1;padding:13px 8px;background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--danger);cursor:pointer">+ Add Expense</button>'
     +'</div>'
     +'</div>';
   document.body.appendChild(overlay);
