@@ -1302,7 +1302,7 @@ function supaFetchWithRefresh(url, opts, cb){
 function supaEnsureUser(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
   fetch(SUPA_URL+'/rest/v1/users',{method:'POST',
-    headers:Object.assign(_supaHdr(),{'Prefer':'resolution=merge-duplicates'}),
+    headers:Object.assign(_supaHdr(),{'Prefer':'resolution=ignore-duplicates'}),
     body:JSON.stringify({id:SUPA_USER.id,name:getUserName()||'',income_types:INCOME_TYPES})
   }).then(function(){if(cb)cb(null);}).catch(function(e){if(cb)cb(e.message);});
 }
