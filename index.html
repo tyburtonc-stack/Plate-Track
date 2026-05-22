@@ -2333,7 +2333,8 @@ function _psAggregateByRef(items,entries){
   order.forEach(function(r){
     var g=groups[r];
     var logCount=entryRefCounts[r]||0;
-    if(g._count>1&&g._count>logCount){delete g._count;delete g._items;out.push(g);}
+    var hasIntrav=g._items.some(function(it){return _psNorm(it.description||'').indexOf('intrav')>=0;});
+    if(g._count>1&&g._count>logCount&&hasIntrav){delete g._count;delete g._items;out.push(g);}
     else{g._items.forEach(function(it){out.push(it);});}
   });
   return out;
