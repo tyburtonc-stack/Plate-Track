@@ -3952,15 +3952,17 @@ function ocrIncomeReceipt(file){
     reader.onload=function(ev){
       window._incomeImgData=ev.target.result;
       var base64=ev.target.result.split(',')[1];
+      var coList=COMPANIES.map(function(c){return c.name;}).join(', ');
+      var promptText='Extract data from this job or delivery confirmation for a UK trade plate driver. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","job_ref":"job/booking reference number printed on document or null","company":"identify company from document branding or job number format, must be exactly one of ['+coList+'] or null","start_postcode":"UK postcode for collection/pickup location or null","end_postcode":"UK postcode for delivery/drop-off location or null"}. Amount is GBP total as a plain number. Postcodes must be uppercase UK format e.g. LU1 2AB.';
       fetch('https://platetrack-ai.tyburtonc.workers.dev/',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           model:'claude-sonnet-4-5',
-          max_tokens:200,
+          max_tokens:400,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-            {type:'text',text:'Extract data from this job or delivery confirmation. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","job_ref":"reference or job number printed on document or null"}. Amount is GBP total as a plain number.'}
+            {type:'text',text:promptText}
           ]}]
         })
       })
@@ -3975,7 +3977,10 @@ function ocrIncomeReceipt(file){
         if(data.amount!=null){var amtEl=document.getElementById('f3');if(amtEl&&!amtEl.value){amtEl.value=parseFloat(data.amount).toFixed(2);updateSaveBtn();filled++;}}
         if(data.date){var dtEl=document.getElementById('f1');if(dtEl){dtEl.value=data.date;filled++;}}
         if(data.job_ref){var jrEl=document.getElementById('f4');if(jrEl&&!jrEl.value){jrEl.value=data.job_ref;filled++;}}
-        if(filled>0)showToast('Scanned — '+filled+' field'+(filled>1?'s':'')+' filled');
+        if(data.company){var coChipsAll=document.querySelectorAll('.co-chips .co-chip');coChipsAll.forEach(function(btn){if(btn.textContent.trim()===data.company){btn.click();filled++;}});}
+        if(data.start_postcode){var spEl=document.getElementById('f_sp');if(spEl&&!spEl.value){spEl.value=data.start_postcode.toUpperCase().trim();filled++;}}
+        if(data.end_postcode){var epEl=document.getElementById('f_ep');if(epEl&&!epEl.value){epEl.value=data.end_postcode.toUpperCase().trim();filled++;}}
+        if(filled>0)showToast('Job scanned — '+filled+' field'+(filled>1?'s':'')+' filled');
       })
       .catch(function(){if(statusEl)statusEl.textContent='';});
     };
