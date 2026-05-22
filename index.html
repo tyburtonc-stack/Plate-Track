@@ -307,13 +307,19 @@ body.dark .filter-chip.active{background:var(--gold);color:#1A1A2E;border-color:
 body.dark .overlay{background:rgba(0,0,0,.7)}
 .overlay.open{display:flex;animation:overlayIn .2s ease-out}
 @keyframes overlayIn{from{opacity:0}to{opacity:1}}
-.sheet{background:var(--sheet);border-radius:24px 24px 0 0;padding:0 0 max(env(safe-area-inset-bottom),20px);width:100%;max-height:92vh;overflow-y:auto;overflow-x:hidden;box-shadow:var(--shadow-lg);animation:sheetIn .28s cubic-bezier(.34,1.56,.64,1)}
+.sheet{background:var(--sheet);border-radius:24px 24px 0 0;padding:0;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-lg);animation:sheetIn .28s cubic-bezier(.34,1.56,.64,1)}
 @keyframes sheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .sheet-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 0}
 .sheet-hdr{padding:14px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
 .sheet-title{font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--text)}
 .sheet-close{width:30px;height:30px;background:var(--bg3);border:none;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--text3)}
-.sheet-body{padding:18px 20px 28px;overflow-x:hidden}
+.sheet-hdr-actions{display:flex;align-items:center;gap:8px}
+.sheet-camera-btn{width:34px;height:34px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;color:var(--text);position:relative;padding:0}
+.receipt-badge{position:absolute;top:-2px;right:-2px;width:9px;height:9px;background:var(--success);border-radius:50%;border:1.5px solid var(--sheet)}
+.sheet-body{padding:18px 20px 8px;overflow-x:hidden;overflow-y:auto;flex:1}
+.sheet-footer{padding:10px 20px max(env(safe-area-inset-bottom),16px);border-top:1px solid var(--border);background:var(--sheet)}
+.sheet-footer .save-btn{margin-top:0}
+.sheet-footer .del-btn{margin-top:8px}
 /* ── Form fields ──────────────────────────────────────────────── */
 .field{margin-bottom:16px;min-width:0;overflow:hidden}
 .field-label{font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px}
@@ -872,9 +878,13 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
     <div class="sheet-handle"></div>
     <div class="sheet-hdr">
       <span class="sheet-title" id="sheet-title"></span>
-      <button class="sheet-close" onclick="closeSheet()">&#x2715;</button>
+      <div class="sheet-hdr-actions" id="sheet-hdr-actions">
+        <button class="sheet-camera-btn" id="sheet-camera-btn" style="display:none" onclick="document.getElementById('f_img').click()">&#x1F4F7;</button>
+        <button class="sheet-close" onclick="closeSheet()">&#x2715;</button>
+      </div>
     </div>
     <div class="sheet-body" id="sheet-body"></div>
+    <div class="sheet-footer" id="sheet-footer"></div>
   </div>
 </div>
 
@@ -3778,39 +3788,52 @@ function openSheet(type,id){
       +'<button type="button" class="reimb-opt'+(fcat&&!isReimb?' selected-no':'')+'" id="reimb-no" onclick="setReimb(false)">&#x1F4B8; NO &mdash; My cost</button>'
       +'</div><div class="field-hint" id="reimb-hint">'+(fcat?(isReimb?'Won\'t reduce your tax bill (already paid back)':'Will reduce your tax bill as a deductible expense'):'Select a category first')+'</div></div>'
       +'<div class="field"><label class="field-label">Amount</label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
-      +'<div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+fd2+'"></div>'
+      +'<div class="field-row"><div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+fd2+'"></div>'
+      +'<div class="field"><label class="field-label">Receipt Ref <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f4" class="std-input" placeholder="REC-001" value="'+frc+'"></div></div>'
       +'<div class="field"><label class="field-label">Link to Job</label>'
       +'<input type="text" id="f4c" class="std-input" list="joblist" placeholder="Type to search jobs..." value="'+fjr2+'" autocomplete="off">'
-      +'<datalist id="joblist">'+dlOpts+'</datalist>'
-      +'<div class="field-hint">Suggestions sorted by same date, then same company</div></div>'
-      +'<div style="border-top:1px solid var(--border);margin:16px 0"></div>'
-      +'<div class="optional-toggle" onclick="this.nextElementSibling.className=\'optional-body\'+(this.nextElementSibling.className.indexOf(\'open\')>=0?\'\':\'open\');this.querySelector(\'.optional-chevron\').className=\'optional-chevron\'+(this.nextElementSibling.className.indexOf(\'open\')>=0?\' open\':\'\')"><span>&#x25B6; More details</span><span class="optional-chevron'+(fimg||frc||fds?' open':'')+'">&#x25B6;</span></div>'
-      +'<div class="optional-body'+(fimg||frc||fds?' open':'')+'">'
-      +'<div class="field"><label class="field-label">Receipt Photo <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label>'
-      +'<input type="file" id="f_img" accept="image/*,.heic,.heif">'
-      +imgPreview
-      +(fimg?'<button type="button" style="margin-top:8px;background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border);border-radius:var(--r-sm);padding:5px 12px;font-size:12px;cursor:pointer" onclick="deleteReceiptImage(\''+EID+'\')">&#x2715; Remove photo</button>':'')
-      +'<div class="field-hint">Stored locally on this device only.</div></div>'
-      +'<div class="field"><label class="field-label">Receipt Ref <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f4" class="std-input" placeholder="e.g. REC-001" value="'+frc+'"></div>'
+      +'<datalist id="joblist">'+dlOpts+'</datalist></div>'
       +'<div class="field"><label class="field-label">Description <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f5" class="std-input" placeholder="What was this for?" value="'+fds+'"></div>'
-      +'</div>';
+      +(fimg?'<div style="display:flex;gap:14px;align-items:center;margin-bottom:12px">'
+        +'<button type="button" style="font-size:12px;color:var(--text4);background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px" onclick="viewReceipt(\''+fimg+'\')">&#x1F9FE; View receipt</button>'
+        +'<button type="button" style="font-size:12px;color:var(--danger);background:none;border:none;cursor:pointer;padding:0" onclick="deleteReceiptImage(\''+EID+'\')">&#x2715; Remove receipt</button>'
+        +'</div>':'')
+      +'<input type="file" id="f_img" accept="image/*,.heic,.heif" style="display:none">';
   }
   var saveLabel=type==='income'?'Save Job':'Save Expense';
-  html+='<button class="save-btn" id="save-btn" onclick="doSave()" style="margin-top:22px">'+saveLabel+(fam?' &mdash; '+(type==='income'?'+':'-')+'\u00a3'+parseFloat(fam).toFixed(2):'')+'</button>';
-  if(isEdit)html+='<button class="del-btn" onclick="doDelete()">Delete '+(type==='income'?'Job':'Expense')+'</button>';
+  var footerHtml='<button class="save-btn" id="save-btn" onclick="doSave()">'+saveLabel+(fam?' &mdash; '+(type==='income'?'+':'-')+'\u00a3'+parseFloat(fam).toFixed(2):'')+'</button>';
+  if(isEdit)footerHtml+='<button class="del-btn" onclick="doDelete()">Delete '+(type==='income'?'Job':'Expense')+'</button>';
   document.getElementById('sheet-body').innerHTML=html;
+  document.getElementById('sheet-footer').innerHTML=footerHtml;
   document.getElementById('overlay').className='overlay open';
   var uh=document.getElementById('util-hdr');if(uh)uh.style.display='none';
+  // Show camera button only for expense forms
+  var camBtn=document.getElementById('sheet-camera-btn');
+  if(camBtn){
+    if(type==='expense'){
+      camBtn.innerHTML=fimg?'&#x1F4F7;<span class="receipt-badge"></span>':'&#x1F4F7;';
+      camBtn.style.display='flex';
+    } else {
+      camBtn.style.display='none';
+    }
+  }
   // Focus amount if new
   if(!isEdit){setTimeout(function(){var a=document.getElementById('f3');if(a)a.focus();},300);}
   if(type==='expense'){
     var fimgEl=document.getElementById('f_img');
     if(fimgEl){
-      var statusSpan=document.createElement('span');
+      var statusSpan=document.createElement('div');
       statusSpan.id='ocr-status';
-      statusSpan.style.cssText='display:block;font-size:11px;color:var(--text4);margin-top:4px';
-      fimgEl.parentNode.insertBefore(statusSpan,fimgEl.nextSibling);
-      fimgEl.onchange=function(e){if(e.target.files&&e.target.files[0])ocrReceipt(e.target.files[0]);};
+      statusSpan.style.cssText='font-size:10px;color:var(--text4);min-width:0;text-align:right';
+      var hdrActions=document.getElementById('sheet-hdr-actions');
+      if(hdrActions&&camBtn)hdrActions.insertBefore(statusSpan,camBtn);
+      fimgEl.onchange=function(e){
+        if(e.target.files&&e.target.files[0]){
+          var cb=document.getElementById('sheet-camera-btn');
+          if(cb){cb.innerHTML='&#x1F4F7;<span class="receipt-badge"></span>';}
+          ocrReceipt(e.target.files[0]);
+        }
+      };
     }
   }
 }
@@ -4049,7 +4072,7 @@ function doDelete(){
   });
 }
 
-function closeSheet(){document.getElementById('overlay').className='overlay';var uh=document.getElementById('util-hdr');if(uh)uh.style.display='';EID=null;ETYP=null;}
+function closeSheet(){document.getElementById('overlay').className='overlay';var uh=document.getElementById('util-hdr');if(uh)uh.style.display='';EID=null;ETYP=null;var camBtn=document.getElementById('sheet-camera-btn');if(camBtn)camBtn.style.display='none';var footer=document.getElementById('sheet-footer');if(footer)footer.innerHTML='';}
 function closeSheetOutside(e){if(e.target===document.getElementById('overlay'))closeSheet();}
 
 // --- Embed logo if available ---
