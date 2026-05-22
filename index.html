@@ -1113,6 +1113,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 
 <input type="file" id="impfile" accept=".json" style="display:none">
 <input type="file" id="payslipfile" accept="image/*,application/pdf" style="display:none">
+<input type="file" id="fab-scan-input" accept="image/*,.heic,.heif" capture="environment" style="display:none" onchange="fabScanReceiptFromFAB(event)">
 
 <script>
 // ╔══════════════════════════════════════════════════════╗
@@ -1735,17 +1736,22 @@ function fabAddIncome(){closeFAB();openSheet('income','');}
 function fabAddExpense(){closeFAB();openSheet('expense','');}
 function fabScanReceipt(){
   closeFAB();
+  var inp=document.getElementById('fab-scan-input');
+  if(inp)inp.click();
+}
+function fabScanReceiptFromFAB(e){
+  if(!e.target.files||!e.target.files[0])return;
+  var file=e.target.files[0];
+  e.target.value='';
   openSheet('expense','');
   setTimeout(function(){
-    var optBody=document.querySelector('.optional-body');
-    var optChev=document.querySelector('.optional-chevron');
-    if(optBody&&optBody.className.indexOf('open')<0){
-      optBody.className='optional-body open';
-      if(optChev)optChev.className='optional-chevron open';
-    }
-    var pf=document.getElementById('f_img');
-    if(pf)pf.click();
-  },350);
+    var fimgEl=document.getElementById('f_img');
+    if(fimgEl&&window.DataTransfer){var dt=new DataTransfer();dt.items.add(file);fimgEl.files=dt.files;}
+    var cb=document.getElementById('sheet-camera-btn');
+    var svgHtml='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+    if(cb)cb.innerHTML=svgHtml+'<span class="receipt-badge"></span>';
+    ocrReceipt(file);
+  },400);
 }
 
 // --- Profile panel ---
