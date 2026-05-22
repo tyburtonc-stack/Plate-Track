@@ -314,7 +314,7 @@ body.dark .overlay{background:rgba(0,0,0,.7)}
 .sheet-title{font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--text)}
 .sheet-close{width:30px;height:30px;background:var(--bg3);border:none;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--text3)}
 .sheet-hdr-actions{display:flex;align-items:center;gap:8px}
-.sheet-camera-btn{width:34px;height:34px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;color:var(--text);position:relative;padding:0}
+.sheet-camera-btn{width:34px;height:34px;background:var(--bg3);border:1.5px solid var(--accent);border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;color:var(--accent);position:relative;padding:0}
 .receipt-badge{position:absolute;top:-2px;right:-2px;width:9px;height:9px;background:var(--success);border-radius:50%;border:1.5px solid var(--sheet)}
 .sheet-body{padding:18px 20px 8px;overflow-x:hidden;overflow-y:auto;flex:1}
 .sheet-footer{padding:10px 20px max(env(safe-area-inset-bottom),16px);border-top:1px solid var(--border);background:var(--sheet)}
@@ -879,7 +879,7 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
     <div class="sheet-hdr">
       <span class="sheet-title" id="sheet-title"></span>
       <div class="sheet-hdr-actions" id="sheet-hdr-actions">
-        <button class="sheet-camera-btn" id="sheet-camera-btn" style="display:none" onclick="document.getElementById('f_img').click()">&#x1F4F7;</button>
+        <button class="sheet-camera-btn" id="sheet-camera-btn" style="display:none" onclick="document.getElementById('f_img').click()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
         <button class="sheet-close" onclick="closeSheet()">&#x2715;</button>
       </div>
     </div>
@@ -3809,7 +3809,8 @@ function openSheet(type,id){
   var camBtn=document.getElementById('sheet-camera-btn');
   if(camBtn){
     var _camImg=type==='income'?(rec?(rec.receiptImage||''):''):fimg;
-    camBtn.innerHTML=_camImg?'&#x1F4F7;<span class="receipt-badge"></span>':'&#x1F4F7;';
+    var _camSvg='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+    camBtn.innerHTML=_camImg?_camSvg+'<span class="receipt-badge"></span>':_camSvg;
     camBtn.style.display='flex';
   }
   // Focus amount if new
@@ -3825,7 +3826,7 @@ function openSheet(type,id){
       fimgEl.onchange=function(e){
         if(e.target.files&&e.target.files[0]){
           var cb=document.getElementById('sheet-camera-btn');
-          if(cb){cb.innerHTML='&#x1F4F7;<span class="receipt-badge"></span>';}
+          if(cb){cb.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span class="receipt-badge"></span>';}
           ocrReceipt(e.target.files[0]);
         }
       };
@@ -3834,7 +3835,7 @@ function openSheet(type,id){
       fimgEl.onchange=function(e){
         if(e.target.files&&e.target.files[0]){
           var cb=document.getElementById('sheet-camera-btn');
-          if(cb){cb.innerHTML='&#x1F4F7;<span class="receipt-badge"></span>';}
+          if(cb){cb.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span class="receipt-badge"></span>';}
           ocrIncomeReceipt(e.target.files[0]);
         }
       };
