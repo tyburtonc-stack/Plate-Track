@@ -3953,13 +3953,13 @@ function ocrIncomeReceipt(file){
       window._incomeImgData=ev.target.result;
       var base64=ev.target.result.split(',')[1];
       var coList=COMPANIES.map(function(c){return c.name;}).join(', ');
-      var promptText='Extract data from this job or delivery confirmation for a UK trade plate driver. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","job_ref":"job/booking reference number printed on document or null","company":"identify company from document branding or job number format, must be exactly one of ['+coList+'] or null","start_postcode":"UK postcode for collection/pickup location or null","end_postcode":"UK postcode for delivery/drop-off location or null"}. Amount is GBP total as a plain number. Postcodes must be uppercase UK format e.g. LU1 2AB.';
+      var promptText='Extract data from this job or delivery confirmation for a UK trade plate driver. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","job_ref":"alphanumeric job or booking reference ID such as J-0739-08CF (NOT the vehicle registration plate) or null","registration":"UK vehicle registration plate such as KJ25LTT or null","miles":miles_as_number_or_null,"company":"identify company from document branding or job number format, must be exactly one of ['+coList+'] or null","start_postcode":"UK postcode for collection/pickup location or null","end_postcode":"UK postcode for delivery/drop-off location or null"}. Amount is GBP total as a plain number. Postcodes must be uppercase UK format e.g. LU1 2AB. miles is a plain number (e.g. 39 for distances shown as \"39 mi\").';
       fetch('https://platetrack-ai.tyburtonc.workers.dev/',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           model:'claude-sonnet-4-5',
-          max_tokens:400,
+          max_tokens:500,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
             {type:'text',text:promptText}
@@ -3980,6 +3980,8 @@ function ocrIncomeReceipt(file){
         if(data.company){var coChipsAll=document.querySelectorAll('.co-chips .co-chip');coChipsAll.forEach(function(btn){if(btn.textContent.trim()===data.company){btn.click();filled++;}});}
         if(data.start_postcode){var spEl=document.getElementById('f_sp');if(spEl&&!spEl.value){spEl.value=data.start_postcode.toUpperCase().trim();filled++;}}
         if(data.end_postcode){var epEl=document.getElementById('f_ep');if(epEl&&!epEl.value){epEl.value=data.end_postcode.toUpperCase().trim();filled++;}}
+        if(data.registration){var regEl2=document.getElementById('f_reg');if(regEl2&&!regEl2.value){regEl2.value=data.registration.toUpperCase().trim();filled++;}}
+        if(data.miles!=null){var mlEl=document.getElementById('f5');if(mlEl&&!mlEl.value){mlEl.value=parseFloat(data.miles);filled++;}}
         if(filled>0)showToast('Job scanned — '+filled+' field'+(filled>1?'s':'')+' filled');
       })
       .catch(function(){if(statusEl)statusEl.textContent='';});
