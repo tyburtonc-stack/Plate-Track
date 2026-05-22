@@ -389,6 +389,8 @@ body.dark .std-select{color-scheme:dark;background-color:var(--input);color:var(
 .modal-note{font-size:12px;color:var(--text4);margin-bottom:16px;text-align:right}
 .modal-save{background:var(--gold);color:#1A1A2E;border:none;padding:13px;border-radius:var(--r-lg);font-size:15px;font-weight:700;cursor:pointer;width:100%;margin-bottom:10px}
 .modal-cancel{background:var(--bg3);color:var(--text3);border:none;padding:12px;border-radius:var(--r-lg);font-size:14px;font-weight:600;cursor:pointer;width:100%}
+.scan-src-btn{display:flex;align-items:center;gap:12px;width:100%;background:var(--bg3);border:none;border-radius:var(--r-lg);padding:14px 16px;font-size:15px;font-weight:600;color:var(--text);cursor:pointer;margin-bottom:10px;text-align:left}
+.scan-src-btn svg{flex-shrink:0}
 /* ── Company modal ────────────────────────────────────────────── */
 .co-modal-list{margin-bottom:14px}
 .co-modal-item{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)}
@@ -888,6 +890,26 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
   </div>
 </div>
 
+<!-- Scan source modal -->
+<div class="modal-overlay" id="scanSourceModal" onclick="closeScanSourceModal(event)">
+  <div class="modal-box" style="padding:20px">
+    <div class="modal-title" style="margin-bottom:14px">Scan Receipt</div>
+    <button class="scan-src-btn" onclick="closeScanSourceModal();document.getElementById('fab-scan-camera').click()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Take Photo
+    </button>
+    <button class="scan-src-btn" onclick="closeScanSourceModal();document.getElementById('fab-scan-library').click()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Photo Library
+    </button>
+    <button class="scan-src-btn" onclick="closeScanSourceModal();document.getElementById('fab-scan-files').click()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Choose File
+    </button>
+    <button class="modal-cancel" onclick="closeScanSourceModal()">Cancel</button>
+  </div>
+</div>
+
 <!-- Alloc modal -->
 
 <div class="modal-overlay" id="allocModal" onclick="closeAllocModal(event)">
@@ -1113,7 +1135,9 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 
 <input type="file" id="impfile" accept=".json" style="display:none">
 <input type="file" id="payslipfile" accept="image/*,application/pdf" style="display:none">
-<input type="file" id="fab-scan-input" accept="image/*,.heic,.heif" capture="environment" style="display:none" onchange="fabScanReceiptFromFAB(event)">
+<input type="file" id="fab-scan-camera"  accept="image/*,.heic,.heif" capture="environment" style="display:none" onchange="fabScanReceiptFromFAB(event)">
+<input type="file" id="fab-scan-library" accept="image/*,.heic,.heif" style="display:none" onchange="fabScanReceiptFromFAB(event)">
+<input type="file" id="fab-scan-files"   accept="image/*,.heic,.heif,.pdf" style="display:none" onchange="fabScanReceiptFromFAB(event)">
 
 <script>
 // ╔══════════════════════════════════════════════════════╗
@@ -1736,8 +1760,11 @@ function fabAddIncome(){closeFAB();openSheet('income','');}
 function fabAddExpense(){closeFAB();openSheet('expense','');}
 function fabScanReceipt(){
   closeFAB();
-  var inp=document.getElementById('fab-scan-input');
-  if(inp)inp.click();
+  document.getElementById('scanSourceModal').classList.add('open');
+}
+function closeScanSourceModal(e){
+  if(e&&e.target!==document.getElementById('scanSourceModal'))return;
+  document.getElementById('scanSourceModal').classList.remove('open');
 }
 function fabScanReceiptFromFAB(e){
   if(!e.target.files||!e.target.files[0])return;
