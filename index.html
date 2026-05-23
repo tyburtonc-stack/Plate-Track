@@ -2389,7 +2389,10 @@ function fuzzyMatchPayslip(items,entries){
       }else{
         var entryToks=_psTok((e.jobRef||'')+' '+(e.category||'')+' '+(e.description||'')+' '+(e.company||''));
         var overlap=_psOverlap(descToks,entryToks);
-        if(overlap>=0.5)score=overlap;
+        if(overlap>=0.5){score=overlap;}else if(e.startPostcode||e.endPostcode){
+          var pcToks=_psTok((e.startPostcode||'')+' '+(e.endPostcode||''));
+          if(pcToks.length){var pcOv=_psOverlap(descToks,pcToks);if(pcOv>=0.5)score=pcOv*0.6;}
+        }
       }
       if(score>0&&_psCoMatch(item.company,e.company))score+=1;
       if(score>bestScore||(score===bestScore&&best&&Math.abs(parseFloat(e.amount||0)-item.amount)<Math.abs(parseFloat(best.amount||0)-item.amount))){bestScore=score;best=e;}
