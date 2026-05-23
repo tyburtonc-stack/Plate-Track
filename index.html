@@ -1406,8 +1406,8 @@ function supaPushAll(cb){
   var expRows=DB.expenses.map(function(x){return{id:x.id,user_id:uid,date:x.date,category:x.category||'',amount:parseFloat(x.amount||0),company:x.company||'',job_ref:x.jobRef||'',receipt:x.receipt||'',description:x.description||'',receipt_image:x.receiptImage&&x.receiptImage.indexOf('supabase:')===0?x.receiptImage:''};});
   var h=Object.assign(_supaHdr(),{'Prefer':'resolution=merge-duplicates'});
   var ops=[];
-  if(incRows.length)ops.push(fetch(SUPA_URL+'/rest/v1/income',{method:'POST',headers:h,body:JSON.stringify(incRows)}).then(function(r){if(!r.ok)r.text().then(function(t){console.warn('push income',r.status,t);});} ));
-  if(expRows.length)ops.push(fetch(SUPA_URL+'/rest/v1/expenses',{method:'POST',headers:h,body:JSON.stringify(expRows)}).then(function(r){if(!r.ok)r.text().then(function(t){console.warn('push exp',r.status,t);});} ));
+  if(incRows.length)ops.push(fetch(SUPA_URL+'/rest/v1/income',{method:'POST',headers:h,body:JSON.stringify(incRows)}).then(function(r){if(!r.ok)r.text().then(function(t){console.warn('push income',r.status,t);});}).catch(function(e){console.warn('push income failed',e);}));
+  if(expRows.length)ops.push(fetch(SUPA_URL+'/rest/v1/expenses',{method:'POST',headers:h,body:JSON.stringify(expRows)}).then(function(r){if(!r.ok)r.text().then(function(t){console.warn('push exp',r.status,t);});}).catch(function(e){console.warn('push exp failed',e);}));
   Promise.all(ops).then(function(){
     supaUploadPendingReceipts(function(){
       window._lastSync=new Date();updateSyncBar();
@@ -1670,9 +1670,10 @@ function fdate(s){if(!s)return '';return new Date(s).toLocaleDateString('en-GB',
 function fdateShort(s){if(!s)return '';return new Date(s).toLocaleDateString('en-GB',{day:'2-digit',month:'short'});}
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function newid(){return Date.now()+Math.floor(Math.random()*9999);}
+function htmlEsc(s){var m={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};return(s||'').replace(/[&<>"']/g,function(c){return m[c];});}
 function isReimbursedCat(cat){for(var i=0;i<REIMBURSED_CATS.length;i++){if(REIMBURSED_CATS[i]===cat)return true;}return false;}
 function inDateRange(d,from,to){if(!from&&!to)return true;if(from&&d<from)return false;if(to&&d>to)return false;return true;}
-function parseDuration(start,end){if(!start||!end)return 0;var s=start.split(':'),e=end.split(':'),mins=(parseInt(e[0])*60+parseInt(e[1]))-(parseInt(s[0])*60+parseInt(s[1]));return mins<0?mins+1440:mins;}
+function parseDuration(start,end){if(!start||!end||start.indexOf(':')<0||end.indexOf(':')<0)return 0;var s=start.split(':'),e=end.split(':'),mins=(parseInt(e[0])*60+parseInt(e[1]))-(parseInt(s[0])*60+parseInt(s[1]));return mins<0?mins+1440:mins;}
 function fmtHours(mins){if(!mins||mins<=0)return '';var h=Math.floor(mins/60),m=mins%60;return h>0?(h+'h'+(m>0?' '+m+'m':'')):(m+'m');}
 function getWeekKey(ds){var d=new Date(ds),day=d.getDay(),mon=new Date(d);mon.setDate(d.getDate()-((day+6)%7));return mon.getFullYear()+'-'+String(mon.getMonth()+1).padStart(2,'0')+'-'+String(mon.getDate()).padStart(2,'0');}
 function getDayKey(ds){return ds.substr?ds.substr(0,10):'';}
@@ -2156,15 +2157,17 @@ function ocrPayslip(file,idx){
           max_tokens:1500,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-            {type:'text',text:'Extract all data from this payslip. Return ONLY valid JSON, no markdown:\n{"periodFrom":"YYYY-MM-DD or null","periodTo":"YYYY-MM-DD or null","netPay":number_or_null,"items":[{"ref":"job/invoice ref or null","description":"1-6 word label","company":"client company name or null","amount":number}]}\nRules: items[] lists every pay line (jobs, bonuses, deductions). Deductions have negative amounts. netPay is the final net/take-home total. Dates in YYYY-MM-DD. Amounts as plain GBP numbers.'}
+            {type:'text',text:'Extract all data from this payslip. Return ONLY valid JSON, no markdown:\n{"periodFrom":"YYYY-MM-DD or null","periodTo":"YYYY-MM-DD or null","netPay":number_or_null,"items":[{"ref":"job number or null","type":"line type code or null","description":"1-6 word route or label","company":"client name or null","amount":number}]}\nRules: items[] lists every pay line (jobs, bonuses, deductions, travel charges, supplements). For BCA self-bill payslips: ref is the Job column number (e.g. 12027220), NOT the Reference column (9060279_JOBS) and NOT the route; put the Type column value verbatim in the type field (JOB, INTRAV, RGNWGT, ADDPAY, etc.); put the route (e.g. NN17 3JP - LE17 5QS) in description. For Engineius invoices: ref is the Job code from the Job column (e.g. J-851B-8E65); type is null; description is the route or charge label (e.g. Loughborough-Dartford or "Fuel Charge"). For DriiveMe and any other company: ref is whatever uniquely identifies the job; type is null unless a distinct type code is shown. Deductions and admin charges have negative amounts. netPay is the final total paid to the driver. Dates in YYYY-MM-DD. Amounts as plain GBP numbers, no currency symbol.'}
           ]}]
         })
       })
       .then(function(r){return r.json();})
       .then(function(d){
+        if(!PAYSLIPS[idx]){return;}
+        if(!d.content||!d.content[0])console.warn('Unexpected API response',d);
         var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
         var m=txt.match(/\{[\s\S]*\}/);
-        var data;if(m)try{data=JSON.parse(m[0]);}catch(e){}
+        var data;if(m)try{data=JSON.parse(m[0]);}catch(e){console.warn('OCR JSON parse',e);}
         PAYSLIPS[idx].status='done';
         if(data){
           if(data.netPay!=null&&!isNaN(data.netPay))PAYSLIPS[idx].manualTotal=String(data.netPay);
@@ -2191,6 +2194,7 @@ function ocrPayslip(file,idx){
         }
       })
       .catch(function(){
+        if(!PAYSLIPS[idx]){return;}
         PAYSLIPS[idx].status='error';
         savePayslips();
         if(CTAB===3)rSummary();
@@ -2337,7 +2341,7 @@ function _psAggregateByRef(items,entries){
   order.forEach(function(r){
     var g=groups[r];
     var logCount=entryRefCounts[r]||0;
-    var hasIntrav=g._items.some(function(it){return _psNorm(it.description||'').indexOf('intrav')>=0;});
+    var hasIntrav=g._items.some(function(it){return _psNorm(it.type||'').indexOf('intrav')>=0||_psNorm(it.description||'').indexOf('intrav')>=0;});
     if(g._count>1&&g._count>logCount&&hasIntrav){delete g._count;delete g._items;out.push(g);}
     else{g._items.forEach(function(it){out.push(it);});}
   });
@@ -2351,7 +2355,7 @@ function fuzzyMatchPayslip(items,entries){
   items.forEach(function(item){
     if((item.amount||0)<=0)return;
     var refNorm=_psNorm(item.ref||'');
-    var isInTrav=_psNorm(item.description||'').indexOf('intrav')>=0;
+    var isInTrav=_psNorm(item.type||'').indexOf('intrav')>=0||_psNorm(item.description||'').indexOf('intrav')>=0;
     if(isInTrav&&refNorm){
       // 1. Try 1:1 exact-amount match against any entry with matching jobRef
       var exact=null;
@@ -2428,8 +2432,8 @@ function buildPayslipGroupHTML(group,type,idx){
     +'<div id="'+bodyId+'" style="display:'+(open?'block':'none')+'">';
   if(type==='matched'){
     group.forEach(function(g){
-      var co=(g.item.company||g.entry.company||'').substr(0,30);
-      var desc=(g.item.description||g.item.ref||'').substr(0,40);
+      var co=htmlEsc((g.item.company||g.entry.company||'').substr(0,30));
+      var desc=htmlEsc((g.item.description||g.item.ref||'').substr(0,40));
       html+='<div class="ps-item">'
         +'<div class="ps-item-left">'+(co?'<div class="ps-item-co">'+co+'</div>':'')+'<div class="ps-item-desc">'+desc+'</div></div>'
         +(g.amountMatch
@@ -2439,8 +2443,8 @@ function buildPayslipGroupHTML(group,type,idx){
     });
   } else if(type==='missing'){
     group.forEach(function(g){
-      var co=(g.item.company||'').substr(0,30);
-      var desc=(g.item.description||g.item.ref||'').substr(0,40);
+      var co=htmlEsc((g.item.company||'').substr(0,30));
+      var desc=htmlEsc((g.item.description||g.item.ref||'').substr(0,40));
       html+='<div class="ps-item">'
         +'<div class="ps-item-left">'+(co?'<div class="ps-item-co">'+co+'</div>':'')+'<div class="ps-item-desc">'+desc+'</div></div>'
         +'<span class="ps-item-amount missing">'+money(g.item.amount)+'</span>'
@@ -2448,8 +2452,8 @@ function buildPayslipGroupHTML(group,type,idx){
     });
   } else {
     group.forEach(function(g){
-      var co=(g.company||'').substr(0,30);
-      var desc=(g.jobRef||g.description||'').substr(0,40);
+      var co=htmlEsc((g.company||'').substr(0,30));
+      var desc=htmlEsc((g.jobRef||g.description||'').substr(0,40));
       html+='<div class="ps-item">'
         +'<div class="ps-item-left">'+(co?'<div class="ps-item-co">'+co+'</div>':'')+'<div class="ps-item-desc">'+desc+'</div></div>'
         +'<span class="ps-item-amount extra">'+money(parseFloat(g.amount||0))+'</span>'
@@ -2535,8 +2539,8 @@ function filtersHTML(){
 
 function cobadge(co){
   var c=getCO(co);
-  if(c){var p=getCOPalette(c);return '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:'+p.bg+';color:'+p.fg+'">'+co+'</span>';}
-  return '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:var(--bg3);color:var(--text3)">'+co+'</span>';
+  if(c){var p=getCOPalette(c);return '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:'+p.bg+';color:'+p.fg+'">'+htmlEsc(co)+'</span>';}
+  return '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:var(--bg3);color:var(--text3)">'+htmlEsc(co)+'</span>';
 }
 function typebadge(t){
   var map={Delivery:'type-delivery Delivery','Waiting Time':'type-waiting \u23F1 Waiting','Charging Time':'type-charging \u26A1 Charging','Bonus':'type-bonus \uD83D\uDCB0 Bonus'};
@@ -2556,7 +2560,7 @@ function filterIncome(val){
   var allItems=getIncome().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
   var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_INCOME);});
   var el=document.getElementById('income-results');
-  if(el)el.innerHTML=items.length===0?'<div style="text-align:center;padding:28px;color:var(--text4)">No results for &ldquo;'+SEARCH_INCOME+'&rdquo;</div>':buildIncomeListHTML(items);
+  if(el)el.innerHTML=items.length===0?'<div style="text-align:center;padding:28px;color:var(--text4)">No results for &ldquo;'+htmlEsc(SEARCH_INCOME)+'&rdquo;</div>':buildIncomeListHTML(items);
   var inp=document.getElementById('income-search-input');
   if(inp&&inp.value!==val)inp.value=val;
   var clr=document.querySelector('#pg1 .search-clear');
@@ -2568,7 +2572,7 @@ function filterExpenses(val){
   var allItems=getExp().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
   var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_EXP);});
   var el=document.getElementById('expense-results');
-  if(el)el.innerHTML=items.length===0?'<div style="text-align:center;padding:28px;color:var(--text4)">No results for &ldquo;'+SEARCH_EXP+'&rdquo;</div>':buildExpenseListHTML(items);
+  if(el)el.innerHTML=items.length===0?'<div style="text-align:center;padding:28px;color:var(--text4)">No results for &ldquo;'+htmlEsc(SEARCH_EXP)+'&rdquo;</div>':buildExpenseListHTML(items);
   var inp=document.getElementById('expense-search-input');
   if(inp&&inp.value!==val)inp.value=val;
 }
@@ -2622,7 +2626,7 @@ function renderCoList(){
     var p=getCOPalette(co);
     return '<div class="co-modal-item" onclick="openCoDefaults('+i+')" style="cursor:pointer">'
       +'<div class="co-modal-dot" style="background:'+p.dot+'"></div>'
-      +'<span class="co-modal-name">'+co.name+'</span>'
+      +'<span class="co-modal-name">'+htmlEsc(co.name)+'</span>'
       +'<span style="font-size:11px;color:var(--text4);margin-left:auto;margin-right:8px">Defaults &#x276F;</span>'
       +(COMPANIES.length>1?'<button class="co-modal-remove" onclick="event.stopPropagation();removeCompany('+i+')">Remove</button>':'<span style="font-size:11px;color:var(--text4)">Last</span>')
       +'</div>';
@@ -2709,7 +2713,7 @@ function renderIncomeTypesList(){
   el.innerHTML=INCOME_TYPES.map(function(tp,i){
     var inUse=DB.income.some(function(x){return x.incomeType===tp;});
     return '<div class="co-modal-item" style="cursor:default">'
-      +'<span class="co-modal-name">'+tp+'</span>'
+      +'<span class="co-modal-name">'+htmlEsc(tp)+'</span>'
       +(inUse?'<span style="font-size:11px;color:var(--text4);margin-right:6px">in use</span>':'')
       +'<button class="co-modal-remove" onclick="editIncomeType('+i+')" style="margin-right:4px">Edit</button>'
       +(INCOME_TYPES.length>1?'<button class="co-modal-remove" onclick="removeIncomeType('+i+')">Remove</button>':'<span style="font-size:11px;color:var(--text4)">last</span>')
