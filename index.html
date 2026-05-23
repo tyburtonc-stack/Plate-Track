@@ -2309,6 +2309,10 @@ function _psCoMatch(a,b){
   if(!na||!nb)return false;
   return na.indexOf(nb)>=0||nb.indexOf(na)>=0||_psOverlap(_psTok(na),_psTok(nb))>=0.6;
 }
+function _psRefNumMatch(a,b){
+  var na=(a||'').replace(/\D/g,''),nb=(b||'').replace(/\D/g,'');
+  return na.length>=4&&na===nb;
+}
 
 function _psAggregateByRef(items,entries){
   if(!items||!items.length)return items||[];
@@ -2347,14 +2351,42 @@ function fuzzyMatchPayslip(items,entries){
   items.forEach(function(item){
     if((item.amount||0)<=0)return;
     var refNorm=_psNorm(item.ref||'');
-    var descToks=_psTok((item.description||''));
+    var isInTrav=_psNorm(item.description||'').indexOf('intrav')>=0;
+    if(isInTrav&&refNorm){
+      // 1. Try 1:1 exact-amount match against any entry with matching jobRef
+      var exact=null;
+      entries.forEach(function(e){
+        if(used[e.id]||exact)return;
+        var eRef=_psNorm(e.jobRef||'');
+        if((eRef===refNorm||_psRefNumMatch(item.ref,e.jobRef))&&Math.abs(parseFloat(e.amount||0)-item.amount)<0.02)exact=e;
+      });
+      if(exact){used[exact.id]=true;matched.push({item:item,entry:exact,amountMatch:true});return;}
+      // 2. Group match: aggregate all expense entries with matching jobRef
+      var grpExp=entries.filter(function(e){
+        if(used[e.id]||e.incomeType!==undefined)return false;
+        var eRef=_psNorm(e.jobRef||'');
+        return eRef===refNorm||_psRefNumMatch(item.ref,e.jobRef);
+      });
+      if(grpExp.length){
+        var sum=grpExp.reduce(function(s,e){return s+parseFloat(e.amount||0);},0);
+        grpExp.forEach(function(e){used[e.id]=true;});
+        var synth={id:'_intrav_'+refNorm,jobRef:item.ref,amount:sum,
+          description:grpExp.length>1?'Travel \xd7'+grpExp.length:(grpExp[0].description||grpExp[0].category||''),
+          company:grpExp[0].company||''};
+        matched.push({item:item,entry:synth,amountMatch:Math.abs(sum-item.amount)<0.02});
+        return;
+      }
+    }
+    // Standard single-entry matching
+    var descToks=_psTok(item.description||'');
     var best=null,bestScore=-1;
     entries.forEach(function(e){
       if(used[e.id])return;
       var score=0;
-      if(refNorm&&refNorm===_psNorm(e.jobRef||'')){
+      var eRefNorm=_psNorm(e.jobRef||'');
+      if(refNorm&&(refNorm===eRefNorm||_psRefNumMatch(item.ref,e.jobRef))){
         score=2;
-      } else {
+      }else{
         var entryToks=_psTok((e.jobRef||'')+' '+(e.category||'')+' '+(e.description||'')+' '+(e.company||''));
         var overlap=_psOverlap(descToks,entryToks);
         if(overlap>=0.5)score=overlap;
@@ -2362,15 +2394,11 @@ function fuzzyMatchPayslip(items,entries){
       if(score>0&&_psCoMatch(item.company,e.company))score+=1;
       if(score>bestScore||(score===bestScore&&best&&Math.abs(parseFloat(e.amount||0)-item.amount)<Math.abs(parseFloat(best.amount||0)-item.amount))){bestScore=score;best=e;}
     });
-    if(best&&bestScore>0){
-      used[best.id]=true;
-      matched.push({item:item,entry:best,amountMatch:Math.abs(parseFloat(best.amount||0)-item.amount)<0.02});
-    } else {
-      missing.push({item:item});
-    }
+    if(best&&bestScore>0){used[best.id]=true;matched.push({item:item,entry:best,amountMatch:Math.abs(parseFloat(best.amount||0)-item.amount)<0.02});}
+    else missing.push({item:item});
   });
   var extra=entries.filter(function(e){return !used[e.id];});
-  return {matched:matched,missing:missing,extra:extra};
+  return{matched:matched,missing:missing,extra:extra};
 }
 
 function buildPayslipGroupHTML(group,type,idx){
