@@ -1,4 +1,4 @@
-const CACHE_NAME = 'platetrack-v1';
+const CACHE_NAME = 'platetrack-v2';
 const URLS_TO_CACHE = [
   '/Plate-Track/',
   '/Plate-Track/index.html'

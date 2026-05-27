@@ -3043,9 +3043,13 @@ function rDash(){
 
   // Greeting section (scrolls with content, sits below sticky util-hdr)
   var doCarAnim=!sessionStorage.getItem('pt_car_done');
+  // If a car animation is already mid-flight, keep the wipe classes so the
+  // text reveal isn't cut short by a Supabase-triggered re-render.
+  var carMidFlight=!!document.querySelector('.car-anim-el');
+  var wipeActive=doCarAnim||carMidFlight;
   var greetingSection='<div class="dash-greeting-section">'
-    +'<div class="dash-greeting-line1'+(doCarAnim?' greet-wipe':'')+'">'+greetWord+greetName+' '+greetEmoji+'</div>'
-    +'<div class="dash-greeting-line2'+(doCarAnim?' greet-wipe-2':'')+'">'+dateStr+'</div>'
+    +'<div class="dash-greeting-line1'+(wipeActive?' greet-wipe':'')+'">'+greetWord+greetName+' '+greetEmoji+'</div>'
+    +'<div class="dash-greeting-line2'+(wipeActive?' greet-wipe-2':'')+'">'+dateStr+'</div>'
     +'</div>';
 
   // Filter row (inline with content)
