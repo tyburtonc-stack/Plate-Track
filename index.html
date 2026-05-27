@@ -754,6 +754,11 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 .ai-send{width:42px;height:42px;border-radius:50%;background:var(--gold);color:#1A1A2E;border:none;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px rgba(232,201,74,.4);-webkit-tap-highlight-color:transparent;transition:transform .15s}
 .ai-send:active{transform:scale(.92)}
 .ai-send:disabled{opacity:.4;cursor:default;transform:none}
+@keyframes carDrive{0%{transform:translateX(-90px)}100%{transform:translateX(calc(100vw + 90px))}}
+@keyframes greetWipe{0%{clip-path:inset(0 100% 0 0)}100%{clip-path:inset(0 0% 0 0)}}
+.car-anim-el{position:fixed;left:0;top:calc(env(safe-area-inset-top,20px) + 78px);font-size:38px;line-height:1;z-index:250;pointer-events:none;animation:carDrive 1.35s cubic-bezier(.42,0,.58,1) forwards}
+.greet-wipe{clip-path:inset(0 100% 0 0);animation:greetWipe 1.35s cubic-bezier(.42,0,.58,1) forwards}
+.greet-wipe-2{clip-path:inset(0 100% 0 0);animation:greetWipe 1.35s cubic-bezier(.42,0,.58,1) .09s forwards}
 </style>
 
 </head>
@@ -3037,9 +3042,10 @@ function rDash(){
   var heroLbl=isFiltered?'TAKE-HOME':'TODAY\'S TAKE-HOME';
 
   // Greeting section (scrolls with content, sits below sticky util-hdr)
+  var doCarAnim=!sessionStorage.getItem('pt_car_done');
   var greetingSection='<div class="dash-greeting-section">'
-    +'<div class="dash-greeting-line1">'+greetWord+greetName+' '+greetEmoji+'</div>'
-    +'<div class="dash-greeting-line2">'+dateStr+'</div>'
+    +'<div class="dash-greeting-line1'+(doCarAnim?' greet-wipe':'')+'">'+greetWord+greetName+' '+greetEmoji+'</div>'
+    +'<div class="dash-greeting-line2'+(doCarAnim?' greet-wipe-2':'')+'">'+dateStr+'</div>'
     +'</div>';
 
   // Filter row (inline with content)
@@ -3075,6 +3081,14 @@ function rDash(){
     +'<div style="height:24px"></div>';
 
   document.getElementById('pg0').innerHTML=pg;
+  if(doCarAnim){
+    sessionStorage.setItem('pt_car_done','1');
+    var car=document.createElement('div');
+    car.className='car-anim-el';
+    car.textContent='🚗';
+    document.body.appendChild(car);
+    car.addEventListener('animationend',function(){car.parentNode&&car.parentNode.removeChild(car);});
+  }
 }
 
 // --- INCOME ---
