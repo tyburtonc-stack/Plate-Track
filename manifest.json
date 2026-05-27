@@ -1,0 +1,9 @@
+{
+  "name": "PlateTrack",
+  "short_name": "PlateTrack",
+  "start_url": "/Plate-Track/",
+  "scope": "/Plate-Track/",
+  "display": "standalone",
+  "theme_color": "#1A1A2E",
+  "background_color": "#1A1A2E"
+}
