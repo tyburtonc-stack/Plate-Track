@@ -2570,7 +2570,7 @@ function filterIncome(val){
 }
 function filterExpenses(val){
   SEARCH_EXP=val;
-  var allItems=getExp().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
+  var allItems=getExp().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:parseFloat(b.amount||0)-parseFloat(a.amount||0);});
   var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_EXP);});
   var el=document.getElementById('expense-results');
   if(el)el.innerHTML=items.length===0?'<div style="text-align:center;padding:28px;color:var(--text4)">No results for &ldquo;'+htmlEsc(SEARCH_EXP)+'&rdquo;</div>':buildExpenseListHTML(items);
@@ -3587,7 +3587,7 @@ function buildExpenseListHTML(items){
 }
 
 function rExpenses(){
-  var allItems=getExp().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
+  var allItems=getExp().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:parseFloat(b.amount||0)-parseFloat(a.amount||0);});
   var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_EXP);});
   var html=buildExpenseListHTML(items);
   var content='<div style="padding:0 16px 14px">'
