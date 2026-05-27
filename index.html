@@ -756,9 +756,9 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
 .ai-send:disabled{opacity:.4;cursor:default;transform:none}
 @keyframes carDrive{0%{transform:translateX(-90px)}100%{transform:translateX(calc(100vw + 90px))}}
 @keyframes greetWipe{0%{clip-path:inset(0 100% 0 0)}100%{clip-path:inset(0 0% 0 0)}}
-.car-anim-el{position:fixed;left:0;top:calc(env(safe-area-inset-top,20px) + 78px);font-size:38px;line-height:1;z-index:250;pointer-events:none;animation:carDrive 1.35s cubic-bezier(.42,0,.58,1) forwards}
-.greet-wipe{clip-path:inset(0 100% 0 0);animation:greetWipe 1.35s cubic-bezier(.42,0,.58,1) forwards}
-.greet-wipe-2{clip-path:inset(0 100% 0 0);animation:greetWipe 1.35s cubic-bezier(.42,0,.58,1) .09s forwards}
+.car-anim-el{position:fixed;left:0;top:calc(env(safe-area-inset-top,20px) + 78px);font-size:38px;line-height:1;z-index:250;pointer-events:none;animation:carDrive 2s cubic-bezier(.42,0,.58,1) forwards}
+.greet-wipe{clip-path:inset(0 100% 0 0);animation:greetWipe 2s cubic-bezier(.42,0,.58,1) forwards}
+.greet-wipe-2{clip-path:inset(0 100% 0 0);animation:greetWipe 2s cubic-bezier(.42,0,.58,1) .09s forwards}
 </style>
 
 </head>
@@ -3046,7 +3046,7 @@ function rDash(){
   // If a car animation is already mid-flight, keep the wipe classes so the
   // text reveal isn't cut short by a Supabase-triggered re-render.
   var carMidFlight=!!document.querySelector('.car-anim-el');
-  var wipeActive=doCarAnim||carMidFlight;
+  var wipeActive=doCarAnim;
   var greetingSection='<div class="dash-greeting-section">'
     +'<div class="dash-greeting-line1'+(wipeActive?' greet-wipe':'')+'">'+greetWord+greetName+' '+greetEmoji+'</div>'
     +'<div class="dash-greeting-line2'+(wipeActive?' greet-wipe-2':'')+'">'+dateStr+'</div>'
@@ -3091,6 +3091,7 @@ function rDash(){
     car.className='car-anim-el';
     car.textContent='🚗';
     document.body.appendChild(car);
+    setTimeout(function(){playCarHornSound();},1600);
     car.addEventListener('animationend',function(){car.parentNode&&car.parentNode.removeChild(car);});
   }
 }
@@ -4312,6 +4313,23 @@ function playExpenseSound(){
       g.gain.exponentialRampToValueAtTime(0.001,t+p[1]+0.38);
       o.connect(g);g.connect(ac.destination);
       o.start(t+p[1]);o.stop(t+p[1]+0.42);
+    });
+  }catch(e){}
+}
+
+function playCarHornSound(){
+  try{
+    var ac=new(window.AudioContext||window.webkitAudioContext)();
+    var t=ac.currentTime;
+    [[0,0.13],[0.2,0.13]].forEach(function(p){
+      var o=ac.createOscillator(),g=ac.createGain();
+      o.type='square';o.frequency.value=420;
+      g.gain.setValueAtTime(0,t+p[0]);
+      g.gain.linearRampToValueAtTime(0.12,t+p[0]+0.01);
+      g.gain.setValueAtTime(0.12,t+p[0]+p[1]-0.01);
+      g.gain.linearRampToValueAtTime(0,t+p[0]+p[1]);
+      o.connect(g);g.connect(ac.destination);
+      o.start(t+p[0]);o.stop(t+p[0]+p[1]+0.01);
     });
   }catch(e){}
 }
