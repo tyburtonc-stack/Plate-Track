@@ -2174,7 +2174,8 @@ function ocrPayslip(file,idx){
         var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
         var m=txt.match(/\{[\s\S]*\}/);
         var data;if(m)try{data=JSON.parse(m[0]);}catch(e){console.warn('OCR JSON parse',e);}
-        if(!data){var arrM=txt.match(/\[[\s\S]*\]/);if(arrM)try{var arr=JSON.parse(arrM[0]);if(Array.isArray(arr)&&arr.length>0){data={items:arr.map(function(x){return{ref:x.job_ref||x.ref||null,type:null,description:x.description||'',company:x.company||null,amount:x.amount,date:x.date||null};});}};}catch(e){console.warn('OCR array parse',e);}}
+        if(data&&!data.items&&!data.netPay&&!data.net_total&&!data.periodFrom&&!data.jobs){data=null;}
+        if(!data){var arrM=txt.match(/\[[\s\S]*\]/);if(arrM)try{var arr=JSON.parse(arrM[0]);if(Array.isArray(arr)&&arr.length>0){data={items:arr.map(function(x){return{ref:x.job_ref||x.ref||null,type:null,description:x.description||'',company:x.company||null,amount:x.amount,date:x.date||null};})};}}catch(e){console.warn('OCR array parse',e);}}
         PAYSLIPS[idx].status='done';
         if(data){
           var netAmt=data.netPay!=null?data.netPay:(data.net_total!=null?data.net_total:null);
