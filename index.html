@@ -2160,10 +2160,10 @@ function ocrPayslip(file,idx){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           model:'claude-sonnet-4-5',
-          max_tokens:1500,
+          max_tokens:2000,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-            {type:'text',text:'Extract all data from this payslip. Return ONLY valid JSON, no markdown:\n{"periodFrom":"YYYY-MM-DD or null","periodTo":"YYYY-MM-DD or null","netPay":number_or_null,"items":[{"ref":"job number or null","type":"line type code or null","description":"1-6 word route or label","company":"client name or null","amount":number}]}\nRules: items[] lists every pay line (jobs, bonuses, deductions, travel charges, supplements). For BCA self-bill payslips: ref is the Job column number (e.g. 12027220), NOT the Reference column (9060279_JOBS) and NOT the route; put the Type column value verbatim in the type field (JOB, INTRAV, RGNWGT, ADDPAY, etc.); put the route (e.g. NN17 3JP - LE17 5QS) in description. For Engineius invoices: ref is the Job code from the Job column (e.g. J-851B-8E65); type is null; description is the route or charge label (e.g. Loughborough-Dartford or "Fuel Charge"). For DriiveMe and any other company: ref is whatever uniquely identifies the job; type is null unless a distinct type code is shown. Deductions and admin charges have negative amounts. netPay is the final total paid to the driver. Dates in YYYY-MM-DD. Amounts as plain GBP numbers, no currency symbol.'}
+            {type:'text',text:'Extract all data from this payslip. Return ONLY valid JSON, no markdown:\n{"periodFrom":"YYYY-MM-DD or null","periodTo":"YYYY-MM-DD or null","netPay":number_or_null,"items":[{"ref":"job number or null","type":"line type code or null","description":"1-6 word route or label","company":"client name or null","amount":number,"date":"YYYY-MM-DD or null"}]}\nRules: items[] lists every pay line (jobs, bonuses, deductions, travel charges, supplements). For BCA self-bill payslips (numeric job refs like 12027220, with Type column codes): ref is the Job column number (e.g. 12027220), NOT the Reference column; put the Type column value verbatim in the type field (JOB, INTRAV, RGNWGT, ADDPAY, etc.); put the route in description. For BCA weekly statements (documents with a table of multiple job entries where each row has a job ref in J-XXXX-XXXX format, e.g. J-1234-AB56): extract EVERY J-XXXX-XXXX ref in the document as a separate item — do NOT stop at the first one; ref = the J-XXXX-XXXX job reference for that row; amount = the amount shown on that row; date = the job date for that row if shown or null; type = null; description = route or label if shown; company = "BCA"; netPay = the Net Total or Grand Total shown at the bottom. For Engineius invoices (single per-job invoice layout with J-XXXX-XXXX ref): ref is the Job code from the Job column (e.g. J-851B-8E65); type is null; description is the route or charge label. For DriiveMe and any other company: ref is whatever uniquely identifies the job; type is null unless a distinct type code is shown. Deductions and admin charges have negative amounts. netPay is the final total paid to the driver. Dates in YYYY-MM-DD. Amounts as plain GBP numbers, no currency symbol.'}
           ]}]
         })
       })
@@ -2174,12 +2174,15 @@ function ocrPayslip(file,idx){
         var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
         var m=txt.match(/\{[\s\S]*\}/);
         var data;if(m)try{data=JSON.parse(m[0]);}catch(e){console.warn('OCR JSON parse',e);}
+        if(!data){var arrM=txt.match(/\[[\s\S]*\]/);if(arrM)try{var arr=JSON.parse(arrM[0]);if(Array.isArray(arr)&&arr.length>0){data={items:arr.map(function(x){return{ref:x.job_ref||x.ref||null,type:null,description:x.description||'',company:x.company||null,amount:x.amount,date:x.date||null};});}};}catch(e){console.warn('OCR array parse',e);}}
         PAYSLIPS[idx].status='done';
         if(data){
-          if(data.netPay!=null&&!isNaN(data.netPay))PAYSLIPS[idx].manualTotal=String(data.netPay);
+          var netAmt=data.netPay!=null?data.netPay:(data.net_total!=null?data.net_total:null);
+          if(netAmt!=null&&!isNaN(netAmt))PAYSLIPS[idx].manualTotal=String(netAmt);
           if(data.periodFrom)PAYSLIPS[idx].periodFrom=data.periodFrom;
           if(data.periodTo)PAYSLIPS[idx].periodTo=data.periodTo;
-          if(Array.isArray(data.items)&&data.items.length>0)PAYSLIPS[idx].items=data.items;
+          var jobsArr=Array.isArray(data.items)?data.items:(Array.isArray(data.jobs)?data.jobs.map(function(x){return{ref:x.job_ref||x.ref||null,type:null,description:x.description||'',company:x.company||null,amount:x.amount,date:x.date||null};}):null);
+          if(jobsArr&&jobsArr.length>0)PAYSLIPS[idx].items=jobsArr;
         }
         savePayslips();
         if(CTAB===3)rSummary();
