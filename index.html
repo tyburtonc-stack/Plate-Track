@@ -2951,7 +2951,8 @@ function goalWidgetHTML(todayInc, weekInc, monthInc){
 function rDash(){
   var t=calcs(),fi=getIncome(),fe=getExp();
   var td=today(),todayInc=0,todayExp=0,todayJobs=[];
-  DB.income.filter(function(i){return i.date===td;}).forEach(function(i){todayInc+=parseFloat(i.amount||0);todayJobs.push(i);});
+  var _todayMs=new Date(td).getTime(),_tmrMs=_todayMs+86400000;
+  DB.income.filter(function(i){return i.date===td||(Number(i.id)>=_todayMs&&Number(i.id)<_tmrMs+9999);}).forEach(function(i){todayInc+=parseFloat(i.amount||0);todayJobs.push(i);});
   DB.expenses.filter(function(e){return e.date===td&&!isReimbursedCat(e.category);}).forEach(function(e){todayExp+=parseFloat(e.amount||0);});
   var todayTakeHome=Math.max(0,todayInc-todayExp);
   var isFiltered=FYR!=='All'||FCO!=='All'||FDFROM||FDTO;
@@ -3183,6 +3184,7 @@ function rIncome(){
 function rJobsOverview(){
   if(JOBS_VIEW==='entries'){
     var allItems=getIncome().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
+    if(window._lastSavedIncomeId){var _nid=window._lastSavedIncomeId,_ni=-1;for(var _ii=0;_ii<allItems.length;_ii++){if(String(allItems[_ii].id)===_nid){_ni=_ii;break;}}if(_ni>0){allItems.unshift(allItems.splice(_ni,1)[0]);}window._lastSavedIncomeId=null;}
     var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_INCOME);});
     var html=buildIncomeListHTML(items);
     var content='<div style="padding:0 16px 14px">'
@@ -3242,6 +3244,7 @@ function rJobsOverview(){
     var bId=gb.items[0]?Number(gb.items[0].id):0;
     return bId-aId;
   });
+  if(window._lastSavedIncomeId){var _nid=window._lastSavedIncomeId,_nk=null;for(var _gi=0;_gi<groupOrder.length;_gi++){var _gk=groupOrder[_gi];var _gitems=groups[_gk].items;for(var _gj=0;_gj<_gitems.length;_gj++){if(String(_gitems[_gj].id)===_nid){_nk=_gk;break;}}if(_nk)break;}if(_nk){var _gidx=groupOrder.indexOf(_nk);if(_gidx>0){groupOrder.splice(_gidx,1);groupOrder.unshift(_nk);}}window._lastSavedIncomeId=null;}
   var cardsHTML=groupOrder.length>0
     ?groupOrder.map(function(k){return jobOverviewCardHTML(groups[k],k);}).join('')
     :'<div class="empty-state"><div class="empty-state-icon">&#x1F4BC;</div><div class="empty-state-title">No jobs yet</div><div class="empty-state-sub">Tap + Add to log your first job</div><button class="empty-state-btn" onclick="openSheet(\'income\',\'\')">&#x2B; Add Job</button></div>';
@@ -4173,7 +4176,7 @@ function doSave(){
       description:document.getElementById('f6')?document.getElementById('f6').value:'',
       receiptImage:window._incomeImgData||(EID?(function(){for(var i=0;i<DB.income.length;i++){if(String(DB.income[i].id)===EID)return DB.income[i].receiptImage||'';}return '';})():'')};
     window._incomeImgData=null;
-    if(EID){for(var i=0;i<DB.income.length;i++){if(String(DB.income[i].id)===EID){DB.income[i]=item;break;}}}else DB.income.unshift(item);
+    if(EID){for(var i=0;i<DB.income.length;i++){if(String(DB.income[i].id)===EID){DB.income[i]=item;break;}}}else{DB.income.unshift(item);window._lastSavedIncomeId=String(nid);}
   } else {
     var imgEl=document.getElementById('f_img');
     var existingImg=EID?(function(){for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===EID)return DB.expenses[i].receiptImage||'';}return '';})():'';
