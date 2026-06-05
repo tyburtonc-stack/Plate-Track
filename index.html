@@ -1355,6 +1355,15 @@ function supaNamePull(cb){
     .catch(function(e){if(cb)cb(e.message);});
 }
 
+function supaNamePush(cb){
+  if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
+  fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id),{
+    method:'PATCH',
+    headers:Object.assign(_supaHdr(),{'Prefer':'return=minimal'}),
+    body:JSON.stringify({name:getUserName()})
+  }).then(function(){if(cb)cb(null);}).catch(function(e){if(cb)cb(e.message);});
+}
+
 function supaCompaniesPush(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
   fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id),{
@@ -2710,6 +2719,7 @@ function saveName(){
   document.getElementById('nameModal').className='modal-overlay';
   showToast(name?'Name saved as '+name:'Name cleared');
   if(CTAB===0)rDash();
+  if(SUPA_USER&&SUPA_SESSION){supaNamePush(null);}
 }
 
 function openIncomeTypesModal(){renderIncomeTypesList();document.getElementById('incomeTypesModal').className='modal-overlay open';}
