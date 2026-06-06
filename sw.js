@@ -1,20 +1,24 @@
-const CACHE_NAME = 'platetrack-v2';
+const CACHE_NAME = 'platetrack-v3';
 const URLS_TO_CACHE = [
   '/Plate-Track/',
-  '/Plate-Track/index.html'
+  '/Plate-Track/index.html',
+  '/Plate-Track/manifest.json',
+  '/Plate-Track/sw.js',
+  '/Plate-Track/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(URLS_TO_CACHE))
   );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+    ).then(() => self.clients.claim())
   );
 });
 
