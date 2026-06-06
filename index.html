@@ -2945,7 +2945,7 @@ function rDash(){
   var t=calcs(),fi=getIncome(),fe=getExp();
   var td=today(),todayInc=0,todayExp=0,todayJobs=[];
   var _todayMs=new Date(td).getTime(),_tmrMs=_todayMs+86400000;
-  DB.income.filter(function(i){return i.date===td||(Number(i.id)>=_todayMs&&Number(i.id)<_tmrMs+9999);}).forEach(function(i){todayInc+=parseFloat(i.amount||0);todayJobs.push(i);});
+  DB.income.filter(function(i){return i.date===td||(!i.date&&Number(i.id)>=_todayMs&&Number(i.id)<_tmrMs+9999);}).forEach(function(i){todayInc+=parseFloat(i.amount||0);todayJobs.push(i);});
   DB.expenses.filter(function(e){return e.date===td&&!isReimbursedCat(e.category);}).forEach(function(e){todayExp+=parseFloat(e.amount||0);});
   var todayTakeHome=Math.max(0,todayInc-todayExp);
   var isFiltered=FYR!=='All'||FCO!=='All'||FDFROM||FDTO;
