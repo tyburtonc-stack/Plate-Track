@@ -1700,7 +1700,7 @@ function getYears(){var y={};DB.income.forEach(function(i){y[tyear(i.date)]=1;})
 function calcs(){
   var fi=getIncome(),fe=getExp(),inc=0,totalExp=0,reimb=0,nonreimb=0;
   fi.forEach(function(i){inc+=parseFloat(i.amount||0);});
-  fe.forEach(function(e){var a=parseFloat(e.amount||0);totalExp+=a;if(isReimbursedCat(e.category))reimb+=a;if(e.category==='Travel (Not Reimbursed)')nonreimb+=a;});
+  fe.forEach(function(e){var a=parseFloat(e.amount||0);totalExp+=a;if(isReimbursedCat(e.category))reimb+=a;else nonreimb+=a;});
   var deductible=totalExp-reimb,p=inc-deductible,tx=p>12570?p-12570:0,tax=0,ni=0;
   if(tx>0){tax=Math.min(tx,37700)*.20+Math.max(0,tx-37700)*.40;ni=Math.min(tx,37700)*.09+Math.max(0,tx-37700)*.02;}
   return {inc:inc,exp:totalExp,deductible:deductible,profit:p,tax:tax,ni:ni,reimb:reimb,nonreimb:nonreimb};
@@ -2514,13 +2514,6 @@ function dashSetFrom(v){FDFROM=v;rDash();}
 function dashSetTo(v){FDTO=v;rDash();}
 function dashClearDates(){FDFROM='';FDTO='';rDash();}
 function dashClearFilter(){FYR='All';FCO='All';FDFROM='';FDTO='';rDash();}
-
-
-function dashSetFYR(v){FYR=v;rDash();}
-function dashSetFCO(v){FCO=v;rDash();}
-function dashSetFrom(v){FDFROM=v;rDash();}
-function dashSetTo(v){FDTO=v;rDash();}
-function dashClearFilter(){FYR='All';FDFROM='';FDTO='';rDash();}
 
 
 function setFCO(v){FCO=v;render(CTAB);}
@@ -3591,9 +3584,9 @@ function buildExpenseListHTML(items){
   if(!items||items.length===0)return '';
   var html='';
   items.forEach(function(x){
-    var isReimb=isReimbursedCat(x.category),isNonReimb=x.category==='Travel (Not Reimbursed)';
+    var isReimb=isReimbursedCat(x.category);
     var icon=CAT_ICONS[x.category]||'&#x1F4CB;',color=CAT_COLORS[x.category]||'#57606A';
-    var tag=isReimb?'<span class="exp-reimb-tag">Reimbursed</span>':isNonReimb?'<span class="exp-ded-tag">Deductible</span>':'';
+    var tag=isReimb?'<span class="exp-reimb-tag">Reimbursed</span>':x.category?'<span class="exp-ded-tag">Deductible</span>':'';
     var coBH=x.company?cobadge(x.company)+' ':'';
     var linkedTag=x.jobRef?'<span class="linked-tag">'+x.jobRef+'</span>':'';
     var thumbHTML='';
@@ -3854,7 +3847,7 @@ function openSheet(type,id){
   document.getElementById('sheet-title').textContent=(isEdit?'Edit ':'Log ')+(type==='income'?'a Job':'an Expense');
   var html='';
   if(type==='income'){
-    var fd2=rec?rec.date:today(),fco=rec?rec.company:COMPANIES[0].name;
+    var fd2=rec?rec.date:today(),fco=rec?rec.company:(COMPANIES.length>0?COMPANIES[0].name:'');
     var fam=rec?(rec.amount||''):'',fjr=rec?(rec.jobRef||''):'',fml=rec?(rec.miles||''):'';
     if(!isEdit&&window._incomePrefill){fco=window._incomePrefill.company||fco;fjr=window._incomePrefill.jobRef||fjr;window._incomePrefill=null;}
     var fds=rec?(rec.description||''):'',fst=rec?(rec.startTime||''):'',fet=rec?(rec.endTime||''):'';
@@ -3926,7 +3919,7 @@ function openSheet(type,id){
       +'<div class="field"><label class="field-label">Amount</label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
       +'<div class="field-row"><div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+fd2+'"></div>'
       +'<div class="field"><label class="field-label">Receipt Ref <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f4" class="std-input" placeholder="REC-001" value="'+frc+'"></div></div>'
-      +'<div class="field"><label class="field-label">Link to Job</label>'
+      +'<div class="field"><label class="field-label">Link to Job <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label>'
       +'<input type="text" id="f4c" class="std-input" list="joblist" placeholder="Type to search jobs..." value="'+fjr2+'" autocomplete="off">'
       +'<datalist id="joblist">'+dlOpts+'</datalist></div>'
       +'<div class="field"><label class="field-label">Description <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f5" class="std-input" placeholder="What was this for?" value="'+fds+'"></div>'
@@ -4133,9 +4126,7 @@ function doSave(){
   if(ETYP==='income'){
     if(!date||!amount){alert('Please enter a date and amount.');return;}
   } else {
-    if(!date){alert('Please enter a date.');return;}
-    var _jobRefVal=document.getElementById('f4c').value;
-    if(!_jobRefVal){alert('Please link this expense to a job.');return;}
+    if(!date||!amount){alert('Please enter a date and amount.');return;}
     var _catVal=document.getElementById('f_cat').value;
     if(!_catVal){alert('Please select a category.');return;}
   }
