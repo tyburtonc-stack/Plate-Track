@@ -4038,7 +4038,7 @@ function ocrReceipt(file){
           max_tokens:300,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-            {type:'text',text:'Extract data from this receipt. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","description":"2-5 word summary or null","category":"one of Fuel/Travel/EV Charging/Cleaning/Parking/Tolls/Other or null","travel_type":"use exactly one of Train/Bus/Taxi/Uber/Tube/Ferry/Other or null (only set when category is Travel)","receipt_ref":"receipt/transaction number printed on receipt or null"}. Amount is the GBP total as a plain number.'}
+            {type:'text',text:'Today\'s date is '+today()+'. Extract data from this receipt. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","description":"2-5 word summary or null","category":"one of Fuel/Travel/EV Charging/Cleaning/Parking/Tolls/Other or null","travel_type":"use exactly one of Train/Bus/Taxi/Uber/Tube/Ferry/Other or null (only set when category is Travel)","receipt_ref":"receipt/transaction number printed on receipt or null"}. Amount is the GBP total as a plain number.'}
           ]}]
         })
       })
@@ -4089,7 +4089,7 @@ function ocrIncomeReceipt(file){
       window._incomeImgData=ev.target.result;
       var base64=ev.target.result.split(',')[1];
       var coList=COMPANIES.map(function(c){return c.name;}).join(', ');
-      var promptText='Extract data from this job or delivery confirmation for a UK trade plate driver. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","job_ref":"alphanumeric job or booking reference ID such as J-0739-08CF (NOT the vehicle registration plate) or null","registration":"UK vehicle registration plate such as KJ25LTT or null","miles":miles_as_number_or_null,"company":"identify company from document branding or job number format, must be exactly one of ['+coList+'] or null","start_postcode":"UK postcode for collection/pickup location or null","end_postcode":"UK postcode for delivery/drop-off location or null"}. Amount is GBP total as a plain number. Postcodes must be uppercase UK format e.g. LU1 2AB. miles is a plain number (e.g. 39 for distances shown as \"39 mi\").';
+      var promptText='Today\'s date is '+today()+'. Extract data from this job or delivery confirmation for a UK trade plate driver. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","job_ref":"alphanumeric job or booking reference ID such as J-0739-08CF (NOT the vehicle registration plate) or null","registration":"UK vehicle registration plate such as KJ25LTT or null","miles":miles_as_number_or_null,"company":"identify company from document branding or job number format, must be exactly one of ['+coList+'] or null","start_postcode":"UK postcode for collection/pickup location or null","end_postcode":"UK postcode for delivery/drop-off location or null"}. Amount is GBP total as a plain number. Postcodes must be uppercase UK format e.g. LU1 2AB. miles is a plain number (e.g. 39 for distances shown as \"39 mi\").';
       fetch('https://platetrack-ai.tyburtonc.workers.dev/',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
