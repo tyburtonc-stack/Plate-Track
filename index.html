@@ -1226,7 +1226,7 @@ var TRAVEL_TYPES=[
 ];
 function isTravelCat(cat){return cat&&(cat.indexOf('Travel')>=0);}
 function travelTypeKey(desc){if(!desc)return '';for(var i=0;i<TRAVEL_TYPES.length;i++){if(desc.indexOf(TRAVEL_TYPES[i].key)>=0)return TRAVEL_TYPES[i].key;}return '';}
-var DEFAULT_INCOME_TYPES=['Delivery','Waiting Time','Charging Time','Bonus'];
+var DEFAULT_INCOME_TYPES=['Delivery','Waiting Time','Charging Time','Bonus','Add Pay','Inspection','RGNWGT'];
 var INCOME_TYPES=DEFAULT_INCOME_TYPES.slice();
 function loadIncomeTypes(){
   try{var s=localStorage.getItem('pt_income_types');if(s){var arr=JSON.parse(s);if(Array.isArray(arr)&&arr.length){INCOME_TYPES=arr;return;}}}catch(e){}
@@ -1686,6 +1686,15 @@ function tyear(d){var dt=new Date(d),y=dt.getFullYear();return dt>=new Date(y,3,
 function money(n){return '\u00a3'+parseFloat(n||0).toFixed(2);}
 function fdate(s){if(!s)return '';return new Date(s).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}
 function fdateShort(s){if(!s)return '';return new Date(s).toLocaleDateString('en-GB',{day:'2-digit',month:'short'});}
+function fdatePeriod(from,to){
+  if(!from||!to)return '';
+  var yf=String(from).slice(0,4),yt=String(to).slice(0,4);
+  if(yf!==yt){
+    var o={day:'2-digit',month:'short',year:'numeric'};
+    return new Date(from).toLocaleDateString('en-GB',o)+' – '+new Date(to).toLocaleDateString('en-GB',o);
+  }
+  return fdateShort(from)+' – '+fdateShort(to);
+}
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function newid(){return Date.now()+Math.floor(Math.random()*9999);}
 function htmlEsc(s){var m={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};return(s||'').replace(/[&<>"']/g,function(c){return m[c];});}
@@ -2177,7 +2186,7 @@ function ocrPayslip(file,idx){
           max_tokens:2000,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-            {type:'text',text:'Extract all data from this payslip. Return ONLY valid JSON, no markdown:\n{"periodFrom":"YYYY-MM-DD or null","periodTo":"YYYY-MM-DD or null","netPay":number_or_null,"items":[{"ref":"job number or null","type":"line type code or null","description":"1-6 word route or label","company":"client name or null","amount":number,"date":"YYYY-MM-DD or null"}]}\nRules: items[] lists every pay line (jobs, bonuses, deductions, travel charges, supplements). For BCA self-bill payslips (numeric job refs like 12027220, with Type column codes): ref is the Job column number (e.g. 12027220), NOT the Reference column; put the Type column value verbatim in the type field (JOB, INTRAV, RGNWGT, ADDPAY, etc.); put the route in description. For BCA weekly statements (documents with a table of multiple job entries where each row has a job ref in J-XXXX-XXXX format, e.g. J-1234-AB56): extract EVERY J-XXXX-XXXX ref in the document as a separate item — do NOT stop at the first one; ref = the J-XXXX-XXXX job reference for that row; amount = the amount shown on that row; date = the job date for that row if shown or null; type = null; description = route or label if shown; company = "BCA"; netPay = the Net Total or Grand Total shown at the bottom. For Engineius invoices (single per-job invoice layout with J-XXXX-XXXX ref): ref is the Job code from the Job column (e.g. J-851B-8E65); type is null; description is the route or charge label. For DriiveMe and any other company: ref is whatever uniquely identifies the job; type is null unless a distinct type code is shown. Deductions and admin charges have negative amounts. netPay is the final total paid to the driver. Dates in YYYY-MM-DD. Amounts as plain GBP numbers, no currency symbol.'}
+            {type:'text',text:'Extract all data from this payslip. Return ONLY valid JSON, no markdown:\n{"periodFrom":"YYYY-MM-DD or null","periodTo":"YYYY-MM-DD or null","netPay":number_or_null,"items":[{"ref":"job number or null","type":"line type code or null","description":"1-6 word route or label","company":"client name or null","amount":number,"date":"YYYY-MM-DD or null","registration":"vehicle registration plate shown on the line or null"}]}\nRules: items[] lists every pay line (jobs, bonuses, deductions, travel charges, supplements). For BCA self-bill payslips (numeric job refs like 12027220, with Type column codes): ref is the Job column number (e.g. 12027220), NOT the Reference column; put the Type column value verbatim in the type field (JOB, INTRAV, RGNWGT, ADDPAY, RATESUPP, WT/NC, WTG, M25, etc.); put the route in description. For Rate Supplement / Inspection Payment lines set type to Rate Supplement, set description to Inspection Payment, and put the trailing vehicle registration plate (e.g. Inspection Payment-04-06-26 AJ23GXT has plate AJ23GXT) in the registration field. For BCA weekly statements (documents with a table of multiple job entries where each row has a job ref in J-XXXX-XXXX format, e.g. J-1234-AB56): extract EVERY J-XXXX-XXXX ref in the document as a separate item — do NOT stop at the first one; ref = the J-XXXX-XXXX job reference for that row; amount = the amount shown on that row; date = the job date for that row if shown or null; type = null; description = route or label if shown; company = "BCA"; netPay = the Net Total or Grand Total shown at the bottom. For Engineius invoices (single per-job invoice layout with J-XXXX-XXXX ref): ref is the Job code from the Job column (e.g. J-851B-8E65); type is null; description is the route or charge label. For DriiveMe and any other company: ref is whatever uniquely identifies the job; type is null unless a distinct type code is shown. Deductions and admin charges have negative amounts. netPay is the final total paid to the driver. Dates in YYYY-MM-DD. Amounts as plain GBP numbers, no currency symbol.'}
           ]}]
         })
       })
@@ -2211,7 +2220,7 @@ function ocrPayslip(file,idx){
             PAYSLIPS[idx].periodTo=_detected.periodTo;
             savePayslips();
             if(CTAB===3)rSummary();
-            showToast('Pay period auto-detected: '+fdateShort(_detected.periodFrom)+' – '+fdateShort(_detected.periodTo));
+            showToast('Pay period auto-detected: '+fdatePeriod(_detected.periodFrom,_detected.periodTo));
           } else {
             showPayslipPeriodPrompt(idx);
           }
@@ -2302,11 +2311,18 @@ function showPayslipPeriodPrompt(idx){
 
 function autoDetectPayslipPeriod(psItems){
   if(!psItems||!psItems.length)return{periodFrom:null,periodTo:null};
+  var iDates=psItems.map(function(it){return it.date;}).filter(function(d){return d&&/^\d{4}-\d{2}-\d{2}$/.test(d);}).sort();
+  if(iDates.length)return{periodFrom:iDates[0],periodTo:iDates[iDates.length-1]};
   var allExp=DB.expenses.filter(function(e){return isReimbursedCat(e.category);});
   var pool=DB.income.concat(allExp);
   var result=fuzzyMatchPayslip(psItems,pool);
   var dates=result.matched.map(function(m){return m.entry.date;}).filter(Boolean).sort();
   if(!dates.length)return{periodFrom:null,periodTo:null};
+  if(dates.length>2){
+    var med=dates[Math.floor(dates.length/2)];
+    var medT=new Date(med).getTime(),D31=31*86400000;
+    dates=dates.filter(function(d){return Math.abs(new Date(d).getTime()-medT)<=D31;});
+  }
   return{periodFrom:dates[0],periodTo:dates[dates.length-1]};
 }
 function tryAutoDetectPeriod(idx){
@@ -2316,7 +2332,7 @@ function tryAutoDetectPeriod(idx){
     PAYSLIPS[idx].periodTo=detected.periodTo;
     savePayslips();
     if(CTAB===3)rSummary();
-    showToast('Pay period auto-detected: '+fdateShort(detected.periodFrom)+' – '+fdateShort(detected.periodTo));
+    showToast('Pay period auto-detected: '+fdatePeriod(detected.periodFrom,detected.periodTo));
   } else {
     showToast('Could not auto-detect — no matching income found');
     showPayslipPeriodPrompt(idx);
@@ -2342,91 +2358,145 @@ function _psRefNumMatch(a,b){
   return na.length>=4&&na===nb;
 }
 
-function _psAggregateByRef(items,entries){
-  if(!items||!items.length)return items||[];
-  var entryRefCounts={};
-  (entries||[]).forEach(function(e){
-    var r=_psNorm(e.jobRef||'');
-    if(r)entryRefCounts[r]=(entryRefCounts[r]||0)+1;
+function _psBcaTypeToIncomeType(t){
+  t=_psNorm(t||'');
+  if(t==='job')return ['delivery'];
+  if(t==='rgnwgt')return ['rgnwgt','add pay'];
+  if(t==='addpay')return ['add pay','bonus'];
+  if(t==='ratesupp')return ['inspection'];
+  if(t==='m25')return ['delivery','add pay'];
+  if(t.indexOf('wt')===0)return ['waiting time'];
+  return null;
+}
+function _psIsIntrav(item){return _psNorm(item.type||'').indexOf('intrav')>=0||_psNorm(item.description||'').indexOf('intrav')>=0;}
+function _psIsInspection(item){var t=_psNorm(item.type||''),d=_psNorm(item.description||'');return t.indexOf('ratesupp')>=0||t.indexOf('rate supplement')>=0||d.indexOf('inspection')>=0;}
+function _psRefEq(itemRef,entryRef){var a=_psNorm(itemRef||''),b=_psNorm(entryRef||'');if(!a||!b)return false;return a===b||_psRefNumMatch(itemRef,entryRef);}
+function _psPlate(s){return _psNorm(s||'').replace(/\s/g,'');}
+function _psAmtEq(a,b){return Math.abs(parseFloat(a||0)-parseFloat(b||0))<0.02;}
+function _psSlipCompany(ps){
+  var counts={},best='',bc=0;
+  (ps.items||[]).forEach(function(it){
+    var c=(it.company||'').trim();if(!c)return;
+    var k=_psNorm(c);counts[k]=(counts[k]||0)+1;
+    if(counts[k]>bc){bc=counts[k];best=c;}
   });
-  var groups={},order=[],out=[];
-  items.forEach(function(it){
-    var r=_psNorm(it.ref||'');
-    if(!r||(it.amount||0)<=0){out.push(it);return;}
-    if(!groups[r]){groups[r]={ref:it.ref,description:it.description||'',company:it.company||'',amount:0,_count:0,_items:[]};order.push(r);}
-    var g=groups[r];
-    g.amount+=parseFloat(it.amount||0);
-    g._count++;
-    g._items.push(it);
-    var d=(it.description||'').trim();
-    if(d&&d.length>(g.description||'').length)g.description=d;
-    if(!g.company&&it.company)g.company=it.company;
-  });
-  order.forEach(function(r){
-    var g=groups[r];
-    var logCount=entryRefCounts[r]||0;
-    var hasIntrav=g._items.some(function(it){return _psNorm(it.type||'').indexOf('intrav')>=0||_psNorm(it.description||'').indexOf('intrav')>=0;});
-    if(g._count>1&&g._count>logCount&&hasIntrav){delete g._count;delete g._items;out.push(g);}
-    else{g._items.forEach(function(it){out.push(it);});}
-  });
-  return out;
+  return best;
 }
 
 function fuzzyMatchPayslip(items,entries){
-  items=_psAggregateByRef(items,entries);
   var used={};
-  var matched=[],missing=[];
-  items.forEach(function(item){
+  var slots=[];
+  (items||[]).forEach(function(item){
     if((item.amount||0)<=0)return;
-    var refNorm=_psNorm(item.ref||'');
-    var isInTrav=_psNorm(item.type||'').indexOf('intrav')>=0||_psNorm(item.description||'').indexOf('intrav')>=0;
-    if(isInTrav&&refNorm){
-      // 1. Try 1:1 exact-amount match against any entry with matching jobRef
-      var exact=null;
-      entries.forEach(function(e){
-        if(used[e.id]||exact)return;
-        var eRef=_psNorm(e.jobRef||'');
-        if((eRef===refNorm||_psRefNumMatch(item.ref,e.jobRef))&&Math.abs(parseFloat(e.amount||0)-item.amount)<0.02)exact=e;
-      });
-      if(exact){used[exact.id]=true;matched.push({item:item,entry:exact,amountMatch:true});return;}
-      // 2. Group match: aggregate all expense entries with matching jobRef
-      var grpExp=entries.filter(function(e){
-        if(used[e.id]||e.incomeType!==undefined)return false;
-        var eRef=_psNorm(e.jobRef||'');
-        return eRef===refNorm||_psRefNumMatch(item.ref,e.jobRef);
-      });
-      if(grpExp.length){
-        var sum=grpExp.reduce(function(s,e){return s+parseFloat(e.amount||0);},0);
-        grpExp.forEach(function(e){used[e.id]=true;});
-        var synth={id:'_intrav_'+refNorm,jobRef:item.ref,amount:sum,
-          description:grpExp.length>1?'Travel \xd7'+grpExp.length:(grpExp[0].description||grpExp[0].category||''),
-          company:grpExp[0].company||''};
-        matched.push({item:item,entry:synth,amountMatch:Math.abs(sum-item.amount)<0.02});
-        return;
+    slots.push({item:item,entry:null,amountMatch:false});
+  });
+  // PASS 1: job ref + exact amount (INTRAV lines match expenses, all others match income)
+  slots.forEach(function(s){
+    var it=s.item;if(!it.ref)return;
+    var wantExp=_psIsIntrav(it);
+    for(var i=0;i<entries.length;i++){
+      var e=entries[i];
+      if(used[e.id])continue;
+      if(wantExp!==(e.incomeType===undefined))continue;
+      if(_psRefEq(it.ref,e.jobRef)&&_psAmtEq(e.amount,it.amount)){
+        s.entry=e;s.amountMatch=true;used[e.id]=true;break;
       }
     }
-    // Standard single-entry matching
-    var descToks=_psTok(item.description||'');
-    var best=null,bestScore=-1;
+  });
+  // PASS 2: INTRAV aggregate - one payslip travel line covers several logged receipts on the same job
+  slots.forEach(function(s){
+    if(s.entry||!_psIsIntrav(s.item)||!s.item.ref)return;
+    var grp=entries.filter(function(e){return !used[e.id]&&e.incomeType===undefined&&_psRefEq(s.item.ref,e.jobRef);});
+    if(!grp.length)return;
+    var sum=grp.reduce(function(t,e){return t+parseFloat(e.amount||0);},0);
+    grp.forEach(function(e){used[e.id]=true;});
+    s.entry={id:'_intrav_'+_psNorm(s.item.ref),jobRef:s.item.ref,amount:sum,
+      description:grp.length>1?'Travel \xd7'+grp.length:(grp[0].description||grp[0].category||''),
+      company:grp[0].company||''};
+    s.amountMatch=_psAmtEq(sum,s.item.amount);
+  });
+  // PASS 3: Inspection / Rate Supplement lines - resolve registration plate to a job ref
+  // via logged income, then match the Inspection entry on that job
+  slots.forEach(function(s){
+    if(s.entry||!_psIsInspection(s.item))return;
+    var reg=_psPlate(s.item.registration);
+    var regJobRef='';
+    if(reg){
+      for(var i=0;i<entries.length;i++){
+        var e=entries[i];
+        if(e.incomeType!==undefined&&_psPlate(e.registration)===reg&&e.jobRef){regJobRef=_psNorm(e.jobRef);break;}
+      }
+    }
+    var cands=entries.filter(function(e){
+      if(used[e.id]||e.incomeType===undefined)return false;
+      return _psNorm(e.incomeType||'').indexOf('inspection')>=0||_psNorm(e.description||'').indexOf('inspection')>=0;
+    });
+    if(!cands.length)return;
+    cands.sort(function(a,b){
+      var aj=regJobRef&&_psNorm(a.jobRef||'')===regJobRef?0:1;
+      var bj=regJobRef&&_psNorm(b.jobRef||'')===regJobRef?0:1;
+      if(aj!==bj)return aj-bj;
+      var ae=_psAmtEq(a.amount,s.item.amount)?0:1;
+      var be=_psAmtEq(b.amount,s.item.amount)?0:1;
+      if(ae!==be)return ae-be;
+      return Math.abs(parseFloat(a.amount||0)-s.item.amount)-Math.abs(parseFloat(b.amount||0)-s.item.amount);
+    });
+    s.entry=cands[0];used[cands[0].id]=true;
+    s.amountMatch=_psAmtEq(cands[0].amount,s.item.amount);
+  });
+  // PASS 4: job ref + type-compatible, closest amount. The type restriction stops a missing
+  // RGNWGT line from stealing an unrelated entry on the same job and hiding the gap.
+  slots.forEach(function(s){
+    if(s.entry||!s.item.ref)return;
+    var wantExp=_psIsIntrav(s.item);
+    var compat=wantExp?null:_psBcaTypeToIncomeType(s.item.type);
+    var cands=entries.filter(function(e){
+      if(used[e.id])return false;
+      if(wantExp!==(e.incomeType===undefined))return false;
+      if(!_psRefEq(s.item.ref,e.jobRef))return false;
+      if(compat&&compat.indexOf(_psNorm(e.incomeType||''))<0)return false;
+      return true;
+    });
+    if(!cands.length)return;
+    cands.sort(function(a,b){
+      return Math.abs(parseFloat(a.amount||0)-s.item.amount)-Math.abs(parseFloat(b.amount||0)-s.item.amount);
+    });
+    s.entry=cands[0];used[cands[0].id]=true;
+    s.amountMatch=_psAmtEq(cands[0].amount,s.item.amount);
+  });
+  // PASS 5: fuzzy fallback - description/postcode token overlap (Engineius routes, lines with no ref).
+  // Items that HAVE a ref but failed ref-matching may only fuzzy-match on an exact amount,
+  // otherwise they go to MISSING instead of stealing an unrelated entry.
+  slots.forEach(function(s){
+    if(s.entry)return;
+    var it=s.item;
+    var wantExp=_psIsIntrav(it);
+    var descToks=_psTok(it.description||'');
+    var best=null,bestScore=0;
     entries.forEach(function(e){
       if(used[e.id])return;
+      if(wantExp!==(e.incomeType===undefined))return;
       var score=0;
-      var eRefNorm=_psNorm(e.jobRef||'');
-      if(refNorm&&(refNorm===eRefNorm||_psRefNumMatch(item.ref,e.jobRef))){
-        score=2;
-      }else{
-        var entryToks=_psTok((e.jobRef||'')+' '+(e.category||'')+' '+(e.description||'')+' '+(e.company||''));
-        var overlap=_psOverlap(descToks,entryToks);
-        if(overlap>=0.5){score=overlap;}else if(e.startPostcode||e.endPostcode){
-          var pcToks=_psTok((e.startPostcode||'')+' '+(e.endPostcode||''));
-          if(pcToks.length){var pcOv=_psOverlap(descToks,pcToks);if(pcOv>=0.5)score=pcOv*0.6;}
-        }
+      var entryToks=_psTok((e.jobRef||'')+' '+(e.category||'')+' '+(e.incomeType||'')+' '+(e.description||'')+' '+(e.company||''));
+      var overlap=_psOverlap(descToks,entryToks);
+      if(overlap>=0.5){score=overlap;}
+      else if(e.startPostcode||e.endPostcode){
+        var pcToks=_psTok((e.startPostcode||'')+' '+(e.endPostcode||''));
+        if(pcToks.length){var pcOv=_psOverlap(descToks,pcToks);if(pcOv>=0.5)score=pcOv*0.6;}
       }
-      if(score>0&&_psCoMatch(item.company,e.company))score+=1;
-      if(score>bestScore||(score===bestScore&&best&&Math.abs(parseFloat(e.amount||0)-item.amount)<Math.abs(parseFloat(best.amount||0)-item.amount))){bestScore=score;best=e;}
+      if(score>0&&_psCoMatch(it.company,e.company))score+=1;
+      if(score>0&&_psAmtEq(e.amount,it.amount))score+=0.5;
+      if(score>bestScore||(score===bestScore&&best&&Math.abs(parseFloat(e.amount||0)-it.amount)<Math.abs(parseFloat(best.amount||0)-it.amount))){bestScore=score;best=e;}
     });
-    if(best&&bestScore>0){used[best.id]=true;matched.push({item:item,entry:best,amountMatch:Math.abs(parseFloat(best.amount||0)-item.amount)<0.02});}
-    else missing.push({item:item});
+    if(best&&bestScore>0&&(!it.ref||_psAmtEq(best.amount,it.amount))){
+      s.entry=best;used[best.id]=true;
+      s.amountMatch=_psAmtEq(best.amount,it.amount);
+    }
+  });
+  var matched=[],missing=[];
+  slots.forEach(function(s){
+    if(s.entry)matched.push({item:s.item,entry:s.entry,amountMatch:s.amountMatch});
+    else missing.push({item:s.item});
   });
   var extra=entries.filter(function(e){return !used[e.id];});
   return{matched:matched,missing:missing,extra:extra};
@@ -2462,7 +2532,7 @@ function buildPayslipGroupHTML(group,type,idx){
         +'<div class="ps-item-left">'+(co?'<div class="ps-item-co">'+co+'</div>':'')+'<div class="ps-item-desc">'+desc+'</div></div>'
         +(g.amountMatch
           ?'<span class="ps-item-amount matched">'+money(g.item.amount)+'</span>'
-          :'<span class="ps-item-amount missing" title="Logged: '+money(parseFloat(g.entry.amount||0))+'">'+money(g.item.amount)+' &#x26A0;</span>')
+          :'<span class="ps-item-amount missing">'+money(g.item.amount)+' &#x26A0;<br><span style="font-size:10px;font-weight:600;color:var(--text4)">logged '+money(parseFloat(g.entry.amount||0))+'</span></span>')
         +'</div>';
     });
   } else if(type==='missing'){
@@ -3715,7 +3785,7 @@ function rSummary(){
       if(i>0)payslipHTML+='<div style="border-top:2px solid var(--border)"></div>';
       if(PAYSLIPS.length>1){
         payslipHTML+='<div style="padding:8px 16px 0;font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.05em">'
-          +'Payslip '+(i+1)+(_psPeriod?' \u2014 '+fdateShort(ps.periodFrom)+' \u2013 '+fdateShort(ps.periodTo):'')+'</div>';
+          +'Payslip '+(i+1)+(_psPeriod?' \u2014 '+fdatePeriod(ps.periodFrom,ps.periodTo):'')+'</div>';
       }
       payslipHTML+='<div style="padding:16px">';
       if(ps.image)payslipHTML+='<img src="'+ps.image+'" style="width:100%;max-height:160px;object-fit:contain;border-radius:var(--r-lg);margin-bottom:12px;cursor:pointer" onclick="viewReceipt(PAYSLIPS['+i+'].image)" alt="Payslip">';
@@ -3724,7 +3794,7 @@ function rSummary(){
       } else {
         if(_psPeriod){
           payslipHTML+='<div class="summary-row" style="border:none;padding:5px 0 8px"><span class="summary-row-label">Pay period</span>'
-            +'<span class="summary-row-val" style="font-size:13px;color:var(--text3)">'+fdateShort(ps.periodFrom)+' \u2013 '+fdateShort(ps.periodTo)+'</span></div>';
+            +'<span class="summary-row-val" style="font-size:13px;color:var(--text3)">'+fdatePeriod(ps.periodFrom,ps.periodTo)+'</span></div>';
         } else {
           payslipHTML+='<div style="background:var(--orange-bg);border:1px solid var(--orange-border);border-radius:var(--r-md);padding:9px 12px;margin-bottom:10px;font-size:13px;color:var(--orange)">'
             +'&#x26A0;&#xFE0F; Pay period not detected &mdash; '
@@ -3732,8 +3802,9 @@ function rSummary(){
             +'<button onclick="showPayslipPeriodPrompt('+i+')" style="background:none;border:none;color:var(--orange);font-weight:700;cursor:pointer;font-size:13px;padding:0;text-decoration:underline">set dates</button></div>';
         }
         if(_psHasItems&&_psPeriod){
-          var _periodInc=DB.income.filter(function(e){return inDateRange(e.date,ps.periodFrom,ps.periodTo);});
-          var _periodExp=DB.expenses.filter(function(e){return inDateRange(e.date,ps.periodFrom,ps.periodTo)&&isReimbursedCat(e.category);});
+          var _psCo=_psSlipCompany(ps);
+          var _periodInc=DB.income.filter(function(e){return inDateRange(e.date,ps.periodFrom,ps.periodTo)&&(!_psCo||!e.company||_psCoMatch(_psCo,e.company));});
+          var _periodExp=DB.expenses.filter(function(e){return inDateRange(e.date,ps.periodFrom,ps.periodTo)&&isReimbursedCat(e.category)&&(!_psCo||!e.company||_psCoMatch(_psCo,e.company));});
           var _mr=fuzzyMatchPayslip(ps.items,_periodInc.concat(_periodExp));
           var _matched=_mr.matched,_missing=_mr.missing,_extra=_mr.extra;
           var _loggedTotal=0;
@@ -3751,6 +3822,10 @@ function rSummary(){
             payslipHTML+='<div class="summary-row" style="border:none;padding:5px 0"><span class="summary-row-label">Logged (period)</span><span class="summary-row-val green">'+money(_loggedTotal)+'</span></div>'
               +'<div class="summary-row" style="border:none;padding:5px 0"><span class="summary-row-label">Payslip net pay</span><span class="summary-row-val" style="color:var(--success)">'+money(_slipTotal)+'</span></div>'
               +'<div style="padding:8px 0 10px;font-weight:700;font-size:13px;color:'+_sColor+'">'+_sText+'</div>';
+          }
+          var _itemSum=0;ps.items.forEach(function(it){_itemSum+=parseFloat(it.amount||0);});
+          if(_hasNetPay&&Math.abs(_itemSum-_slipTotal)>0.05){
+            payslipHTML+='<div style="background:var(--orange-bg);border:1px solid var(--orange-border);border-radius:var(--r-md);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--orange)">⚠️ Scanned line items total '+money(_itemSum)+' but net pay is '+money(_slipTotal)+' — the scan may have misread a line. Tap Replace to re-scan.</div>';
           }
           payslipHTML+='</div><div style="border-top:1px solid var(--border)">';
           payslipHTML+=buildPayslipGroupHTML(_matched,'matched',i);
