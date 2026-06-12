@@ -3138,7 +3138,8 @@ function buildIncomeListHTML(items){
         +'</div></div>';
       html+='</div>';
     } else {
-      var gReg=g.items[0]&&g.items[0].registration?'<span class="reg-tag">'+htmlEsc(g.items[0].registration)+'</span>':'';
+      var gRegVal=jobMetaPick(g.items,'registration');
+      var gReg=gRegVal?'<span class="reg-tag">'+htmlEsc(gRegVal)+'</span>':'';
       html+='<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-sm);margin-bottom:10px">';
       html+='<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--li)">'
         +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+cobadge(g.company)+(g.ref?' <span style="font-size:14px;font-weight:700;color:var(--text)">'+htmlEsc(g.ref)+'</span>':'')
@@ -3421,6 +3422,14 @@ function initJobCardDrag(){
   });
 }
 
+function jobMetaPick(entries,field){
+  for(var i=0;i<entries.length;i++){
+    var v=entries[i][field];
+    if(v!==undefined&&v!==null&&String(v)!==''&&v!==0)return v;
+  }
+  return '';
+}
+
 function jobOverviewCardHTML(g,key){
   var net=g.grossIncome-g.deductTotal;
   var hasExps=g.reimbTotal>0||g.deductTotal>0;
@@ -3432,7 +3441,7 @@ function jobOverviewCardHTML(g,key){
     expPills+='</div>';
   }
   var firstItem=g.items[0]||{};
-  var miles=firstItem.miles||'';
+  var miles=jobMetaPick(g.items,'miles');
   var detailRef=g.ref?g.ref:('__'+firstItem.id);
   var fallbackId=String(firstItem.id||'');
   return '<div class="job-card" data-key="'+(key||detailRef)+'" data-date="'+g.date+'" data-detail-ref="'+detailRef+'" data-detail-fid="'+fallbackId+'" onclick="openJobDetail(this.dataset.detailRef,this.dataset.detailFid)" style="flex-direction:column;align-items:stretch;gap:0;cursor:pointer;margin-bottom:10px">'
@@ -3463,8 +3472,9 @@ function openJobDetail(jobRef,fallbackId){
   }
   if(!incomeEntries.length)return;
   var firstEntry=incomeEntries[0];
-  var company=firstEntry.company,date=firstEntry.date,miles=firstEntry.miles,registration=firstEntry.registration;
-  var startPostcode=firstEntry.startPostcode,endPostcode=firstEntry.endPostcode;
+  var company=firstEntry.company,date=firstEntry.date;
+  var miles=jobMetaPick(incomeEntries,'miles'),registration=jobMetaPick(incomeEntries,'registration');
+  var startPostcode=jobMetaPick(incomeEntries,'startPostcode'),endPostcode=jobMetaPick(incomeEntries,'endPostcode');
   var totalMins=0;
   incomeEntries.forEach(function(x){totalMins+=parseDuration(x.startTime,x.endTime);});
   var notes=incomeEntries.filter(function(x){return x.description;}).map(function(x){return x.description;});
