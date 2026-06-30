@@ -2226,7 +2226,7 @@ function ocrPayslip(file,idx){
           max_tokens:2000,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-            {type:'text',text:'Extract all data from this payslip. Return ONLY valid JSON, no markdown:\n{"periodFrom":"YYYY-MM-DD or null","periodTo":"YYYY-MM-DD or null","netPay":number_or_null,"items":[{"ref":"job number or null","type":"line type code or null","description":"1-6 word route or label","company":"client name or null","amount":number,"date":"YYYY-MM-DD or null","registration":"vehicle registration plate shown on the line or null"}]}\nRules: items[] lists every pay line (jobs, bonuses, deductions, travel charges, supplements). For BCA self-bill payslips (numeric job refs like 12027220, with Type column codes): ref is the Job column number (e.g. 12027220), NOT the Reference column; put the Type column value verbatim in the type field (JOB, INTRAV, RGNWGT, ADDPAY, RATESUPP, WT/NC, WTG, M25, etc.); put the route in description. For Rate Supplement / Inspection Payment lines set type to Rate Supplement, set description to Inspection Payment, and put the trailing vehicle registration plate (e.g. Inspection Payment-04-06-26 AJ23GXT has plate AJ23GXT) in the registration field. For BCA weekly statements (documents with a table of multiple job entries where each row has a job ref in J-XXXX-XXXX format, e.g. J-1234-AB56): extract EVERY J-XXXX-XXXX ref in the document as a separate item — do NOT stop at the first one; ref = the J-XXXX-XXXX job reference for that row; amount = the amount shown on that row; date = the job date for that row if shown or null; type = null; description = route or label if shown; company = "BCA"; netPay = the Net Total or Grand Total shown at the bottom. For Engineius invoices (single per-job invoice layout with J-XXXX-XXXX ref): ref is the Job code from the Job column (e.g. J-851B-8E65); type is null; description is the route or charge label. For DriiveMe and any other company: ref is whatever uniquely identifies the job; type is null unless a distinct type code is shown. Deductions and admin charges have negative amounts. netPay is the final total paid to the driver. Dates in YYYY-MM-DD. Amounts as plain GBP numbers, no currency symbol.'}
+            {type:'text',text:'Extract all data from this payslip. Return ONLY valid JSON, no markdown:\n{"periodFrom":"YYYY-MM-DD or null","periodTo":"YYYY-MM-DD or null","netPay":number_or_null,"items":[{"ref":"job number or null","type":"line type code or null","description":"1-6 word route or label","company":"client name or null","amount":number,"date":"YYYY-MM-DD or null","registration":"vehicle registration plate shown on the line or null"}]}\nRules: items[] lists every pay line (jobs, bonuses, deductions, travel charges, supplements). For BCA self-bill payslips (numeric job refs like 12027220, with Type column codes): ref is the Job column number (e.g. 12027220), NOT the Reference column; put the Type column value verbatim in the type field (JOB, INTRAV, RGNWGT, ADDPAY, RATESUPP, WT/NC, WTG, M25, etc.); put the route in description; set company to "BCA" on EVERY line (including deduction and Rate Supplement lines). For Rate Supplement / Inspection Payment lines set type to Rate Supplement, set description to Inspection Payment, and put the trailing vehicle registration plate (e.g. Inspection Payment-04-06-26 AJ23GXT has plate AJ23GXT) in the registration field. For BCA weekly statements (documents with a table of multiple job entries where each row has a job ref in J-XXXX-XXXX format, e.g. J-1234-AB56): extract EVERY J-XXXX-XXXX ref in the document as a separate item — do NOT stop at the first one; ref = the J-XXXX-XXXX job reference for that row; amount = the amount shown on that row; date = the job date for that row if shown or null; type = null; description = route or label if shown; company = "BCA"; netPay = the Net Total or Grand Total shown at the bottom. For Engineius invoices (single per-job invoice layout with J-XXXX-XXXX ref): ref is the Job code from the Job column (e.g. J-851B-8E65); type is null; description is the route or charge label. For DriiveMe and any other company: ref is whatever uniquely identifies the job; type is null unless a distinct type code is shown. Deductions and admin charges have negative amounts. netPay is the final total paid to the driver. Dates in YYYY-MM-DD. Amounts as plain GBP numbers, no currency symbol.'}
           ]}]
         })
       })
@@ -2413,6 +2413,7 @@ function _psIsInspection(item){var t=_psNorm(item.type||''),d=_psNorm(item.descr
 function _psRefEq(itemRef,entryRef){var a=_psNorm(itemRef||''),b=_psNorm(entryRef||'');if(!a||!b)return false;return a===b||_psRefNumMatch(itemRef,entryRef);}
 function _psPlate(s){return _psNorm(s||'').replace(/\s/g,'');}
 function _psAmtEq(a,b){return Math.abs(parseFloat(a||0)-parseFloat(b||0))<0.02;}
+var _PS_BCA_TYPES={job:1,rgnwgt:1,intrav:1,addpay:1,ratesupp:1,wtg:1,m25:1,wtnc:1};
 function _psSlipCompany(ps){
   var counts={},best='',bc=0;
   (ps.items||[]).forEach(function(it){
@@ -2420,6 +2421,19 @@ function _psSlipCompany(ps){
     var k=_psNorm(c);counts[k]=(counts[k]||0)+1;
     if(counts[k]>bc){bc=counts[k];best=c;}
   });
+  if(best)return best;
+  // Fallback: BCA self-bill payslips don't carry a per-line company name, so the OCR leaves
+  // item.company null. Without a company the period pool can't be filtered and every other
+  // client's jobs (Engineius, DriiveMe) flood the "Not on payslip" list. Detect BCA from its
+  // unmistakable line fingerprint instead: the Type-column codes (JOB/RGNWGT/INTRAV/ADDPAY/...)
+  // and flat-rate inspection lines. Two or more such signals identify a BCA slip.
+  var bcaHits=0,inspHits=0;
+  (ps.items||[]).forEach(function(it){
+    var t=_psNorm(it.type||'').replace(/\s/g,'');
+    if(_PS_BCA_TYPES[t])bcaHits++;
+    if(t.indexOf('ratesupp')>=0||t.indexOf('ratesupplement')>=0||_psNorm(it.description||'').indexOf('inspection')>=0)inspHits++;
+  });
+  if(bcaHits>=2||(bcaHits>=1&&inspHits>=1))return 'BCA';
   return best;
 }
 
@@ -2430,9 +2444,11 @@ function fuzzyMatchPayslip(items,entries){
     if((item.amount||0)<=0)return;
     slots.push({item:item,entry:null,amountMatch:false});
   });
-  // PASS 1: job ref + exact amount (INTRAV lines match expenses, all others match income)
+  // PASS 1: job ref + exact amount (INTRAV lines match expenses, all others match income).
+  // Inspection / Rate Supplement lines are skipped here and handled by the plate-anchored PASS 3,
+  // because every inspection is the same flat amount and would otherwise grab the wrong job.
   slots.forEach(function(s){
-    var it=s.item;if(!it.ref)return;
+    var it=s.item;if(!it.ref||_psIsInspection(it))return;
     var wantExp=_psIsIntrav(it);
     for(var i=0;i<entries.length;i++){
       var e=entries[i];
@@ -2455,39 +2471,39 @@ function fuzzyMatchPayslip(items,entries){
       company:grp[0].company||''};
     s.amountMatch=_psAmtEq(sum,s.item.amount);
   });
-  // PASS 3: Inspection / Rate Supplement lines - resolve registration plate to a job ref
-  // via logged income, then match the Inspection entry on that job
+  // PASS 3: Inspection / Rate Supplement lines - STRICTLY plate-anchored.
+  // Every inspection on a BCA payslip pays the same flat amount, so the vehicle registration
+  // plate (not the amount) is the only reliable key. We match an inspection line ONLY to the
+  // logged inspection it provably belongs to, via the plate. Two supported logging styles:
+  //   (a) the inspection entry itself carries the plate (older entries: reg on the Inspection row)
+  //   (b) the inspection is logged against a job ref, and the plate appears on that job's Delivery
+  //       row - so we resolve plate -> jobRef, then match the inspection on that exact job.
+  // If the plate can't be resolved, or no inspection is logged for it, the line is left for
+  // MISSING rather than silently consuming an unrelated inspection (which would hide a real gap).
   slots.forEach(function(s){
     if(s.entry||!_psIsInspection(s.item))return;
     var reg=_psPlate(s.item.registration);
-    var regJobRef='';
-    if(reg){
-      for(var i=0;i<entries.length;i++){
-        var e=entries[i];
-        if(e.incomeType!==undefined&&_psPlate(e.registration)===reg&&e.jobRef){regJobRef=_psNorm(e.jobRef);break;}
+    if(!reg)return;
+    var isInspEntry=function(e){return e.incomeType!==undefined&&(_psNorm(e.incomeType||'').indexOf('inspection')>=0||_psNorm(e.description||'').indexOf('inspection')>=0);};
+    var cand=null,i;
+    // (a) plate sits directly on a logged inspection entry
+    for(i=0;i<entries.length;i++){var e=entries[i];if(used[e.id])continue;if(isInspEntry(e)&&_psPlate(e.registration)===reg){cand=e;break;}}
+    // (b) resolve plate -> jobRef via any logged row carrying that plate, then match that job's inspection
+    if(!cand){
+      var regJobRef='';
+      for(i=0;i<entries.length;i++){var ek=entries[i];if(_psPlate(ek.registration)===reg&&ek.jobRef){regJobRef=_psNorm(ek.jobRef);break;}}
+      if(regJobRef){
+        for(i=0;i<entries.length;i++){var e2=entries[i];if(used[e2.id])continue;if(isInspEntry(e2)&&_psNorm(e2.jobRef||'')===regJobRef){cand=e2;s.item._resolvedRef=regJobRef;break;}}
       }
     }
-    var cands=entries.filter(function(e){
-      if(used[e.id]||e.incomeType===undefined)return false;
-      return _psNorm(e.incomeType||'').indexOf('inspection')>=0||_psNorm(e.description||'').indexOf('inspection')>=0;
-    });
-    if(!cands.length)return;
-    cands.sort(function(a,b){
-      var aj=regJobRef&&_psNorm(a.jobRef||'')===regJobRef?0:1;
-      var bj=regJobRef&&_psNorm(b.jobRef||'')===regJobRef?0:1;
-      if(aj!==bj)return aj-bj;
-      var ae=_psAmtEq(a.amount,s.item.amount)?0:1;
-      var be=_psAmtEq(b.amount,s.item.amount)?0:1;
-      if(ae!==be)return ae-be;
-      return Math.abs(parseFloat(a.amount||0)-s.item.amount)-Math.abs(parseFloat(b.amount||0)-s.item.amount);
-    });
-    s.entry=cands[0];used[cands[0].id]=true;
-    s.amountMatch=_psAmtEq(cands[0].amount,s.item.amount);
+    if(!cand)return;
+    s.entry=cand;used[cand.id]=true;
+    s.amountMatch=_psAmtEq(cand.amount,s.item.amount);
   });
   // PASS 4: job ref + type-compatible, closest amount. The type restriction stops a missing
   // RGNWGT line from stealing an unrelated entry on the same job and hiding the gap.
   slots.forEach(function(s){
-    if(s.entry||!s.item.ref)return;
+    if(s.entry||!s.item.ref||_psIsInspection(s.item))return;
     var wantExp=_psIsIntrav(s.item);
     var compat=wantExp?null:_psBcaTypeToIncomeType(s.item.type);
     var cands=entries.filter(function(e){
@@ -2508,7 +2524,7 @@ function fuzzyMatchPayslip(items,entries){
   // Items that HAVE a ref but failed ref-matching may only fuzzy-match on an exact amount,
   // otherwise they go to MISSING instead of stealing an unrelated entry.
   slots.forEach(function(s){
-    if(s.entry)return;
+    if(s.entry||_psIsInspection(s.item))return;
     var it=s.item;
     var wantExp=_psIsIntrav(it);
     var descToks=_psTok(it.description||'');
@@ -2567,7 +2583,8 @@ function buildPayslipGroupHTML(group,type,idx){
   if(type==='matched'){
     group.forEach(function(g){
       var co=htmlEsc((g.item.company||g.entry.company||'').substr(0,30));
-      var desc=htmlEsc((g.item.description||g.item.ref||'').substr(0,40));
+      var _ty=g.item.type?htmlEsc(String(g.item.type).toUpperCase().substr(0,8))+' \u00B7 ':'';
+      var desc=_ty+htmlEsc((g.item.description||g.item.ref||g.item._resolvedRef||'').substr(0,40));
       html+='<div class="ps-item">'
         +'<div class="ps-item-left">'+(co?'<div class="ps-item-co">'+co+'</div>':'')+'<div class="ps-item-desc">'+desc+'</div></div>'
         +(g.amountMatch
@@ -2578,7 +2595,8 @@ function buildPayslipGroupHTML(group,type,idx){
   } else if(type==='missing'){
     group.forEach(function(g){
       var co=htmlEsc((g.item.company||'').substr(0,30));
-      var desc=htmlEsc((g.item.description||g.item.ref||'').substr(0,40));
+      var _tyM=g.item.type?htmlEsc(String(g.item.type).toUpperCase().substr(0,8))+' \u00B7 ':'';
+      var desc=_tyM+htmlEsc((g.item.description||g.item.ref||g.item.registration||'').substr(0,40));
       html+='<div class="ps-item">'
         +'<div class="ps-item-left">'+(co?'<div class="ps-item-co">'+co+'</div>':'')+'<div class="ps-item-desc">'+desc+'</div></div>'
         +'<span class="ps-item-amount missing">'+money(g.item.amount)+'</span>'
@@ -3848,25 +3866,28 @@ function rSummary(){
           var _periodExp=DB.expenses.filter(function(e){return inDateRange(e.date,ps.periodFrom,ps.periodTo)&&isReimbursedCat(e.category)&&(!_psCo||!e.company||_psCoMatch(_psCo,e.company));});
           var _mr=fuzzyMatchPayslip(ps.items,_periodInc.concat(_periodExp));
           var _matched=_mr.matched,_missing=_mr.missing,_extra=_mr.extra;
-          var _loggedTotal=0;
-          _matched.forEach(function(g){_loggedTotal+=parseFloat(g.entry.amount||0);});
-          _extra.forEach(function(g){_loggedTotal+=parseFloat(g.amount||0);});
-          var _slipTotal=parseFloat(ps.manualTotal||0);
-          var _hasNetPay=ps.manualTotal&&_slipTotal>0;
-          if(_hasNetPay){
-            var _diff=_loggedTotal-_slipTotal;
-            var _diffOk=Math.abs(_diff)<0.02;
-            var _sColor=_diffOk?'var(--success)':_diff>0?'var(--orange)':'var(--danger)';
-            var _sText=_diffOk?'\u2705 Logged income matches payslip net pay'
-              :_diff>0?'\u26A0\uFE0F You\u2019ve logged \u00A3'+Math.abs(_diff).toFixed(2)+' more than payslip'
-                     :'\u26A0\uFE0F Payslip shows \u00A3'+Math.abs(_diff).toFixed(2)+' more than logged';
-            payslipHTML+='<div class="summary-row" style="border:none;padding:5px 0"><span class="summary-row-label">Logged (period)</span><span class="summary-row-val green">'+money(_loggedTotal)+'</span></div>'
-              +'<div class="summary-row" style="border:none;padding:5px 0"><span class="summary-row-label">Payslip net pay</span><span class="summary-row-val" style="color:var(--success)">'+money(_slipTotal)+'</span></div>'
-              +'<div style="padding:8px 0 10px;font-weight:700;font-size:13px;color:'+_sColor+'">'+_sText+'</div>';
-          }
+          // Compare what the PAYSLIP pays against what we matched in the log, line by line.
+          // BCA remittance dates don't line up with job dates (a job worked on the 25th may be paid
+          // on the next statement), so totalling every logged entry in the date window and comparing
+          // it to one payslip's net pay is meaningless - it's nearly always "off". Instead we compare
+          // the payslip's own pay lines: matched (found in log) vs the slip's gross pay. The shortfall
+          // is exactly the MISSING lines, which is the number that actually helps the driver.
+          var _slipGross=0;ps.items.forEach(function(it){var a=parseFloat(it.amount||0);if(a>0)_slipGross+=a;});
+          var _matchedTotal=0;_matched.forEach(function(g){var a=parseFloat(g.item.amount||0);if(a>0)_matchedTotal+=a;});
+          var _slipNet=parseFloat(ps.manualTotal||0);
+          var _hasNetPay=ps.manualTotal&&_slipNet>0;
+          var _payDiff=_matchedTotal-_slipGross;
+          var _payOk=Math.abs(_payDiff)<0.02;
+          var _pColor=_payOk?'var(--success)':'var(--orange)';
+          var _pText=_payOk?'\u2705 Every payslip line is logged'
+            :'\u26A0\uFE0F \u00A3'+Math.abs(_payDiff).toFixed(2)+' of payslip pay isn\u2019t in your log (see Missing below)';
+          payslipHTML+='<div class="summary-row" style="border:none;padding:5px 0"><span class="summary-row-label">Payslip pay (lines)</span><span class="summary-row-val" style="color:var(--success)">'+money(_slipGross)+'</span></div>'
+            +'<div class="summary-row" style="border:none;padding:5px 0"><span class="summary-row-label">Matched in log</span><span class="summary-row-val green">'+money(_matchedTotal)+'</span></div>'
+            +(_hasNetPay?'<div class="summary-row" style="border:none;padding:5px 0"><span class="summary-row-label">Payslip net (after deductions)</span><span class="summary-row-val" style="color:var(--text3)">'+money(_slipNet)+'</span></div>':'')
+            +'<div style="padding:8px 0 10px;font-weight:700;font-size:13px;color:'+_pColor+'">'+_pText+'</div>';
           var _itemSum=0;ps.items.forEach(function(it){_itemSum+=parseFloat(it.amount||0);});
-          if(_hasNetPay&&Math.abs(_itemSum-_slipTotal)>0.05){
-            payslipHTML+='<div style="background:var(--orange-bg);border:1px solid var(--orange-border);border-radius:var(--r-md);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--orange)">⚠️ Scanned line items total '+money(_itemSum)+' but net pay is '+money(_slipTotal)+' — the scan may have misread a line. Tap Replace to re-scan.</div>';
+          if(_hasNetPay&&Math.abs(_itemSum-_slipNet)>0.05){
+            payslipHTML+='<div style="background:var(--orange-bg);border:1px solid var(--orange-border);border-radius:var(--r-md);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--orange)">⚠️ Scanned line items total '+money(_itemSum)+' but net pay is '+money(_slipNet)+' — the scan may have misread a line. Tap Replace to re-scan.</div>';
           }
           payslipHTML+='</div><div style="border-top:1px solid var(--border)">';
           payslipHTML+=buildPayslipGroupHTML(_matched,'matched',i);
