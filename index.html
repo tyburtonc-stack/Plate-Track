@@ -2408,7 +2408,35 @@ function _psBcaTypeToIncomeType(t){
   if(t.indexOf('wt')===0)return ['waiting time'];
   return null;
 }
-function _psIsIntrav(item){return _psNorm(item.type||'').indexOf('intrav')>=0||_psNorm(item.description||'').indexOf('intrav')>=0;}
+function _psEngTimeIncomeType(desc){
+  // "Additional Charge: EV Charging Time" / "...Cleaning Time" on an Engineius invoice are paid
+  // to the driver as income (a separate line for time spent), logged with these exact income
+  // types - not a reimbursed expense. Used by PASS 4 as a type-compat hint, same role as
+  // _psBcaTypeToIncomeType plays for BCA type codes.
+  var d=_psNorm(desc||'');
+  if(d.indexOf('charging time')>=0)return ['charging time'];
+  if(d.indexOf('cleaning time')>=0)return ['cleaning time'];
+  return null;
+}
+function _psIsIntrav(item){
+  var t=_psNorm(item.type||''), d=_psNorm(item.description||'');
+  if(t.indexOf('intrav')>=0||d.indexOf('intrav')>=0)return true;
+  // Engineius invoices have no BCA-style type codes (type is always null); their reimbursed
+  // extras appear as "Additional Charge: <label>" description lines instead. Route the cost-type
+  // charges (Fuel, Cleaning, Tolls, EV Charging Cost) to the expense pool like INTRAV. "Charging
+  // Time" and "Cleaning Time" are excluded because the app pays those as INCOME (a separate paid
+  // line for time spent), not as a reimbursed expense - routing them here would hide a real gap.
+  if(d.indexOf('additional charge')>=0){
+    if(d.indexOf('charging time')>=0)return false;
+    if(d.indexOf('cleaning time')>=0)return false;
+    if(d.indexOf('fuel')>=0)return true;
+    if(d.indexOf('cleaning')>=0)return true;
+    if(d.indexOf('toll')>=0)return true;
+    if(d.indexOf('charging')>=0)return true;
+    if(d.indexOf('parking')>=0)return true;
+  }
+  return false;
+}
 function _psIsInspection(item){var t=_psNorm(item.type||''),d=_psNorm(item.description||'');return t.indexOf('ratesupp')>=0||t.indexOf('rate supplement')>=0||d.indexOf('inspection')>=0;}
 function _psRefEq(itemRef,entryRef){var a=_psNorm(itemRef||''),b=_psNorm(entryRef||'');if(!a||!b)return false;return a===b||_psRefNumMatch(itemRef,entryRef);}
 function _psPlate(s){return _psNorm(s||'').replace(/\s/g,'');}
@@ -2505,7 +2533,7 @@ function fuzzyMatchPayslip(items,entries){
   slots.forEach(function(s){
     if(s.entry||!s.item.ref||_psIsInspection(s.item))return;
     var wantExp=_psIsIntrav(s.item);
-    var compat=wantExp?null:_psBcaTypeToIncomeType(s.item.type);
+    var compat=wantExp?null:(_psBcaTypeToIncomeType(s.item.type)||_psEngTimeIncomeType(s.item.description));
     var cands=entries.filter(function(e){
       if(used[e.id])return false;
       if(wantExp!==(e.incomeType===undefined))return false;
