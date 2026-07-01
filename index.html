@@ -2422,19 +2422,19 @@ function _psIsIntrav(item){
   var t=_psNorm(item.type||''), d=_psNorm(item.description||'');
   if(t.indexOf('intrav')>=0||d.indexOf('intrav')>=0)return true;
   // Engineius invoices have no BCA-style type codes (type is always null); their reimbursed
-  // extras appear as "Additional Charge: <label>" description lines instead. Route the cost-type
-  // charges (Fuel, Cleaning, Tolls, EV Charging Cost) to the expense pool like INTRAV. "Charging
-  // Time" and "Cleaning Time" are excluded because the app pays those as INCOME (a separate paid
-  // line for time spent), not as a reimbursed expense - routing them here would hide a real gap.
-  if(d.indexOf('additional charge')>=0){
-    if(d.indexOf('charging time')>=0)return false;
-    if(d.indexOf('cleaning time')>=0)return false;
-    if(d.indexOf('fuel')>=0)return true;
-    if(d.indexOf('cleaning')>=0)return true;
-    if(d.indexOf('toll')>=0)return true;
-    if(d.indexOf('charging')>=0)return true;
-    if(d.indexOf('parking')>=0)return true;
-  }
+  // extras appear as description text instead, e.g. "Additional Charge: Fuel". The OCR prompt's
+  // own "1-6 word route or label" instruction means this prefix isn't reliably preserved - it may
+  // come back as just "Fuel" or "EV Charging Cost" with the prefix dropped. So this checks for the
+  // underlying cost keyword as a whole word, not the literal "Additional Charge" phrase, making it
+  // resilient either way. "Charging Time" and "Cleaning Time" are excluded FIRST because the app
+  // pays those as INCOME (a separate paid line for time spent), not as a reimbursed expense -
+  // routing them here would hide a real gap. Word-boundary matching (via token split) avoids
+  // false-positiving on route/place names that happen to contain these letters as a substring.
+  if(d.indexOf('charging time')>=0)return false;
+  if(d.indexOf('cleaning time')>=0)return false;
+  var costWords={fuel:1,cleaning:1,toll:1,tolls:1,parking:1,charging:1};
+  var toks=d.split(' ');
+  for(var i=0;i<toks.length;i++){if(costWords[toks[i]])return true;}
   return false;
 }
 function _psIsInspection(item){var t=_psNorm(item.type||''),d=_psNorm(item.description||'');return t.indexOf('ratesupp')>=0||t.indexOf('rate supplement')>=0||d.indexOf('inspection')>=0;}
