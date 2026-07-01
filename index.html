@@ -834,6 +834,9 @@ transition:right .25s cubic-bezier(.4,0,.2,1);
     <button class="util-btn" id="searchBtn" onclick="openDashSearchPanel()" aria-label="Search">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text2)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </button>
+    <button class="util-btn" id="notesBtn" onclick="openNotesPanel()" aria-label="Notes">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text2)"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+    </button>
     <button class="util-btn" id="notifBtn" onclick="openNotifications()" aria-label="Notifications">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text2)"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span class="util-notif-dot" id="notifDot" style="display:none"></span>
@@ -1707,6 +1710,8 @@ function loadDB(){
   if(!raw){try{raw=localStorage.getItem('pt7');}catch(e){}}
   if(raw){try{var p=JSON.parse(raw);if(p&&p.income&&p.expenses)DB=p;}catch(e){}}
   if(!DB.jobOrder)DB.jobOrder={};
+  if(!DB.jobs)DB.jobs={}; // DB.jobs: job status/notes annotation layer, keyed by jobRef. Local-only — not yet in Supabase schema.
+  if(!DB.notes)DB.notes=[]; // DB.notes: global quick-jot notes. Local-only — not yet in Supabase schema.
 }
 function saveDB(){
   var s=JSON.stringify(DB);
@@ -1935,6 +1940,134 @@ function openDashSearchPanel(){
 // --- Notifications ---
 function openNotifications(){
   showToast('No new notifications');
+}
+// --- Global notes ---
+var NOTES_SEARCH='';
+function noteAutoLink(text){
+  var t=(text||'').toUpperCase();
+  if(!t)return '';
+  var toks=t.split(/[^A-Z0-9]+/).filter(Boolean);
+  if(!toks.length)return '';
+  var refs={},regs={};
+  DB.income.forEach(function(i){
+    if(i.jobRef)refs[String(i.jobRef).toUpperCase()]=i.jobRef;
+    if(i.registration&&i.jobRef)regs[String(i.registration).replace(/\s+/g,'').toUpperCase()]=i.jobRef;
+  });
+  for(var k=0;k<toks.length;k++){
+    if(refs[toks[k]])return refs[toks[k]];
+    if(regs[toks[k]])return regs[toks[k]];
+  }
+  return '';
+}
+function addNote(text){
+  var tx=(text||'').trim();
+  if(!tx){showToast('Write something first');return false;}
+  DB.notes.unshift({id:newid(),ts:new Date().toISOString(),text:tx,jobRef:noteAutoLink(tx),done:false});
+  saveDB();
+  return true;
+}
+function toggleNoteDone(id){
+  var n=DB.notes.filter(function(x){return x.id===id;})[0];
+  if(!n)return;
+  n.done=!n.done;
+  saveDB();renderNotesList();
+}
+function deleteNote(id){
+  swipeConfirm('Delete this note?',function(){
+    DB.notes=DB.notes.filter(function(x){return x.id!==id;});
+    saveDB();renderNotesList();showToast('Note deleted');
+  },'Delete','Cancel');
+}
+function noteJobOpen(ref){
+  var ov=document.getElementById('notesPanelOverlay');
+  if(ov)ov.remove();
+  openJobDetail(ref,'');
+}
+function renderNotesList(){
+  var box=document.getElementById('notesListBox');
+  if(!box)return;
+  var q=NOTES_SEARCH.toLowerCase();
+  var list=DB.notes.filter(function(n){return !q||n.text.toLowerCase().indexOf(q)>=0||(n.jobRef&&n.jobRef.toLowerCase().indexOf(q)>=0);});
+  if(!list.length){
+    box.innerHTML='<div style="padding:36px 16px;text-align:center;border:1px dashed var(--border);border-radius:var(--r-md)">'
+      +'<div style="font-size:26px;margin-bottom:8px">&#x270E;</div>'
+      +'<div style="font-size:14px;font-weight:800;margin-bottom:4px">'+(q?'No matching notes':'No notes yet')+'</div>'
+      +'<div style="font-size:12px;color:var(--text4);line-height:1.5">Jot anything down &mdash; a reg, a job ref, a reminder. Mention a job ref or plate and it links itself.</div>'
+      +'</div>';
+    return;
+  }
+  var h='';
+  list.forEach(function(n){
+    var d=new Date(n.ts);
+    var when=d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+d.toTimeString().slice(0,5);
+    h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px'+(n.done?';opacity:.55':'')+'">'
+      +'<div style="display:flex;gap:10px;align-items:flex-start">'
+      +'<button onclick="toggleNoteDone(\''+n.id+'\')" style="width:22px;height:22px;border-radius:50%;flex-shrink:0;margin-top:1px;cursor:pointer;border:2px solid '+(n.done?'var(--success);background:var(--success-bg);color:var(--success)':'var(--border2, var(--border));background:none;color:transparent')+';font-size:12px;font-weight:800;line-height:1">&#x2713;</button>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:14px;color:var(--text2);line-height:1.5;white-space:pre-wrap;word-break:break-word'+(n.done?';text-decoration:line-through':'')+'">'+htmlEsc(n.text)+'</div>'
+      +'<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">'
+      +'<span style="font-size:11px;color:var(--text4)">'+when+'</span>'
+      +(n.jobRef?'<button onclick="noteJobOpen(\''+htmlEsc(n.jobRef).replace(/'/g,"\\'")+'\')" style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:100px;background:var(--orange-bg);border:1px solid var(--orange-border);color:var(--orange);cursor:pointer">&#x1F517; '+htmlEsc(n.jobRef)+'</button>':'')
+      +'</div></div>'
+      +'<button onclick="deleteNote(\''+n.id+'\')" style="background:none;border:none;color:var(--text4);font-size:15px;cursor:pointer;flex-shrink:0;padding:2px">&#x1F5D1;</button>'
+      +'</div></div>';
+  });
+  box.innerHTML=h;
+}
+function openNotesPanel(){
+  NOTES_SEARCH='';
+  var CHIPS=['Damage found','Keys left with','Waiting at compound','Call BCA','Fuel receipt to log'];
+  var overlay=document.createElement('div');
+  overlay.id='notesPanelOverlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:flex-end;justify-content:center';
+  var chipsHTML='';
+  CHIPS.forEach(function(c,ci){
+    chipsHTML+='<button class="nt-chip" data-c="'+ci+'" style="font-size:12px;font-weight:700;padding:6px 12px;border-radius:100px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;white-space:nowrap">'+c+'</button>';
+  });
+  overlay.innerHTML='<div style="background:var(--card);backdrop-filter:blur(16px);border-radius:20px 20px 0 0;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 -4px 32px rgba(0,0,0,.35)">'
+    +'<div style="padding:20px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">'
+    +'<div><div style="font-size:18px;font-weight:800">Notes</div><div style="font-size:12px;color:var(--text4)" id="notesCount"></div></div>'
+    +'<button class="nt-close" style="background:var(--bg3);border:none;border-radius:100px;width:32px;height:32px;font-size:16px;color:var(--text3);cursor:pointer">&#x2715;</button>'
+    +'</div>'
+    +'<div style="padding:14px 20px 0;flex-shrink:0">'
+    +'<textarea id="noteInput" placeholder="Jot anything down &mdash; reg, job ref, reminder..." style="width:100%;min-height:64px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:14px;box-sizing:border-box;resize:none"></textarea>'
+    +'<div style="display:flex;gap:6px;overflow-x:auto;padding:8px 0;-webkit-overflow-scrolling:touch">'+chipsHTML+'</div>'
+    +'<button id="noteAddBtn" style="width:100%;padding:12px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-md);font-size:14px;font-weight:800;color:var(--success);cursor:pointer;margin-bottom:10px">+ Add note</button>'
+    +'<input id="noteSearch" placeholder="&#x1F50D; Search your notes..." style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:10px">'
+    +'</div>'
+    +'<div style="overflow-y:auto;flex:1;padding:0 20px 28px" id="notesListBox"></div>'
+    +'</div>';
+  document.body.appendChild(overlay);
+  var updateCount=function(){
+    var c=document.getElementById('notesCount');
+    if(c)c.textContent=DB.notes.length+(DB.notes.length===1?' note':' notes')+' · on this device';
+  };
+  updateCount();
+  renderNotesList();
+  overlay.querySelector('.nt-close').addEventListener('click',function(){overlay.remove();});
+  overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
+  overlay.querySelector('#noteAddBtn').addEventListener('click',function(){
+    var inp=overlay.querySelector('#noteInput');
+    if(addNote(inp.value)){
+      inp.value='';
+      updateCount();renderNotesList();
+      var linked=DB.notes[0]&&DB.notes[0].jobRef;
+      showToast(linked?('✓ Note saved · linked to '+DB.notes[0].jobRef):'✓ Note saved');
+    }
+  });
+  overlay.querySelector('#noteSearch').addEventListener('input',function(){
+    NOTES_SEARCH=this.value;
+    renderNotesList();
+  });
+  var chipBtns=overlay.querySelectorAll('.nt-chip');
+  for(var i=0;i<chipBtns.length;i++){
+    chipBtns[i].addEventListener('click',function(){
+      var inp=overlay.querySelector('#noteInput');
+      var add=CHIPS[parseInt(this.getAttribute('data-c'),10)];
+      inp.value=(inp.value?inp.value+' ':'')+add+' ';
+      inp.focus();
+    });
+  }
 }
 
 // --- Streak ---
@@ -2377,6 +2510,25 @@ function tryAutoDetectPeriod(idx){
     showToast('Could not auto-detect — no matching income found');
     showPayslipPeriodPrompt(idx);
   }
+}
+function psMarkPaid(i){
+  var ps=PAYSLIPS[i];
+  if(!ps||!ps.items||!ps.items.length){showToast('No payslip lines to apply');return;}
+  if(!ps.periodFrom||!ps.periodTo){showToast('Set the pay period first');return;}
+  var _psCo=_psSlipCompany(ps);
+  var inc=DB.income.filter(function(e){return inDateRange(e.date,ps.periodFrom,ps.periodTo)&&(!_psCo||!e.company||_psCoMatch(_psCo,e.company));});
+  var exp=DB.expenses.filter(function(e){return inDateRange(e.date,ps.periodFrom,ps.periodTo)&&isReimbursedCat(e.category)&&(!_psCo||!e.company||_psCoMatch(_psCo,e.company));});
+  var mr=fuzzyMatchPayslip(ps.items,inc.concat(exp));
+  var n=0;
+  mr.matched.forEach(function(g){
+    var ref=g.entry&&g.entry.jobRef;
+    if(!ref)return;
+    var jm=jobMeta(ref);
+    if(g.entry.incomeType!==undefined){if(!jm.paidJob){jm.paidJob=true;n++;}}
+    else{if(!jm.paidTravel){jm.paidTravel=true;n++;}}
+  });
+  saveDB();render(CTAB);
+  showToast(n>0?('✓ Marked '+n+' payment line'+(n===1?'':'s')+' as paid'):'Nothing new to tick off');
 }
 var _PS_STOPWORDS={a:1,the:1,and:1,for:1,to:1,of:1,in:1,on:1,at:1,by:1,job:1,delivery:1,pay:1,ltd:1,limited:1};
 function _psNorm(s){return(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();}
@@ -3000,7 +3152,7 @@ function dashJobCardHTML(x){
   }
   return '<div class="job-card" data-jid="'+x.id+'" onclick="dashOpenJob(this)" style="flex-direction:column;align-items:stretch;gap:0">'
     +'<div style="display:flex;justify-content:space-between;align-items:center">'
-    +'<div class="job-card-left"><div class="job-card-top">'+cobadge(x.company)+'<span class="job-card-ref">'+htmlEsc(x.jobRef||'Job')+'</span></div>'
+    +'<div class="job-card-left"><div class="job-card-top">'+cobadge(x.company)+'<span class="job-card-ref">'+htmlEsc(x.jobRef||'Job')+'</span>'+jobStatusChip(x.jobRef)+'</div>'
     +'<div class="job-card-meta">'+fdateShort(x.date)+(x.miles?' &middot; '+htmlEsc(String(x.miles))+' mi':'')+'</div></div>'
     +'<div class="job-card-right">'
     +(deduct>0
@@ -3592,6 +3744,19 @@ function initJobCardDrag(){
   });
 }
 
+function jobMeta(ref){
+  if(!ref)return null;
+  if(!DB.jobs[ref])DB.jobs[ref]={status:'',note:'',abortCode:'',abortReason:'',completedAt:'',paidJob:false,paidTravel:false};
+  return DB.jobs[ref];
+}
+function jobStatusChip(ref){
+  var jm=ref?DB.jobs[ref]:null;
+  if(!jm||!jm.status)return '';
+  var map={active:['&#x23F1; Active','var(--orange-bg)','var(--orange)'],complete:['&#x2713; Complete','var(--success-bg)','var(--success)'],aborted:['&#x2715; Aborted','var(--danger-bg)','var(--danger)']};
+  var m=map[jm.status];
+  if(!m)return '';
+  return '<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:100px;background:'+m[1]+';color:'+m[2]+';white-space:nowrap">'+m[0]+'</span>';
+}
 function jobMetaPick(entries,field){
   for(var i=0;i<entries.length;i++){
     var v=entries[i][field];
@@ -3616,7 +3781,7 @@ function jobOverviewCardHTML(g,key){
   var fallbackId=String(firstItem.id||'');
   return '<div class="job-card" data-key="'+(key||detailRef)+'" data-date="'+g.date+'" data-detail-ref="'+detailRef+'" data-detail-fid="'+fallbackId+'" onclick="openJobDetail(this.dataset.detailRef,this.dataset.detailFid)" style="flex-direction:column;align-items:stretch;gap:0;cursor:pointer;margin-bottom:10px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center">'
-    +'<div class="job-card-left"><div class="job-card-top">'+cobadge(g.company)+'<span class="job-card-ref">'+htmlEsc(g.ref||'Job')+'</span></div>'
+    +'<div class="job-card-left"><div class="job-card-top">'+cobadge(g.company)+'<span class="job-card-ref">'+htmlEsc(g.ref||'Job')+'</span>'+jobStatusChip(g.ref)+'</div>'
     +'<div class="job-card-meta">'+fdateShort(g.date)+(miles?' &middot; '+htmlEsc(String(miles))+' mi':'')+(g.items.length>1?' &middot; '+g.items.length+' entries':'')+'</div></div>'
     +'<div class="job-card-right">'
     +(g.deductTotal>0
@@ -3642,6 +3807,7 @@ function openJobDetail(jobRef,fallbackId){
   }
   if(!incomeEntries.length)return;
   var firstEntry=incomeEntries[0];
+  var jm=jobMeta(jobRef);
   var company=firstEntry.company,date=firstEntry.date;
   var miles=jobMetaPick(incomeEntries,'miles'),registration=jobMetaPick(incomeEntries,'registration');
   var startPostcode=jobMetaPick(incomeEntries,'startPostcode'),endPostcode=jobMetaPick(incomeEntries,'endPostcode');
@@ -3713,7 +3879,7 @@ function openJobDetail(jobRef,fallbackId){
     expRowsHTML='<div style="font-size:13px;color:var(--text4);padding:8px 0">No expenses linked to this job.</div>';
   }
   var metaHTML='<div style="font-size:13px;color:var(--text4);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap">'
-    +'<span>'+fdateShort(date)+'</span>'
+    +'<span>'+fdateShort(date)+'</span>'+jobStatusChip(jobRef)
     +(miles?'<span>&#x1F4CD; '+miles+' mi</span>':'')
     +(totalMins>0?'<span>&#x23F1; '+fmtHours(totalMins)+'</span>':'')
     +(registration?'<span>&#x1F697; '+registration+'</span>':'')
@@ -3746,7 +3912,22 @@ function openJobDetail(jobRef,fallbackId){
     +'<span style="font-size:14px;font-weight:700;color:var(--success)">Net Income</span>'
     +'<span style="font-size:20px;font-weight:800;color:var(--success)">'+money(netIncome)+'</span>'
     +'</div>'
+    +(jm?('<div style="margin-top:16px;padding:14px 16px;background:var(--bg3);border-radius:var(--r-md);border:1px solid var(--border)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em">Payment</span>'+jobStatusChip(jobRef)+'</div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>Job pay</span>'+(jm.paidJob?'<span style="color:var(--success);font-weight:800">Paid &#x2713;</span>':'<span style="color:var(--text4);font-weight:700">Awaiting</span>')+'</div>'
+      +(totalReimb>0?'<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>Travel / reimbursed</span>'+(jm.paidTravel?'<span style="color:var(--success);font-weight:800">Paid &#x2713;</span>':'<span style="color:var(--text4);font-weight:700">Awaiting</span>')+'</div>':'')
+      +'<div style="font-size:11px;color:var(--text4);margin-top:6px">Ticked automatically when a payslip cross-check matches this job.</div>'
+      +((jm.status==='aborted'&&(jm.abortCode||jm.abortReason))?'<div style="margin-top:8px;font-size:12px;font-weight:600;color:var(--danger)">Abort'+(jm.abortCode?' code: '+htmlEsc(jm.abortCode):'')+(jm.abortReason?' &mdash; '+htmlEsc(jm.abortReason):'')+'</div>':'')
+      +(jm.note?'<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)"><div style="font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Job note</div><div style="font-size:13px;color:var(--text2);white-space:pre-wrap">'+htmlEsc(jm.note)+'</div></div>':'')
+      +'</div>'):'')
     +'<div style="height:20px"></div>'
+    +'</div>'
+    +'<div style="padding:12px 20px 0;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">'
+    +(jm&&(jm.status==='complete'||jm.status==='aborted')
+      ?'<button class="jd-reopen" style="flex:1;padding:12px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">&#x21BA; Reopen Job</button>'
+      :'<button class="jd-abort" style="flex:1;padding:12px 8px;background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--danger);cursor:pointer">&#x2715; Abort</button>'
+      +'<button class="jd-complete" style="flex:2;padding:12px 8px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--success);cursor:pointer">&#x2713; Complete Job</button>')
+    +'<button class="jd-note" style="flex:1;padding:12px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">&#x270E; Note</button>'
     +'</div>'
     +'<div style="padding:12px 20px 32px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">'
     +'<button class="jd-edit" style="flex:1;padding:13px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">Edit Job</button>'
@@ -3759,9 +3940,73 @@ function openJobDetail(jobRef,fallbackId){
   var prefillRef=(!isSingleton&&jobRef)?jobRef:'';
   overlay.querySelector('.jd-close').addEventListener('click',function(){overlay.remove();});
   overlay.querySelector('.jd-edit').addEventListener('click',function(){overlay.remove();openSheet('income',editId);});
+  var _jdComplete=overlay.querySelector('.jd-complete');
+  if(_jdComplete)_jdComplete.addEventListener('click',function(){
+    jm.status='complete';jm.completedAt=new Date().toISOString().slice(0,10);
+    saveDB();overlay.remove();render(CTAB);showToast('✓ Job marked complete');
+  });
+  var _jdAbort=overlay.querySelector('.jd-abort');
+  if(_jdAbort)_jdAbort.addEventListener('click',function(){
+    overlay.remove();showAbortPrompt(jobRef,fallbackId);
+  });
+  var _jdReopen=overlay.querySelector('.jd-reopen');
+  if(_jdReopen)_jdReopen.addEventListener('click',function(){
+    swipeConfirm('Reopen this job and mark it active again?',function(){
+      jm.status='active';saveDB();overlay.remove();render(CTAB);showToast('Job reopened');
+    },'Reopen','Cancel');
+  });
+  var _jdNote=overlay.querySelector('.jd-note');
+  if(_jdNote)_jdNote.addEventListener('click',function(){
+    overlay.remove();showJobNotePrompt(jobRef,fallbackId);
+  });
   overlay.querySelector('.jd-addinc').addEventListener('click',function(){window._incomePrefill={company:company,jobRef:prefillRef};overlay.remove();openSheet('income','');});
   overlay.querySelector('.jd-addexp').addEventListener('click',function(){window._expensePrefill={company:company,jobRef:prefillRef};overlay.remove();openSheet('expense','');});
   overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+}
+function showAbortPrompt(jobRef,fallbackId){
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px';
+  overlay.innerHTML='<div style="background:var(--card);border-radius:20px;width:100%;max-width:420px;padding:22px">'
+    +'<div style="font-size:17px;font-weight:800;margin-bottom:6px">Abort this job?</div>'
+    +'<div style="font-size:13px;color:var(--text3);margin-bottom:14px">The job stays in your log with an Aborted badge. Income and expenses are not changed &mdash; log any abort fee as normal. You can reopen it later.</div>'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Abort code (optional)</div>'
+    +'<input class="ab-code" placeholder="e.g. CXL12345" style="width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:14px;margin-bottom:12px;box-sizing:border-box">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Reason (optional)</div>'
+    +'<textarea class="ab-reason" placeholder="e.g. Vehicle not at site, customer cancelled" style="width:100%;min-height:64px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:14px;margin-bottom:16px;box-sizing:border-box;resize:vertical"></textarea>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button class="ab-cancel" style="flex:1;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-weight:700;color:var(--text2);cursor:pointer">Cancel</button>'
+    +'<button class="ab-go" style="flex:1;padding:12px;background:var(--danger-bg);border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-weight:800;color:var(--danger);cursor:pointer">&#x2715; Abort</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+  overlay.querySelector('.ab-cancel').addEventListener('click',function(){overlay.remove();openJobDetail(jobRef,fallbackId);});
+  overlay.querySelector('.ab-go').addEventListener('click',function(){
+    var jm=jobMeta(jobRef);
+    jm.status='aborted';
+    jm.abortCode=overlay.querySelector('.ab-code').value.trim();
+    jm.abortReason=overlay.querySelector('.ab-reason').value.trim();
+    saveDB();overlay.remove();render(CTAB);showToast('Job marked as aborted');
+  });
+  overlay.onclick=function(e){if(e.target===overlay){overlay.remove();openJobDetail(jobRef,fallbackId);}};
+}
+function showJobNotePrompt(jobRef,fallbackId){
+  var jm=jobMeta(jobRef);
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px';
+  overlay.innerHTML='<div style="background:var(--card);border-radius:20px;width:100%;max-width:420px;padding:22px">'
+    +'<div style="font-size:17px;font-weight:800;margin-bottom:10px">Job note</div>'
+    +'<textarea class="jn-text" placeholder="Route notes, damage found, keys left with, waiting time..." style="width:100%;min-height:110px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:14px;margin-bottom:16px;box-sizing:border-box;resize:vertical"></textarea>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button class="jn-cancel" style="flex:1;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-weight:700;color:var(--text2);cursor:pointer">Cancel</button>'
+    +'<button class="jn-save" style="flex:1;padding:12px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-md);font-size:14px;font-weight:800;color:var(--success);cursor:pointer">Save note</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+  overlay.querySelector('.jn-text').value=jm&&jm.note?jm.note:'';
+  overlay.querySelector('.jn-cancel').addEventListener('click',function(){overlay.remove();openJobDetail(jobRef,fallbackId);});
+  overlay.querySelector('.jn-save').addEventListener('click',function(){
+    if(jm)jm.note=overlay.querySelector('.jn-text').value.trim();
+    saveDB();overlay.remove();showToast('Note saved');openJobDetail(jobRef,fallbackId);
+  });
+  overlay.onclick=function(e){if(e.target===overlay){overlay.remove();openJobDetail(jobRef,fallbackId);}};
 }
 
 // --- EXPENSES ---
@@ -3935,6 +4180,7 @@ function rSummary(){
           payslipHTML+=buildPayslipGroupHTML(_matched,'matched',i);
           payslipHTML+=buildPayslipGroupHTML(_missing,'missing',i);
           payslipHTML+=buildPayslipGroupHTML(_extra,'extra',i);
+          payslipHTML+='<div style="padding:12px 16px 0"><button onclick="psMarkPaid('+i+')" style="width:100%;padding:11px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--success);cursor:pointer">&#x2713; Tick off paid jobs from this payslip</button></div>';
           payslipHTML+='</div><div style="padding:16px">';
         } else {
           var _loggedFb=0;
