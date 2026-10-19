@@ -299,6 +299,14 @@ npm test        # build, then run the browser tests in test/ (headless Chromium 
 
 Always commit the rebuilt `docs/` alongside changes to `index.html`.
 
+### Supabase security
+`supabase/rls.sql` turns on Row Level Security so each signed-in user can only read and change their own `users`, `income` and `expenses` rows and their own files in the `Receipts` bucket. Run it once in the Supabase SQL editor; it is safe to re-run.
+
+### AI worker
+`platetrack-ai-worker/` is the Cloudflare Worker behind receipt/payslip scanning and the AI assistant. It only serves signed-in users calling from the app's own site, fixes the model and output cap server-side, and keeps the Anthropic key as a worker secret. The **Deploy AI worker** GitHub Action deploys it on every change to that folder on `main` (repo secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`). `cd platetrack-ai-worker && npm test` runs its tests.
+
+Ideas for later live in `BACKLOG.md`.
+
 ### UK Tax Calculations
 Estimates use 2026/27 rates for England, Wales & NI (`ukTax()` in `index.html`):
 - Personal Allowance: £12,570, reduced by £1 for every £2 of profit over £100,000

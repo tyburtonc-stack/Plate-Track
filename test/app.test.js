@@ -213,3 +213,103 @@ test('notes auto-link to jobs by dashed job ref or by plate typed with a space',
   assert.deepEqual(r, ['J-85CA-5D30', 'J-85CA-5D30', '', '']);
   await close();
 });
+
+// Dashboard stat chips read as text, e.g. { 'This Week': '£70.00', ... }
+async function dashStats(page) {
+  return page.evaluate(() => {
+    showTab(0);
+    const out = {};
+    document.querySelectorAll('#pg0 .stat-chip').forEach(c => { out[c.querySelector('.stat-chip-label').textContent] = c.querySelector('.stat-chip-val').textContent; });
+    out.hero = document.querySelector('#pg0 .dash-hero-amount').textContent;
+    return out;
+  });
+}
+
+test('dashboard figures are profit: expenses reduce today, this week and this month', async () => {
+  const { page, errors, close } = await openApp({ income: [], expenses: [] });
+  await page.evaluate(() => {
+    const td = today();
+    DB.income.push({ id: 'i1', date: td, company: 'BCA', amount: '100', jobRef: 'J1' });
+    DB.expenses.push({ id: 'e1', date: td, category: 'Fuel (Not Reimbursed)', amount: '30' });
+    DB.expenses.push({ id: 'e2', date: td, category: 'Fuel (Reimbursed)', amount: '20' }); // paid back: no effect
+    saveDB();
+  });
+  let s = await dashStats(page);
+  assert.equal(s.hero, '£70.00');
+  assert.equal(s['This Week'], '£70.00');
+  assert.equal(s['This Month'], '£70.00');
+
+  // adding another expense today must lower every figure straight away
+  await page.evaluate(() => { DB.expenses.push({ id: 'e3', date: today(), category: 'Tolls (Not Reimbursed)', amount: '15' }); saveDB(); });
+  s = await dashStats(page);
+  assert.equal(s.hero, '£55.00');
+  assert.equal(s['This Week'], '£55.00');
+  assert.equal(s['This Month'], '£55.00');
+
+  // a loss shows as a negative number, not £0
+  await page.evaluate(() => { DB.expenses.push({ id: 'e4', date: today(), category: 'Hotel (Not Reimbursed)', amount: '80' }); saveDB(); });
+  s = await dashStats(page);
+  assert.equal(s.hero, '-£25.00');
+  assert.equal(s['This Week'], '-£25.00');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('tax pot covers the current tax year only, and multi-year tax is worked out per year', async () => {
+  const { page, close } = await openApp({ income: [], expenses: [] });
+  const r = await page.evaluate(() => {
+    const td = today(), ty = tyear(td);
+    // £30k this tax year, plus £30k three years ago
+    DB.income.push({ id: 'a', date: td, company: 'BCA', amount: '30000' });
+    const old = new Date(); old.setFullYear(old.getFullYear() - 3);
+    DB.income.push({ id: 'b', date: old.toISOString().slice(0, 10), company: 'BCA', amount: '30000' });
+    saveDB(); showTab(0);
+    const pot = [...document.querySelectorAll('#pg0 .stat-chip')].find(c => c.textContent.includes('Tax Pot'));
+    const t = calcs();
+    return { pot: pot.querySelector('.stat-chip-val').textContent, potSub: pot.querySelector('.stat-chip-sub').textContent, ty, tax: t.tax, ni: t.ni };
+  });
+  assert.equal(r.pot, '£4531.80');               // 3486 tax + 1045.80 NI on this year's £30k
+  assert.equal(r.potSub, 'est. ' + r.ty);
+  assert.ok(Math.abs(r.tax - 2 * 3486) < 0.01);  // two separate years, not one £60k year
+  assert.ok(Math.abs(r.ni - 2 * 1045.8) < 0.01);
+  await close();
+});
+
+test('company filter: profit only deducts that company\'s expenses', async () => {
+  const { page, close } = await openApp({ income: [
+    { id: 'i1', date: '2026-10-01', company: 'BCA', amount: '200' },
+    { id: 'i2', date: '2026-10-01', company: 'Engineius', amount: '300' } ], expenses: [
+    { id: 'e1', date: '2026-10-01', company: 'BCA', category: 'Fuel (Not Reimbursed)', amount: '50' },
+    { id: 'e2', date: '2026-10-01', company: '', category: 'Other', amount: '40' } ] });
+  const r = await page.evaluate(() => {
+    const all = calcs().profit;
+    FCO = 'BCA'; const bca = calcs().profit; FCO = 'All';
+    return { all, bca };
+  });
+  assert.equal(r.all, 410);  // 500 - 50 - 40
+  assert.equal(r.bca, 150);  // 200 - 50
+  await close();
+});
+
+test('AI requests carry the sign-in token, and signed-out users are asked to sign in', async () => {
+  const { page, close } = await openApp({ income: [], expenses: [] });
+  const r = await page.evaluate(async () => {
+    const sent = [];
+    const realFetch = window.fetch;
+    window.fetch = async (url, opts) => { sent.push({ url, opts }); return new Response('{"content":[{"type":"text","text":"ok"}]}'); };
+    const out = await (await aiFetch({ max_tokens: 10, messages: [{ role: 'user', content: 'hi' }] })).json();
+    const signedOut = { out, calls: sent.length };
+    SUPA_USER = { id: 'u1' }; SUPA_SESSION = { access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 };
+    const ok = await (await aiFetch({ max_tokens: 10, messages: [{ role: 'user', content: 'hi' }] })).json();
+    window.fetch = realFetch;
+    const call = sent[0];
+    return { signedOut, ok, url: call.url, auth: call.opts.headers.Authorization, body: JSON.parse(call.opts.body) };
+  });
+  assert.equal(r.signedOut.calls, 0);
+  assert.match(r.signedOut.out.error.message, /sign in/i);
+  assert.equal(r.ok.content[0].text, 'ok');
+  assert.equal(r.url, 'https://platetrack-ai.tyburtonc.workers.dev/');
+  assert.equal(r.auth, 'Bearer tok');
+  assert.equal(r.body.model, undefined); // the worker picks the model
+  await close();
+});

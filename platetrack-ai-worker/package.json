@@ -1,0 +1,15 @@
+{
+  "name": "platetrack-ai-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "test": "node --test test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.2"
+  }
+}
