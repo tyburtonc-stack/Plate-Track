@@ -142,3 +142,74 @@ test('Diagnostics screen reports status and its test tools work', async () => {
   assert.deepEqual(errors, []);
   await close();
 });
+
+test('notes can be added, ticked, edited and deleted (including old numeric ids)', async () => {
+  const seed = { income: [{ id: '1', date: '2026-10-01', company: 'BCA', amount: '50', jobRef: 'J-77' }], expenses: [],
+    notes: [{ id: 1739000000000, ts: '2026-10-01T09:00:00Z', text: 'Old note with a numeric id', jobRef: '', done: false }] };
+  const { page, errors, close } = await openApp(seed);
+  await page.evaluate(() => { const a = document.getElementById('auth-modal'); if (a) a.style.display = 'none'; openNotesPanel(); });
+  const yes = async () => page.evaluate(() => document.getElementById('sc-yes').click());
+
+  // tick off the old numeric-id note, then delete it
+  await page.evaluate(() => document.querySelector('#notesListBox button[aria-label="Mark done"]').click());
+  assert.equal(await page.evaluate(() => DB.notes[0].done), true);
+  await page.evaluate(() => document.querySelector('#notesListBox button[aria-label="Delete note"]').click());
+  await yes();
+  assert.equal(await page.evaluate(() => DB.notes.length), 0);
+  assert.match(await page.textContent('#notesCount'), /^0 notes/);
+
+  // add a note that links to a job, edit it, then delete it
+  await page.fill('#noteInput', "Keys left with Dave's mate for J-77");
+  await page.evaluate(() => document.getElementById('noteAddBtn').click());
+  assert.equal(await page.evaluate(() => DB.notes[0].jobRef), 'J-77');
+  assert.match(await page.textContent('#notesCount'), /^1 note/);
+  await page.evaluate(() => document.querySelector('#notesListBox button[aria-label="Edit note"]').click());
+  await page.fill('#noteEditText', 'Edited note');
+  await page.evaluate(() => [...document.querySelectorAll('#notesListBox button')].find(b => b.textContent === 'Save').click());
+  assert.equal(await page.evaluate(() => DB.notes[0].text), 'Edited note');
+  await page.evaluate(() => document.querySelector('#notesListBox button[aria-label="Delete note"]').click());
+  await yes();
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('pt9')).notes.length), 0);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('a job note can be deleted', async () => {
+  const seed = { income: [{ id: '1', date: '2026-10-01', company: 'BCA', amount: '50', jobRef: 'J-9' }], expenses: [],
+    jobs: { 'J-9': { status: '', note: 'Scratch on bumper' } } };
+  const { page, errors, close } = await openApp(seed);
+  await page.evaluate(() => showJobNotePrompt('J-9', ''));
+  await page.evaluate(() => document.querySelector('.jn-delete').click());
+  assert.equal(await page.evaluate(() => DB.jobs['J-9'].note), '');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('a cloud pull does not bring back a note deleted on this device', async () => {
+  const { page, close } = await openApp({ income: [], expenses: [], notes: [{ id: 'n1', ts: '2026-10-01T09:00:00Z', text: 'A', done: false }, { id: 'n2', ts: '2026-10-01T09:00:00Z', text: 'B', done: false }] });
+  const result = await page.evaluate(async () => {
+    const cloud = { jobs: DB.jobs, notes: DB.notes.slice() };
+    jobMetaMarkSynced();                                   // device and cloud agree on A + B
+    DB.notes = DB.notes.filter(n => n.id !== 'n2');        // delete B locally; upload hasn't happened
+    const pushed = [];
+    SUPA_USER = { id: 'u1' }; SUPA_SESSION = { access_token: 't' };
+    window.fetch = async (url, opts) => {
+      if (opts && opts.method === 'PATCH') { pushed.push(JSON.parse(opts.body).job_meta); return { ok: true, json: async () => [] }; }
+      return { ok: true, json: async () => [{ job_meta: cloud }] };
+    };
+    await new Promise(r => supaJobMetaPull(r));
+    return { local: DB.notes.map(n => n.id), pushed: pushed.map(j => j.notes.map(n => n.id)) };
+  });
+  assert.deepEqual(result.local, ['n1']);
+  assert.deepEqual(result.pushed, [['n1']]);
+  await close();
+});
+
+test('notes auto-link to jobs by dashed job ref or by plate typed with a space', async () => {
+  const seed = { income: [{ id: '1', date: '2026-10-01', company: 'Engineius', amount: '50', jobRef: 'J-85CA-5D30', registration: 'AB12CDE' },
+                          { id: '2', date: '2026-10-02', company: 'BCA', amount: '40', jobRef: '123456' }], expenses: [] };
+  const { page, close } = await openApp(seed);
+  const r = await page.evaluate(() => [noteAutoLink('keys for j-85ca-5d30 left'), noteAutoLink('Damage on AB12 CDE'), noteAutoLink('ref 1234567 is different'), noteAutoLink('nothing here')]);
+  assert.deepEqual(r, ['J-85CA-5D30', 'J-85CA-5D30', '', '']);
+  await close();
+});

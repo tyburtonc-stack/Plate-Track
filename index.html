@@ -1327,7 +1327,7 @@ function supaSignIn(email,pw,cb){
 
 function supaSignOut(cb){
   if(SUPA_SESSION)fetch(SUPA_URL+'/auth/v1/logout',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_SESSION.access_token}}).catch(function(){});
-  SUPA_SESSION=null;SUPA_USER=null;_jobMetaPulled=false;
+  SUPA_SESSION=null;SUPA_USER=null;_jobMetaPulled=false;try{localStorage.removeItem('pt_jobmeta_synced');}catch(e){}
   try{localStorage.removeItem('pt_sess');}catch(e){}
   if(cb)cb();
 }
@@ -1438,14 +1438,24 @@ function supaCompaniesPull(cb){
 // Until that's run the requests fail quietly and the data just stays on this device.
 // Pushes wait until this session has pulled once, so a fresh device can't overwrite the cloud copy.
 var _jobMetaPulled=false,JOB_META_STATUS='Not synced yet this session';
+// pt_jobmeta_synced holds the last copy agreed with the cloud. If the local copy differs from it,
+// there are edits (e.g. a deleted note) that haven't uploaded yet, and a pull must not undo them.
+function jobMetaJSON(){return JSON.stringify({jobs:DB.jobs||{},notes:DB.notes||[]});}
+function jobMetaMarkSynced(){try{localStorage.setItem('pt_jobmeta_synced',jobMetaJSON());}catch(e){}}
+function jobMetaDirty(){var last=null;try{last=localStorage.getItem('pt_jobmeta_synced');}catch(e){}return last!==null&&last!==jobMetaJSON();}
 function supaJobMetaPush(cb,force){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
   if(!_jobMetaPulled&&!force)return cb&&cb('not_pulled');
+  var sent=jobMetaJSON();
   fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id),{
     method:'PATCH',
     headers:Object.assign(_supaHdr(),{'Prefer':'return=minimal'}),
-    body:JSON.stringify({job_meta:{jobs:DB.jobs||{},notes:DB.notes||[]}})
-  }).then(function(r){if(!r.ok)console.warn('push job_meta',r.status);if(cb)cb(null);}).catch(function(e){if(cb)cb(e.message);});
+    body:JSON.stringify({job_meta:JSON.parse(sent)})
+  }).then(function(r){
+    if(r.ok){try{localStorage.setItem('pt_jobmeta_synced',sent);}catch(e){}}
+    else console.warn('push job_meta',r.status);
+    if(cb)cb(null);
+  }).catch(function(e){if(cb)cb(e.message);});
 }
 function supaJobMetaPull(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
@@ -1457,10 +1467,12 @@ function supaJobMetaPull(cb){
       JOB_META_STATUS='Synced at '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
       var jm=rows.length?rows[0].job_meta:null;
       _jobMetaPulled=true;
+      if(jobMetaDirty()){supaJobMetaPush(cb,true);return;} // local edits win over the older cloud copy
       if(jm&&typeof jm==='object'){
         DB.jobs=jm.jobs&&typeof jm.jobs==='object'?jm.jobs:{};
         DB.notes=Array.isArray(jm.notes)?jm.notes:[];
-        saveDB();render(CTAB);
+        jobMetaMarkSynced();
+        saveDB();render(CTAB);renderNotesList();
         if(cb)cb(null);
       } else {
         supaJobMetaPush(cb,true); // first sync from this account: upload what's on the device
@@ -1496,7 +1508,7 @@ function supaIncomeTypesPull(cb){
 function supaPushAll(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
   var uid=SUPA_USER.id;
-  if(DB.income.length===0&&DB.expenses.length===0)return cb&&cb(null);
+  if(DB.income.length===0&&DB.expenses.length===0){supaJobMetaPush(function(){if(cb)cb(null);});return;}
   var incRows=DB.income.map(function(x){return{id:x.id,user_id:uid,date:x.date,company:x.company||'',income_type:x.incomeType||'',amount:parseFloat(x.amount||0),job_ref:x.jobRef||'',start_time:x.startTime||'',end_time:x.endTime||'',miles:x.miles?parseFloat(x.miles):null,registration:x.registration||'',start_postcode:x.startPostcode||'',end_postcode:x.endPostcode||'',description:x.description||''};});
   var expRows=DB.expenses.map(function(x){return{id:x.id,user_id:uid,date:x.date,category:x.category||'',amount:parseFloat(x.amount||0),company:x.company||'',job_ref:x.jobRef||'',receipt:x.receipt||'',description:x.description||'',receipt_image:x.receiptImage&&x.receiptImage.indexOf('supabase:')===0?x.receiptImage:''};});
   var h=Object.assign(_supaHdr(),{'Prefer':'resolution=merge-duplicates'});
@@ -1997,41 +2009,55 @@ function openNotifications(){
 }
 // --- Global notes ---
 var NOTES_SEARCH='';
+// Link a note to a job when it mentions a job ref (e.g. J-85CA-5D30) or a plate (spaces ignored).
 function noteAutoLink(text){
   var t=(text||'').toUpperCase();
   if(!t)return '';
-  var toks=t.split(/[^A-Z0-9]+/).filter(Boolean);
-  if(!toks.length)return '';
-  var refs={},regs={};
-  DB.income.forEach(function(i){
-    if(i.jobRef)refs[String(i.jobRef).toUpperCase()]=i.jobRef;
-    if(i.registration&&i.jobRef)regs[String(i.registration).replace(/\s+/g,'').toUpperCase()]=i.jobRef;
+  var compact=t.replace(/\s+/g,'');
+  var esc=function(x){return x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');};
+  var found='';
+  DB.income.some(function(i){
+    if(!i.jobRef)return false;
+    var ref=String(i.jobRef).toUpperCase().trim();
+    if(ref&&new RegExp('(^|[^A-Z0-9])'+esc(ref)+'($|[^A-Z0-9])').test(t)){found=i.jobRef;return true;}
+    var reg=String(i.registration||'').replace(/\s+/g,'').toUpperCase();
+    if(reg.length>=5&&compact.indexOf(reg)>=0){found=i.jobRef;return true;}
+    return false;
   });
-  for(var k=0;k<toks.length;k++){
-    if(refs[toks[k]])return refs[toks[k]];
-    if(regs[toks[k]])return regs[toks[k]];
-  }
-  return '';
+  return found;
 }
 function addNote(text){
   var tx=(text||'').trim();
   if(!tx){showToast('Write something first');return false;}
-  DB.notes.unshift({id:newid(),ts:new Date().toISOString(),text:tx,jobRef:noteAutoLink(tx),done:false});
+  DB.notes.unshift({id:String(newid()),ts:new Date().toISOString(),text:tx,jobRef:noteAutoLink(tx),done:false});
   saveDB();
   return true;
 }
+// Note ids were numbers in older data but arrive from buttons as text, so always compare as strings.
+function findNote(id){return DB.notes.filter(function(x){return String(x.id)===String(id);})[0];}
 function toggleNoteDone(id){
-  var n=DB.notes.filter(function(x){return x.id===id;})[0];
+  var n=findNote(id);
   if(!n)return;
   n.done=!n.done;
   saveDB();renderNotesList();
 }
 function deleteNote(id){
   swipeConfirm('Delete this note?',function(){
-    DB.notes=DB.notes.filter(function(x){return x.id!==id;});
+    DB.notes=DB.notes.filter(function(x){return String(x.id)!==String(id);});
     saveDB();renderNotesList();showToast('Note deleted');
   },'Delete','Cancel');
 }
+var NOTE_EDITING='';
+function editNote(id){NOTE_EDITING=String(id);renderNotesList();var t=document.getElementById('noteEditText');if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length);}}
+function saveNoteEdit(id){
+  var n=findNote(id),t=document.getElementById('noteEditText');
+  if(!n||!t)return;
+  var tx=t.value.trim();
+  if(!tx){NOTE_EDITING='';deleteNote(id);return;}
+  n.text=tx;n.jobRef=noteAutoLink(tx);NOTE_EDITING='';
+  saveDB();renderNotesList();showToast('Note updated');
+}
+function cancelNoteEdit(){NOTE_EDITING='';renderNotesList();}
 function noteJobOpen(ref){
   var ov=document.getElementById('notesPanelOverlay');
   if(ov)ov.remove();
@@ -2040,6 +2066,8 @@ function noteJobOpen(ref){
 function renderNotesList(){
   var box=document.getElementById('notesListBox');
   if(!box)return;
+  var cnt=document.getElementById('notesCount');
+  if(cnt)cnt.textContent=DB.notes.length+(DB.notes.length===1?' note':' notes')+(SUPA_USER?' · synced':' · on this device');
   var q=NOTES_SEARCH.toLowerCase();
   var list=DB.notes.filter(function(n){return !q||n.text.toLowerCase().indexOf(q)>=0||(n.jobRef&&n.jobRef.toLowerCase().indexOf(q)>=0);});
   if(!list.length){
@@ -2052,24 +2080,37 @@ function renderNotesList(){
   }
   var h='';
   list.forEach(function(n){
+    var nid=htmlEsc(String(n.id));
+    if(NOTE_EDITING===String(n.id)){
+      h+='<div style="background:var(--bg2);border:1px solid var(--gold, var(--border));border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px">'
+        +'<textarea id="noteEditText" style="font-family:inherit;width:100%;min-height:72px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:14px;box-sizing:border-box;resize:vertical">'+htmlEsc(n.text)+'</textarea>'
+        +'<div style="display:flex;gap:8px;margin-top:8px">'
+        +'<button onclick="cancelNoteEdit()" style="flex:1;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">Cancel</button>'
+        +'<button onclick="saveNoteEdit(\''+nid+'\')" style="flex:1;padding:10px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-md);font-size:13px;font-weight:800;color:var(--success);cursor:pointer">Save</button>'
+        +'</div></div>';
+      return;
+    }
     var d=new Date(n.ts);
     var when=d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+d.toTimeString().slice(0,5);
     h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px'+(n.done?';opacity:.55':'')+'">'
       +'<div style="display:flex;gap:10px;align-items:flex-start">'
-      +'<button onclick="toggleNoteDone(\''+n.id+'\')" style="width:22px;height:22px;border-radius:50%;flex-shrink:0;margin-top:1px;cursor:pointer;border:2px solid '+(n.done?'var(--success);background:var(--success-bg);color:var(--success)':'var(--border2, var(--border));background:none;color:transparent')+';font-size:12px;font-weight:800;line-height:1">&#x2713;</button>'
+      +'<button aria-label="Mark done" onclick="toggleNoteDone(\''+nid+'\')" style="width:22px;height:22px;border-radius:50%;flex-shrink:0;margin-top:1px;cursor:pointer;border:2px solid '+(n.done?'var(--success);background:var(--success-bg);color:var(--success)':'var(--border2, var(--border));background:none;color:transparent')+';font-size:12px;font-weight:800;line-height:1">&#x2713;</button>'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:14px;color:var(--text2);line-height:1.5;white-space:pre-wrap;word-break:break-word'+(n.done?';text-decoration:line-through':'')+'">'+htmlEsc(n.text)+'</div>'
+      +'<div onclick="editNote(\''+nid+'\')" style="cursor:text;font-size:14px;color:var(--text2);line-height:1.5;white-space:pre-wrap;word-break:break-word'+(n.done?';text-decoration:line-through':'')+'">'+htmlEsc(n.text)+'</div>'
       +'<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">'
       +'<span style="font-size:11px;color:var(--text4)">'+when+'</span>'
-      +(n.jobRef?'<button onclick="noteJobOpen(\''+htmlEsc(n.jobRef).replace(/'/g,"\\'")+'\')" style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:100px;background:var(--orange-bg);border:1px solid var(--orange-border);color:var(--orange);cursor:pointer">&#x1F517; '+htmlEsc(n.jobRef)+'</button>':'')
+      +(n.jobRef?'<button data-ref="'+htmlEsc(n.jobRef)+'" onclick="noteJobOpen(this.dataset.ref)" style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:100px;background:var(--orange-bg);border:1px solid var(--orange-border);color:var(--orange);cursor:pointer">&#x1F517; '+htmlEsc(n.jobRef)+'</button>':'')
       +'</div></div>'
-      +'<button onclick="deleteNote(\''+n.id+'\')" style="background:none;border:none;color:var(--text4);font-size:15px;cursor:pointer;flex-shrink:0;padding:2px">&#x1F5D1;</button>'
+      +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
+      +'<button aria-label="Delete note" onclick="deleteNote(\''+nid+'\')" style="background:none;border:none;color:var(--text4);font-size:17px;cursor:pointer;padding:6px">&#x1F5D1;</button>'
+      +'<button aria-label="Edit note" onclick="editNote(\''+nid+'\')" style="background:none;border:none;color:var(--text4);font-size:15px;cursor:pointer;padding:6px">&#x270E;</button>'
+      +'</div>'
       +'</div></div>';
   });
   box.innerHTML=h;
 }
 function openNotesPanel(){
-  NOTES_SEARCH='';
+  NOTES_SEARCH='';NOTE_EDITING='';
   var CHIPS=['Damage found','Keys left with','Waiting at compound','Call BCA','Fuel receipt to log'];
   var overlay=document.createElement('div');
   overlay.id='notesPanelOverlay';
@@ -2084,7 +2125,7 @@ function openNotesPanel(){
     +'<button class="nt-close" style="background:var(--bg3);border:none;border-radius:100px;width:32px;height:32px;font-size:16px;color:var(--text3);cursor:pointer">&#x2715;</button>'
     +'</div>'
     +'<div style="padding:14px 20px 0;flex-shrink:0">'
-    +'<textarea id="noteInput" placeholder="Jot anything down &mdash; reg, job ref, reminder..." style="width:100%;min-height:64px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:14px;box-sizing:border-box;resize:none"></textarea>'
+    +'<textarea id="noteInput" placeholder="Jot anything down &mdash; reg, job ref, reminder..." style="font-family:inherit;width:100%;min-height:64px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:14px;box-sizing:border-box;resize:none"></textarea>'
     +'<div style="display:flex;gap:6px;overflow-x:auto;padding:8px 0;-webkit-overflow-scrolling:touch">'+chipsHTML+'</div>'
     +'<button id="noteAddBtn" style="width:100%;padding:12px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-md);font-size:14px;font-weight:800;color:var(--success);cursor:pointer;margin-bottom:10px">+ Add note</button>'
     +'<input id="noteSearch" placeholder="&#x1F50D; Search your notes..." style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:10px">'
@@ -2092,11 +2133,6 @@ function openNotesPanel(){
     +'<div style="overflow-y:auto;flex:1;padding:0 20px 28px" id="notesListBox"></div>'
     +'</div>';
   document.body.appendChild(overlay);
-  var updateCount=function(){
-    var c=document.getElementById('notesCount');
-    if(c)c.textContent=DB.notes.length+(DB.notes.length===1?' note':' notes')+(SUPA_USER?' · synced':' · on this device');
-  };
-  updateCount();
   renderNotesList();
   overlay.querySelector('.nt-close').addEventListener('click',function(){overlay.remove();});
   overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
@@ -2104,7 +2140,7 @@ function openNotesPanel(){
     var inp=overlay.querySelector('#noteInput');
     if(addNote(inp.value)){
       inp.value='';
-      updateCount();renderNotesList();
+      renderNotesList();
       var linked=DB.notes[0]&&DB.notes[0].jobRef;
       showToast(linked?('✓ Note saved · linked to '+DB.notes[0].jobRef):'✓ Note saved');
     }
@@ -4242,8 +4278,9 @@ function showJobNotePrompt(jobRef,fallbackId){
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px';
   overlay.innerHTML='<div style="background:var(--card);border-radius:20px;width:100%;max-width:420px;padding:22px">'
     +'<div style="font-size:17px;font-weight:800;margin-bottom:10px">Job note</div>'
-    +'<textarea class="jn-text" placeholder="Route notes, damage found, keys left with, waiting time..." style="width:100%;min-height:110px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:14px;margin-bottom:16px;box-sizing:border-box;resize:vertical"></textarea>'
+    +'<textarea class="jn-text" placeholder="Route notes, damage found, keys left with, waiting time..." style="font-family:inherit;width:100%;min-height:110px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg3);color:var(--text);font-size:14px;margin-bottom:16px;box-sizing:border-box;resize:vertical"></textarea>'
     +'<div style="display:flex;gap:8px">'
+    +(jm&&jm.note?'<button class="jn-delete" style="flex:1;padding:12px;background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:var(--r-md);font-size:14px;font-weight:700;color:var(--danger);cursor:pointer">Delete</button>':'')
     +'<button class="jn-cancel" style="flex:1;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-weight:700;color:var(--text2);cursor:pointer">Cancel</button>'
     +'<button class="jn-save" style="flex:1;padding:12px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-md);font-size:14px;font-weight:800;color:var(--success);cursor:pointer">Save note</button>'
     +'</div></div>';
@@ -4251,8 +4288,14 @@ function showJobNotePrompt(jobRef,fallbackId){
   overlay.querySelector('.jn-text').value=jm&&jm.note?jm.note:'';
   overlay.querySelector('.jn-cancel').addEventListener('click',function(){overlay.remove();openJobDetail(jobRef,fallbackId);});
   overlay.querySelector('.jn-save').addEventListener('click',function(){
-    if(jm)jm.note=overlay.querySelector('.jn-text').value.trim();
-    saveDB();overlay.remove();showToast('Note saved');openJobDetail(jobRef,fallbackId);
+    var tx=overlay.querySelector('.jn-text').value.trim();
+    if(jm)jm.note=tx;
+    saveDB();overlay.remove();showToast(tx?'Note saved':'Note deleted');openJobDetail(jobRef,fallbackId);
+  });
+  var del=overlay.querySelector('.jn-delete');
+  if(del)del.addEventListener('click',function(){
+    if(jm)jm.note='';
+    saveDB();overlay.remove();showToast('Note deleted');openJobDetail(jobRef,fallbackId);
   });
   overlay.onclick=function(e){if(e.target===overlay){overlay.remove();openJobDetail(jobRef,fallbackId);}};
 }
