@@ -95,7 +95,8 @@ test('local receipts move into IndexedDB, still show, and are included in backup
   const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
   const { page, errors, close } = await openApp({ income: [], expenses: [expense(7, { receiptImage: png })] });
   await page.waitForFunction(() => DB.expenses[0].receiptImage === 'idb:7', null, { timeout: 5000 });
-  assert.ok(!(await page.evaluate(() => localStorage.getItem('pt9'))).includes('base64'));
+  // The migration saves once after the whole batch, so wait for the stored copy to drop the image.
+  await page.waitForFunction(() => !localStorage.getItem('pt9').includes('base64'), null, { timeout: 5000 });
   await page.evaluate(() => showTab(2));
   await page.waitForFunction(() => !!(document.querySelector('#pg2 img.receipt-thumb') || {}).src, null, { timeout: 5000 });
   const src = await page.evaluate(() => document.querySelector('#pg2 img.receipt-thumb').src);
@@ -122,4 +123,22 @@ test('signed-out users with data see the backup reminder until they back up', as
 test('build stamps the service worker cache with a content hash', () => {
   const sw = fs.readFileSync(path.join(DOCS, 'sw.js'), 'utf8');
   assert.match(sw, /const CACHE_NAME = 'platetrack-[0-9a-f]{10}';/);
+});
+
+test('Diagnostics screen reports status and its test tools work', async () => {
+  const { page, errors, close } = await openApp({ income: [], expenses: [expense(1)] });
+  await page.evaluate(() => openDiagnostics());
+  await page.waitForFunction(() => document.getElementById('diag-body').textContent.includes('Test tools'));
+  const text = await page.textContent('#diag-body');
+  assert.match(text, /Tax rates 2026\/27/);
+  assert.match(text, /platetrack-[0-9a-f]{10}/);
+  assert.equal(await page.locator('#diag-body >> text=❌').count(), 0, text);
+  await page.evaluate(() => diagAddTestExpense());
+  await page.evaluate(() => { document.getElementById('diag-overlay').remove(); showTab(2); });
+  assert.equal(await page.locator('#pg2 .exp-card b, #pg2 .exp-card i').count(), 0);
+  assert.match(await page.textContent('#pg2'), /<b>not bold<\/b>/);
+  await page.evaluate(() => diagRemoveTestExpense());
+  assert.equal(await page.evaluate(() => DB.expenses.some(e => e.id === 'diag-test')), false);
+  assert.deepEqual(errors, []);
+  await close();
 });

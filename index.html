@@ -1437,7 +1437,7 @@ function supaCompaniesPull(cb){
 // Needs: ALTER TABLE users ADD COLUMN IF NOT EXISTS job_meta jsonb; (supabase/job-meta.sql).
 // Until that's run the requests fail quietly and the data just stays on this device.
 // Pushes wait until this session has pulled once, so a fresh device can't overwrite the cloud copy.
-var _jobMetaPulled=false;
+var _jobMetaPulled=false,JOB_META_STATUS='Not synced yet this session';
 function supaJobMetaPush(cb,force){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
   if(!_jobMetaPulled&&!force)return cb&&cb('not_pulled');
@@ -1451,9 +1451,10 @@ function supaJobMetaPull(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
   var h=_supaHdr();delete h['Content-Type'];
   fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id)+'&select=job_meta',{headers:h})
-    .then(function(r){return r.ok?r.json():null;})
+    .then(function(r){if(!r.ok)JOB_META_STATUS='Cloud not set up yet: run supabase/job-meta.sql ('+r.status+')';return r.ok?r.json():null;})
     .then(function(rows){
       if(!rows){if(cb)cb('unavailable');return;}
+      JOB_META_STATUS='Synced at '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
       var jm=rows.length?rows[0].job_meta:null;
       _jobMetaPulled=true;
       if(jm&&typeof jm==='object'){
@@ -2433,6 +2434,73 @@ function backupReminderHTML(){
     +'</div>';
 }
 function snoozeBackupReminder(){try{localStorage.setItem('pt_backup_snooze',String(Date.now()+3*86400000));}catch(e){}if(CTAB===0)rDash();}
+
+// --- Diagnostics ---
+// A checklist screen so the recent fixes can be verified on a phone without dev tools.
+var DIAG_TEST_ID='diag-test';
+function openDiagnostics(){
+  var old=document.getElementById('diag-overlay');if(old)old.remove();
+  var ov=document.createElement('div');ov.id='diag-overlay';ov.className='overlay';ov.style.display='flex';
+  ov.innerHTML='<div class="sheet" style="max-height:88vh;overflow-y:auto;width:100%;max-width:520px;padding:20px 18px calc(24px + env(safe-area-inset-bottom))">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-size:18px;font-weight:800">&#x1FA7A; Diagnostics</div><button class="diag-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3)">&#x2715;</button></div>'
+    +'<div id="diag-body" style="font-size:13px;line-height:1.5;color:var(--text2)">Checking&hellip;</div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector('.diag-close').onclick=function(){ov.remove();};
+  ov.onclick=function(e){if(e.target===ov)ov.remove();};
+  renderDiagnostics();
+}
+function renderDiagnostics(){
+  var body=document.getElementById('diag-body');if(!body)return;
+  var row=function(ok,title,detail){return '<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-size:16px">'+(ok===true?'&#x2705;':ok===false?'&#x274C;':'&#x2139;&#xFE0F;')+'</span><div><div style="font-weight:700;color:var(--text)">'+title+'</div><div style="color:var(--text4)">'+detail+'</div></div></div>';};
+  var btn=function(label,fn){return '<button class="settings-btn" style="margin-top:8px" onclick="'+fn+'">'+label+'</button>';};
+  rsKeys(function(keys){
+    fetch('/Plate-Track/sw.js',{cache:'no-store'}).then(function(r){return r.text();}).catch(function(){return '';}).then(function(sw){
+      var ver=(sw.match(/CACHE_NAME = '([^']+)'/)||[])[1]||'unknown';
+      var t=ukTax(30000),taxOk=Math.abs(t.tax-3486)<0.01&&Math.abs(t.ni-1045.8)<0.01;
+      var inline=0,local=0,cloud=0;
+      DB.expenses.forEach(function(e){var r=e.receiptImage||'';if(r.indexOf('data:')===0)inline++;else if(r.indexOf('idb:')===0)local++;else if(r.indexOf('supabase:')===0)cloud++;});
+      var last=0;try{last=parseInt(localStorage.getItem('pt_last_backup')||'0',10);}catch(e){}
+      var hasTest=DB.expenses.some(function(e){return e.id===DIAG_TEST_ID;});
+      var h='';
+      h+=row(true,'App version',htmlEsc(ver));
+      h+=row(taxOk,'Tax rates '+TAX_YEAR_LABEL,'On £30,000 profit: tax '+money(t.tax)+' (expect £3486.00), Class 4 NI '+money(t.ni)+' (expect £1045.80)');
+      h+=row(document.cookie.indexOf('pt9=')<0,'No data in cookies',document.cookie.indexOf('pt9=')<0?'Your data is not being sent in cookies.':'An old data cookie is still present.');
+      h+=row(inline===0,'Receipt storage',local+' on this device (IndexedDB), '+cloud+' in the cloud, '+inline+' in old format'+(keys.length!==local?' &middot; '+keys.length+' stored':''));
+      h+=row(SUPA_USER?JOB_META_STATUS.indexOf('Synced')===0:null,'Job status &amp; notes sync',SUPA_USER?htmlEsc(JOB_META_STATUS):'Sign in to sync job statuses and notes between devices.');
+      h+=row(SUPA_USER?true:null,'Backups',SUPA_USER?'Signed in &mdash; data syncs to the cloud.':(last?'Last backup '+new Date(last).toLocaleDateString('en-GB'):'Never backed up')+'. The Home screen reminds you every '+BACKUP_NAG_DAYS+' days.');
+      h+=row(EXP_SAFE?null:true,'Expenses tab',EXP_SAFE?'Safe mode is on (receipts shown as icons).':'Normal mode. Crash detector is active.');
+      h+='<div style="font-weight:800;color:var(--text);margin:16px 0 4px">Test tools</div>';
+      h+=btn('&#x1F514; Show backup reminder now','diagShowBackupReminder()');
+      h+=btn(hasTest?'&#x1F5D1;&#xFE0F; Remove test expense':'&#x1F9EA; Add test expense (tricky text)',hasTest?'diagRemoveTestExpense()':'diagAddTestExpense()');
+      h+=btn('&#x1F4A5; Simulate Expenses crash','diagSimulateCrash()');
+      if(SUPA_USER)h+=btn('&#x1F504; Sync job notes now','diagSyncJobMeta()');
+      body.innerHTML=h;
+    });
+  });
+}
+function diagShowBackupReminder(){
+  try{localStorage.removeItem('pt_last_backup');localStorage.removeItem('pt_backup_snooze');}catch(e){}
+  var ov=document.getElementById('diag-overlay');if(ov)ov.remove();
+  showTab(0);window.scrollTo(0,0);
+  showToast(SUPA_USER?'Reminder only shows when signed out':'Reminder shown at the top of Home');
+}
+function diagAddTestExpense(){
+  DB.expenses.unshift({id:DIAG_TEST_ID,date:today(),category:'Other',amount:'0.01',company:'',jobRef:'<i>TEST</i>',receipt:'',description:'Test "quotes" & <b>not bold</b>',receiptImage:''});
+  saveDB();showToast('Test expense added to Expenses');renderDiagnostics();
+}
+function diagRemoveTestExpense(){
+  DB.expenses=DB.expenses.filter(function(e){return e.id!==DIAG_TEST_ID;});
+  saveDB();showToast('Test expense removed');renderDiagnostics();
+}
+function diagSimulateCrash(){
+  if(!confirm('The app will reload as if the Expenses tab had crashed. You should see the crash message, then Expenses opens in safe mode. Continue?'))return;
+  try{localStorage.setItem('pt_exp_render','step=simulated test (not a real crash)');}catch(e){}
+  location.reload();
+}
+function diagSyncJobMeta(){
+  showToast('Syncing…');
+  supaJobMetaPull(function(){renderDiagnostics();showToast(JOB_META_STATUS);});
+}
 
 // --- Export/Import ---
 function doExport(){
@@ -4472,6 +4540,7 @@ function rSummary(){
     +'<button class="settings-btn" onclick="openCoModal()"><span>&#x1F3E2;</span> Manage Companies</button>'
     +'<button class="settings-btn" onclick="openIncomeTypesModal()"><span>&#x1F4B0;</span> Manage Income Types</button>'
     +'<button class="settings-btn" onclick="openNameModal()"><span>&#x2712;</span> Change Your Name</button>'
+    +'<button class="settings-btn" onclick="openDiagnostics()"><span>&#x1FA7A;</span> Diagnostics</button>'
     +'</div></div>'
     // Tips
     +'<div style="padding-bottom:8px">'
