@@ -1,47 +1,10 @@
 // Browser tests against the built app in docs/. Run with `npm test` (builds first).
-const { test, before, after } = require('node:test');
+const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
 
-const DOCS = path.join(__dirname, '..', 'docs');
-const TYPES = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png' };
-let server, browser, base;
-
-before(async () => {
-  server = http.createServer((req, res) => {
-    let p = decodeURIComponent(req.url.split('?')[0]).replace(/^\/Plate-Track/, '');
-    if (p === '' || p.endsWith('/')) p += 'index.html';
-    const f = path.join(DOCS, p);
-    if (!f.startsWith(DOCS) || !fs.existsSync(f)) { res.writeHead(404); return res.end(); }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' });
-    fs.createReadStream(f).pipe(res);
-  });
-  await new Promise(r => server.listen(0, r));
-  base = `http://localhost:${server.address().port}/Plate-Track/`;
-  browser = await chromium.launch();
-});
-after(async () => { await browser.close(); server.close(); });
-
-// Fresh page with onboarding skipped and optional seed data in localStorage.
-async function openApp(seed) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
-  await page.addInitScript(db => {
-    if (sessionStorage.getItem('seeded')) return;
-    sessionStorage.setItem('seeded', '1');
-    localStorage.setItem('pt_onboarded', '1');
-    if (db) localStorage.setItem('pt9', db);
-  }, seed ? JSON.stringify(seed) : null);
-  page.on('dialog', d => d.dismiss());
-  await page.goto(base);
-  await page.waitForFunction(() => typeof DB === 'object');
-  return { page, errors, close: () => ctx.close() };
-}
+const { openApp, DOCS } = require('./helpers');
 
 const expense = (id, extra) => Object.assign({ id: String(id), date: '2026-10-01', category: 'Fuel (Not Reimbursed)', amount: '10', company: '', jobRef: '', receipt: '', description: '', receiptImage: '' }, extra);
 
@@ -255,23 +218,20 @@ test('dashboard figures are profit: expenses reduce today, this week and this mo
   await close();
 });
 
-test('tax pot covers the current tax year only, and multi-year tax is worked out per year', async () => {
-  const { page, close } = await openApp({ income: [], expenses: [] });
+test('tax pot covers the current tax year only, and multi-year tax uses each year\'s rates', async () => {
+  const { page, close } = await openApp({ income: [
+    { id: 'a', date: '2026-10-01', company: 'BCA', amount: '30000' },
+    { id: 'b', date: '2023-10-01', company: 'BCA', amount: '30000' } ], expenses: [] }, { now: '2026-10-19T12:00:00' });
   const r = await page.evaluate(() => {
-    const td = today(), ty = tyear(td);
-    // £30k this tax year, plus £30k three years ago
-    DB.income.push({ id: 'a', date: td, company: 'BCA', amount: '30000' });
-    const old = new Date(); old.setFullYear(old.getFullYear() - 3);
-    DB.income.push({ id: 'b', date: old.toISOString().slice(0, 10), company: 'BCA', amount: '30000' });
-    saveDB(); showTab(0);
+    showTab(0);
     const pot = [...document.querySelectorAll('#pg0 .stat-chip')].find(c => c.textContent.includes('Tax Pot'));
     const t = calcs();
-    return { pot: pot.querySelector('.stat-chip-val').textContent, potSub: pot.querySelector('.stat-chip-sub').textContent, ty, tax: t.tax, ni: t.ni };
+    return { pot: pot.querySelector('.stat-chip-val').textContent, potSub: pot.querySelector('.stat-chip-sub').textContent, tax: t.tax, ni: t.ni };
   });
-  assert.equal(r.pot, '£4531.80');               // 3486 tax + 1045.80 NI on this year's £30k
-  assert.equal(r.potSub, 'est. ' + r.ty);
-  assert.ok(Math.abs(r.tax - 2 * 3486) < 0.01);  // two separate years, not one £60k year
-  assert.ok(Math.abs(r.ni - 2 * 1045.8) < 0.01);
+  assert.equal(r.pot, '£4531.80');                         // 2026/27 only: 3486 tax + 1045.80 Class 4
+  assert.equal(r.potSub, 'est. 2026/27');
+  assert.ok(Math.abs(r.tax - 2 * 3486) < 0.01);             // two separate years, not one £60k year
+  assert.ok(Math.abs(r.ni - (1045.8 + 1568.7 + 179.4)) < 0.01); // 2023/24: Class 4 at 9% + Class 2 £3.45 x 52
   await close();
 });
 

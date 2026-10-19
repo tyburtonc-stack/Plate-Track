@@ -1807,7 +1807,18 @@ function savePayslips(){try{localStorage.setItem('pt_payslips',JSON.stringify(PA
 try{var al=localStorage.getItem('pt_alloc');if(al){var alp=JSON.parse(al);ALLOC.invest=alp.invest||20;ALLOC.bills=alp.bills||10;}}catch(e){}
 
 // --- Helpers ---
-function tyear(d){var dt=new Date(d),y=dt.getFullYear();return dt>=new Date(y,3,6)?(y+'/'+(y+1)):((y-1)+'/'+y);}
+// UK tax year for a 'YYYY-MM-DD' date: 6 April to 5 April, e.g. '2026-04-05' -> '2025/26'.
+// Works on the date text so time zones and clock changes can't move an entry into another year.
+function tyear(d){
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(d||'');
+  if(!m)return '';
+  var y=+m[1],onOrAfter6Apr=(m[2]+m[3])>='0406';
+  var start=onOrAfter6Apr?y:y-1;
+  return start+'/'+String(start+1).slice(-2);
+}
+// Local calendar date from 'YYYY-MM-DD' (new Date('YYYY-MM-DD') would be UTC midnight).
+function parseYMD(ds){var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(ds||'');return m?new Date(+m[1],+m[2]-1,+m[3]):new Date(NaN);}
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function money(n){var v=parseFloat(n||0);return (v<0?'-':'')+'\u00a3'+Math.abs(v).toFixed(2);}
 function fdate(s){if(!s)return '';return new Date(s).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}
 function fdateShort(s){if(!s)return '';return new Date(s).toLocaleDateString('en-GB',{day:'2-digit',month:'short'});}
@@ -1827,22 +1838,46 @@ function isReimbursedCat(cat){for(var i=0;i<REIMBURSED_CATS.length;i++){if(REIMB
 function inDateRange(d,from,to){if(!from&&!to)return true;if(from&&d<from)return false;if(to&&d>to)return false;return true;}
 function parseDuration(start,end){if(!start||!end||start.indexOf(':')<0||end.indexOf(':')<0)return 0;var s=start.split(':'),e=end.split(':'),mins=(parseInt(e[0])*60+parseInt(e[1]))-(parseInt(s[0])*60+parseInt(s[1]));return mins<0?mins+1440:mins;}
 function fmtHours(mins){if(!mins||mins<=0)return '';var h=Math.floor(mins/60),m=mins%60;return h>0?(h+'h'+(m>0?' '+m+'m':'')):(m+'m');}
-function getWeekKey(ds){var d=new Date(ds),day=d.getDay(),mon=new Date(d);mon.setDate(d.getDate()-((day+6)%7));return mon.getFullYear()+'-'+String(mon.getMonth()+1).padStart(2,'0')+'-'+String(mon.getDate()).padStart(2,'0');}
+// Monday of the week (Mon–Sun) containing the date, as 'YYYY-MM-DD'.
+function getWeekKey(ds){var d=parseYMD(ds);if(isNaN(d))return '';d.setDate(d.getDate()-((d.getDay()+6)%7));return ymd(d);}
 function getDayKey(ds){return ds.substr?ds.substr(0,10):'';}
 
 function getIncome(){return DB.income.filter(function(i){return(FYR==='All'||tyear(i.date)===FYR)&&(FCO==='All'||i.company===FCO)&&inDateRange(i.date,FDFROM,FDTO);});}
 function getExp(){return DB.expenses.filter(function(e){return(FYR==='All'||tyear(e.date)===FYR)&&(FCO==='All'||e.company===FCO||!e.company)&&inDateRange(e.date,FDFROM,FDTO);});}
-function getYears(){var y={};DB.income.forEach(function(i){y[tyear(i.date)]=1;});DB.expenses.forEach(function(e){y[tyear(e.date)]=1;});return Object.keys(y).sort().reverse();}
+function getYears(){var y={};DB.income.forEach(function(i){y[tyear(i.date)]=1;});DB.expenses.forEach(function(e){y[tyear(e.date)]=1;});return Object.keys(y).filter(Boolean).sort().reverse();}
 
-// UK self-employed rates for 2026/27 (England, Wales & NI). Allowance and bands are frozen to April 2028.
-var TAX_YEAR_LABEL='2026/27';
-function ukTax(profit){
+// UK self-employed rates by tax year (England, Wales & Northern Ireland; Scotland has its own
+// income tax bands). Sources: HMRC rates and allowances; Finance Act 2023 freezes the allowance
+// and basic rate band to 2027/28.
+//   pa      personal allowance (tapers £1 per £2 of income over £100,000)
+//   basic   basic rate band (taxable income taxed at 20%), then 40%
+//   addl    taxable income above which 45% applies
+//   lpl/upl Class 4 lower/upper profits limits; c4/c4u the rates between them / above upl
+//   c2      Class 2 weekly rate (0 from 2024/25, when it was abolished); c2from profits at which it's due
+var TAX_RATES={
+  '2021/22':{pa:12570,basic:37700,addl:150000,lpl:9568, upl:50270,c4:0.09,  c4u:0.02,  c2:3.05,c2from:6515},
+  '2022/23':{pa:12570,basic:37700,addl:150000,lpl:11908,upl:50270,c4:0.0973,c4u:0.0273,c2:3.15,c2from:11908},
+  '2023/24':{pa:12570,basic:37700,addl:125140,lpl:12570,upl:50270,c4:0.09,  c4u:0.02,  c2:3.45,c2from:12570},
+  '2024/25':{pa:12570,basic:37700,addl:125140,lpl:12570,upl:50270,c4:0.06,  c4u:0.02,  c2:0,   c2from:0},
+  '2025/26':{pa:12570,basic:37700,addl:125140,lpl:12570,upl:50270,c4:0.06,  c4u:0.02,  c2:0,   c2from:0},
+  '2026/27':{pa:12570,basic:37700,addl:125140,lpl:12570,upl:50270,c4:0.06,  c4u:0.02,  c2:0,   c2from:0}
+};
+// Years outside the table use the nearest known year (later years: thresholds are frozen to 2028).
+function taxRatesFor(ty){
+  if(TAX_RATES[ty])return TAX_RATES[ty];
+  var ys=Object.keys(TAX_RATES).sort();
+  return TAX_RATES[ty&&ty<ys[0]?ys[0]:ys[ys.length-1]];
+}
+var TAX_YEAR_LABEL=tyear(today());
+function ukTax(profit,ty){
+  var r=taxRatesFor(ty||tyear(today()));
   var p=Math.max(0,profit||0);
-  var pa=Math.max(0,12570-Math.max(0,p-100000)/2); // allowance tapers by £1 for every £2 over £100k
+  var pa=Math.max(0,r.pa-Math.max(0,p-100000)/2);
   var taxable=Math.max(0,p-pa);
-  var tax=Math.min(taxable,37700)*.20+Math.max(0,Math.min(taxable,125140)-37700)*.40+Math.max(0,taxable-125140)*.45;
-  var ni=Math.max(0,Math.min(p,50270)-12570)*.06+Math.max(0,p-50270)*.02; // Class 4
-  return {pa:pa,taxable:taxable,tax:tax,ni:ni};
+  var tax=Math.min(taxable,r.basic)*.20+Math.max(0,Math.min(taxable,r.addl)-r.basic)*.40+Math.max(0,taxable-r.addl)*.45;
+  var c4=Math.max(0,Math.min(p,r.upl)-r.lpl)*r.c4+Math.max(0,p-r.upl)*r.c4u;
+  var c2=r.c2&&p>=r.c2from?r.c2*52:0;
+  return {pa:pa,taxable:taxable,tax:tax,ni:c4+c2,c4:c4,c2:c2};
 }
 // Expenses that count against profit for the current filters. Unlike getExp() (which also lists
 // unassigned expenses under a company filter), a company filter only takes that company's costs.
@@ -1868,15 +1903,15 @@ function calcs(){
   var byYear={};
   fi.forEach(function(i){var y=tyear(i.date);byYear[y]=(byYear[y]||0)+parseFloat(i.amount||0);});
   fe.forEach(function(e){if(isReimbursedCat(e.category))return;var y=tyear(e.date);byYear[y]=(byYear[y]||0)-parseFloat(e.amount||0);});
-  var tax=0,ni=0,pa=0,taxable=0;
-  Object.keys(byYear).forEach(function(y){var ut=ukTax(byYear[y]);tax+=ut.tax;ni+=ut.ni;pa+=ut.pa;taxable+=ut.taxable;});
-  if(!Object.keys(byYear).length)pa=ukTax(0).pa;
-  return {inc:inc,exp:totalExp,deductible:deductible,profit:p,tax:tax,ni:ni,pa:pa,taxable:taxable,reimb:reimb,nonreimb:nonreimb,years:Object.keys(byYear).length};
+  var tax=0,ni=0,c4=0,c2=0,pa=0,taxable=0;
+  Object.keys(byYear).forEach(function(y){var ut=ukTax(byYear[y],y);tax+=ut.tax;ni+=ut.ni;c4+=ut.c4;c2+=ut.c2;pa+=ut.pa;taxable+=ut.taxable;});
+  if(!Object.keys(byYear).length)pa=ukTax(0,FYR!=='All'?FYR:'').pa;
+  return {inc:inc,exp:totalExp,deductible:deductible,profit:p,tax:tax,ni:ni,c4:c4,c2:c2,pa:pa,taxable:taxable,reimb:reimb,nonreimb:nonreimb,years:Object.keys(byYear).length};
 }
 // Estimated tax + NI for one tax year (e.g. '2026/27'), ignoring the dashboard filters.
 function taxYearEstimate(ty){
   var r=profitFor(DB.income.filter(function(i){return tyear(i.date)===ty;}),DB.expenses.filter(function(e){return tyear(e.date)===ty;}));
-  var ut=ukTax(r.net);
+  var ut=ukTax(r.net,ty);
   return {profit:r.net,tax:ut.tax,ni:ut.ni,total:ut.tax+ut.ni};
 }
 function jobProfit(jr){
@@ -2618,7 +2653,7 @@ function generateReport(){
   fi.forEach(function(i){if(byC[i.company]!==undefined)byC[i.company]+=parseFloat(i.amount||0);});
   var dr=(FDFROM||FDTO)?((FDFROM||'Start')+' to '+(FDTO||'Today')):(FYR==='All'?'All Time':FYR);
   var coLines=[];COMPANIES.forEach(function(c){coLines.push((c.name+':').padEnd(16)+money(byC[c.name]||0));});
-  var lines=['PLATETRACK - SELF ASSESSMENT REPORT','Accountant Report (Self Assessment Ready)','==========================================','Period: '+dr,'Generated: '+new Date().toLocaleDateString('en-GB'),'','INCOME','------'].concat(coLines).concat(['Total Income:  '+money(t.inc),'','EXPENSES','--------','Total Expenses:         '+money(t.exp),'Reimbursed (excluded):  '+money(t.reimb),'Allowable Deductions:   '+money(t.deductible),'','PROFIT & TAX','------------','Net Taxable Profit:   '+money(t.profit),'Personal Allowance:   '+money(t.pa),'Taxable Income:       '+money(t.taxable),'Est. Income Tax:      '+money(t.tax),'Est. Class 4 NI:      '+money(t.ni),'Total Tax Liability:  '+money(t.tax+t.ni),'','NOTE: '+TAX_YEAR_LABEL+' UK rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p rate).','Consult a qualified accountant for your official return.','==========================================']);
+  var lines=['PLATETRACK - SELF ASSESSMENT REPORT','Accountant Report (Self Assessment Ready)','==========================================','Period: '+dr,'Generated: '+new Date().toLocaleDateString('en-GB'),'','INCOME','------'].concat(coLines).concat(['Total Income:  '+money(t.inc),'','EXPENSES','--------','Total Expenses:         '+money(t.exp),'Reimbursed (excluded):  '+money(t.reimb),'Allowable Deductions:   '+money(t.deductible),'','PROFIT & TAX','------------','Net Taxable Profit:   '+money(t.profit),'Personal Allowance:   '+money(t.pa),'Taxable Income:       '+money(t.taxable),'Est. Income Tax:      '+money(t.tax),'Est. Class 4 NI:      '+money(t.c4),].concat(t.c2>0?['Class 2 NI:           '+money(t.c2)]:[]).concat(['Total Tax Liability:  '+money(t.tax+t.ni),'','NOTE: Each tax year uses its own HMRC rates (England, Wales & NI). No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p rate).','Consult a qualified accountant for your official return.','==========================================']));
   try{var blob=new Blob([lines.join('\n')],{type:'text/plain'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='platetrack-sa-'+today()+'.txt';document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},100);showToast('Report downloaded!');}catch(e){showToast('Export failed');}
 }
 function csvEsc(v){
@@ -3153,7 +3188,12 @@ function updateHeaderDate(){
 }
 
 // --- Deadline ---
-function daysToDeadline(){var now=new Date(),yr=now.getFullYear(),d=new Date(yr,0,31);if(d<now)d=new Date(yr+1,0,31);return Math.ceil((d-now)/86400000);}
+// Whole days until the next 31 January Self Assessment deadline (0 on the day itself).
+function daysToDeadline(){
+  var t=parseYMD(today()),d=new Date(t.getFullYear(),0,31);
+  if(d<t)d=new Date(t.getFullYear()+1,0,31);
+  return Math.round((d-t)/86400000);
+}
 
 // --- Smart job sort for expense linking ---
 function sortedJobRefs(date,company){
@@ -3641,12 +3681,12 @@ function rDash(){
   var weekMap={};
   DB.income.forEach(function(i){var dk=getDayKey(i.date);weekMap[dk]=(weekMap[dk]||0)+parseFloat(i.amount||0);});
   DB.expenses.forEach(function(e){if(isReimbursedCat(e.category))return;var dk=getDayKey(e.date);weekMap[dk]=(weekMap[dk]||0)-parseFloat(e.amount||0);});
-  var monDate=new Date(wk);
+  var monDate=parseYMD(wk);
   var maxDay=1;
   var dayData=[];
   for(var di=0;di<7;di++){
     var dd=new Date(monDate);dd.setDate(monDate.getDate()+di);
-    var dkey=dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');
+    var dkey=ymd(dd);
     var val=weekMap[dkey]||0;
     if(Math.abs(val)>maxDay)maxDay=Math.abs(val);
     dayData.push({label:weekDays[di],key:dkey,val:val,isToday:dkey===td,isPast:dd<new Date()&&dkey!==td});
@@ -3698,7 +3738,7 @@ function rDash(){
   var bLbl=isFiltered&&!DASH_FILTER_OPEN?'&#x2713; Filtered':'&#x25BC; Filter';
   var filterBtn='<button onclick="toggleDashFilter()" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--r-full);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+bBdr+';background:'+bBg+';color:'+bClr+';backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 8px rgba(0,0,0,0.08);-webkit-tap-highlight-color:transparent">'+bLbl+'</button>';
 
-  var heroLbl=isFiltered?'TAKE-HOME':'TODAY\'S TAKE-HOME';
+  var heroLbl=isFiltered?'PROFIT':'TODAY\'S PROFIT';
 
   // Greeting section (scrolls with content, sits below sticky util-hdr)
   var doCarAnim=!sessionStorage.getItem('pt_car_done');
@@ -4469,9 +4509,10 @@ function rSummary(){
     {label:'Personal Allowance',val:money(t.pa),cls:''},
     {label:'Taxable Income',val:money(t.taxable),cls:''},
     {label:'Est. Income Tax',val:money(t.tax),cls:'red'},
-    {label:'Est. Class 4 NI',val:money(t.ni),cls:'red'},
+    {label:'Est. Class 4 NI',val:money(t.c4),cls:'red'},
+  ].concat(t.c2>0?[{label:'Class 2 NI',val:money(t.c2),cls:'red'}]:[]).concat([
     {label:'Total Tax Bill',val:money(t.tax+t.ni),cls:'red',bold:true},
-  ];
+  ]);
   var rowsHTML=coRows.map(function(r){return '<div class="summary-row"><span class="summary-row-label">'+r.label+'</span><span class="summary-row-val" style="color:'+r.color+'">'+r.val+'</span></div>';}).join('');
   rowsHTML+=rows.map(function(r){return '<div class="summary-row'+(r.indent?' indent':'')+'"><span class="summary-row-label">'+r.label+'</span><span class="summary-row-val '+(r.cls||'')+'" style="'+(r.bold?'font-size:16px':'')+'">'+r.val+'</span></div>';}).join('');
 
@@ -4610,7 +4651,7 @@ function rSummary(){
     +'</div>'
     // SA breakdown
     +'<div class="summary-card"><div class="summary-card-hdr">Self Assessment Breakdown</div>'+rowsHTML
-    +'<div class="disc" style="padding:14px 16px;border-top:1px solid var(--border)">Estimates only &mdash; '+TAX_YEAR_LABEL+' UK tax rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p). Consult an accountant.</div></div>'
+    +'<div class="disc" style="padding:14px 16px;border-top:1px solid var(--border)">Estimates only &mdash; each tax year uses its own HMRC rates (England, Wales &amp; NI). No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p). Consult an accountant.</div></div>'
     // Payslip
     +payslipHTML
     // Export

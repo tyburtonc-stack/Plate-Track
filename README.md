@@ -308,7 +308,7 @@ Always commit the rebuilt `docs/` alongside changes to `index.html`.
 Ideas for later live in `BACKLOG.md`.
 
 ### UK Tax Calculations
-Estimates use 2026/27 rates for England, Wales & NI (`ukTax()` in `index.html`):
+Estimates use each tax year's own HMRC rates for England, Wales & NI (`TAX_RATES` and `ukTax()` in `index.html`, 2021/22 onwards; later years use the latest rates). Tax years run 6 April–5 April and are worked out from the date text, so time zones can't shift an entry. `test/figures.test.js` checks every figure against hand-worked HMRC answers. For 2026/27:
 - Personal Allowance: £12,570, reduced by £1 for every £2 of profit over £100,000
 - Basic Rate (20%): first £37,700 of taxable income
 - Higher Rate (40%): up to £125,140
