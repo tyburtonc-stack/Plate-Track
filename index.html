@@ -1721,6 +1721,7 @@ function saveDB(){
   if(SUPA_USER&&SUPA_SESSION){clearTimeout(window._syncT);window._syncT=setTimeout(function(){supaPushAll(function(){updateSyncBar();});},2000);}
 }
 loadDB();loadGoal();
+setTimeout(shrinkLocalReceipts,300);
 try{var _psArr=localStorage.getItem('pt_payslips');if(_psArr)PAYSLIPS=JSON.parse(_psArr);}catch(e){}
 if(!PAYSLIPS.length){try{var _psOld=localStorage.getItem('pt_payslip');if(_psOld){var _po=JSON.parse(_psOld);if(_po&&(_po.image||_po.manualTotal||(_po.items&&_po.items.length))){if(!_po.id)_po.id=newid();if(!_po.grpMatched)_po.grpMatched=true;if(!_po.grpMissing)_po.grpMissing=true;if(_po.grpExtra==null)_po.grpExtra=false;if(!Array.isArray(_po.items))_po.items=[];PAYSLIPS.push(_po);}}}catch(e){}}
 function savePayslips(){try{localStorage.setItem('pt_payslips',JSON.stringify(PAYSLIPS));}catch(e){}}
@@ -2239,6 +2240,34 @@ function viewReceipt(src){
   var img=document.getElementById('receiptViewerImg');
   if(viewer&&img){img.src=src;viewer.style.display='flex';}
   else{var w=window.open();if(w)w.document.write('<img src="'+src+'" style="max-width:100%;max-height:100vh">');}
+}
+
+function viewExpReceipt(id){for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===String(id)){viewReceipt(DB.expenses[i].receiptImage);return;}}}
+// Older local receipts were stored as full-resolution base64 photos (several MB each), which
+// crashed iOS Safari when the Expenses list rendered them. Downscale them once, one at a time.
+var RECEIPT_MAX_PX=1200,RECEIPT_MAX_LEN=400000;
+function shrinkLocalReceipts(){
+  var todo=DB.expenses.filter(function(e){return e.receiptImage&&e.receiptImage.indexOf('data:')===0&&e.receiptImage.length>RECEIPT_MAX_LEN;});
+  if(!todo.length)return;
+  var changed=false;
+  (function next(){
+    var e=todo.shift();
+    if(!e){if(changed){saveDB();if(CTAB===2)rExpenses();}return;}
+    var img=new Image();
+    img.onload=function(){
+      try{
+        var scale=Math.min(RECEIPT_MAX_PX/img.width,RECEIPT_MAX_PX/img.height,1);
+        var c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+        var ctx=c.getContext('2d');ctx.fillStyle='#FFFFFF';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);
+        var d=c.toDataURL('image/jpeg',0.7);
+        if(d&&d.length>100&&d.length<e.receiptImage.length){e.receiptImage=d;changed=true;}
+        c.width=c.height=0;
+      }catch(err){console.warn('Receipt shrink failed',err);}
+      img.src='';setTimeout(next,50);
+    };
+    img.onerror=function(){setTimeout(next,50);};
+    img.src=e.receiptImage;
+  })();
 }
 
 function closeReceiptViewer(){
@@ -4021,9 +4050,9 @@ function buildExpenseListHTML(items){
     var linkedTag=x.jobRef?'<span class="linked-tag">'+x.jobRef+'</span>':'';
     var thumbHTML='';
     if(x.receiptImage&&x.receiptImage.indexOf('supabase:')===0){
-      thumbHTML='<div class="receipt-thumb" onclick="event.stopPropagation();viewReceipt(\''+x.receiptImage+'\')" style="background:var(--bg3);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;cursor:pointer"><span style="font-size:18px">&#x1F9FE;</span><span style="font-size:8px;color:var(--text4);font-weight:700">VIEW</span></div>';
+      thumbHTML='<div class="receipt-thumb" onclick="event.stopPropagation();viewExpReceipt(\''+x.id+'\')" style="background:var(--bg3);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;cursor:pointer"><span style="font-size:18px">&#x1F9FE;</span><span style="font-size:8px;color:var(--text4);font-weight:700">VIEW</span></div>';
     } else if(x.receiptImage){
-      thumbHTML='<img class="receipt-thumb" src="'+x.receiptImage+'" onclick="event.stopPropagation();viewReceipt(\''+x.receiptImage+'\')" alt="Receipt">';
+      thumbHTML='<img class="receipt-thumb" src="'+x.receiptImage+'" loading="lazy" decoding="async" onclick="event.stopPropagation();viewExpReceipt(\''+x.id+'\')" alt="Receipt">';
     }
     html+='<div class="swipe-wrap" data-id="'+x.id+'">';
       html+='<div class="swipe-delete-btn" onclick="swipeDelete(\'expense\',\''+x.id+'\')">';
@@ -4517,12 +4546,12 @@ function openSheet(type,id){
     var imgPreview='';
     if(fimg&&fimg.indexOf('supabase:')===0){
       imgPreview='<div style="margin-top:8px">'
-        +'<div onclick="viewReceipt(\''+fimg+'\')" style="width:72px;height:72px;border-radius:var(--r-md);border:1.5px solid var(--border);background:var(--bg3);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:3px">'
+        +'<div onclick="viewExpReceipt(\''+EID+'\')" style="width:72px;height:72px;border-radius:var(--r-md);border:1.5px solid var(--border);background:var(--bg3);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:3px">'
         +'<span style="font-size:22px">&#x1F9FE;</span>'
         +'<span style="font-size:9px;color:var(--text4);font-weight:600">VIEW</span>'
         +'</div></div>';
     } else if(fimg){
-      imgPreview='<div style="margin-top:8px"><img src="'+fimg+'" style="width:72px;height:72px;object-fit:cover;border-radius:var(--r-md);cursor:pointer;border:1px solid var(--border)" onclick="viewReceipt(\''+fimg+'\')" alt="Receipt"></div>';
+      imgPreview='<div style="margin-top:8px"><img src="'+fimg+'" style="width:72px;height:72px;object-fit:cover;border-radius:var(--r-md);cursor:pointer;border:1px solid var(--border)" onclick="viewExpReceipt(\''+EID+'\')" alt="Receipt"></div>';
     }
     html='<input type="hidden" id="f_cat" value="'+fcat+'">'
       +'<input type="hidden" id="f_exco" value="'+fco2+'">'
@@ -4545,7 +4574,7 @@ function openSheet(type,id){
       +'<datalist id="joblist">'+dlOpts+'</datalist></div>'
       +'<div class="field"><label class="field-label">Description <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f5" class="std-input" placeholder="What was this for?" value="'+fds+'"></div>'
       +(fimg?'<div style="display:flex;gap:14px;align-items:center;margin-bottom:12px">'
-        +'<button type="button" style="font-size:12px;color:var(--text4);background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px" onclick="viewReceipt(\''+fimg+'\')">&#x1F9FE; View receipt</button>'
+        +'<button type="button" style="font-size:12px;color:var(--text4);background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px" onclick="viewExpReceipt(\''+EID+'\')">&#x1F9FE; View receipt</button>'
         +'<button type="button" style="font-size:12px;color:var(--danger);background:none;border:none;cursor:pointer;padding:0" onclick="deleteReceiptImage(\''+EID+'\')">&#x2715; Remove receipt</button>'
         +'</div>':'')
       +'<input type="file" id="f_img" accept="image/*,.heic,.heif" style="display:none">';
@@ -4818,7 +4847,7 @@ function doSave(){
         // Fallback: store as base64 locally
         var reader=new FileReader();
         reader.onload=function(ev){ci.receiptImage=ev.target.result;if(ceid){for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===ceid){DB.expenses[i]=ci;break;}}}else DB.expenses.unshift(ci);saveDB();closeSheet();render(CTAB);if(!ceid)playExpenseSound();showToast('✓ Saved with receipt');checkMilestones();};
-        reader.readAsDataURL(file);
+        compressImage(file,RECEIPT_MAX_PX,0.7,function(blob){reader.readAsDataURL(blob);});
       }
       return;
     }
