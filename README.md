@@ -100,6 +100,7 @@ Browser (PWA)
 | `name` | TEXT | Display name |
 | `companies` | JSONB | Array of company config objects |
 | `income_types` | JSONB | Array of custom income type strings |
+| `job_meta` | JSONB | `{jobs, notes}`: job statuses/notes and quick notes. Add with `supabase/job-meta.sql` |
 | `created_at` | TIMESTAMP | |
 
 ### Table: `income`
@@ -256,7 +257,11 @@ FREE_EXPENSE_LIMIT = 10      // max free tier expense entries
 ### LocalStorage Keys
 | Key | Contents |
 |---|---|
-| `pt9` | Serialised `DB` object (income, expenses, jobOrder) |
+| `pt9` | Serialised `DB` object (income, expenses, jobOrder, jobs, notes) |
+| `pt_last_backup` | Timestamp of the last JSON backup (drives the backup reminder) |
+| `pt_exp_render` / `pt_exp_safe` | Expenses tab crash breadcrumb / safe-mode flag |
+
+Receipts saved while signed out are stored in IndexedDB (`platetrack` → `receipts`) and referenced from the expense as `idb:<key>`.
 | `pt_companies` | Array of company config objects |
 | `pt_income_types` | Array of income type strings |
 | `pt_name` | User display name |
@@ -284,18 +289,20 @@ PlateTrack requires no installation or build step.
 
 ## Development
 
-The entire application is contained in a single file:
+`index.html` is the source; `docs/` is the minified build that GitHub Pages serves.
 
 ```
-Plate-Track/
-└── index.html    ← HTML, CSS, and JavaScript (~4,700 lines)
+npm install
+npm run build   # minify index.html into docs/ and stamp the service worker cache version
+npm test        # build, then run the browser tests in test/ (headless Chromium via Playwright)
 ```
 
-**No dependencies, no build tools, no package manager.** Edit `index.html` directly and refresh the browser to see changes.
+Always commit the rebuilt `docs/` alongside changes to `index.html`.
 
 ### UK Tax Calculations
-Tax estimates use the current UK thresholds:
-- Personal Allowance: £12,570
-- Basic Rate (20%): up to £37,700 above the allowance
-- Higher Rate (40%): above £37,700
-- National Insurance: 9% (basic) / 2% (higher)
+Estimates use 2026/27 rates for England, Wales & NI (`ukTax()` in `index.html`):
+- Personal Allowance: £12,570, reduced by £1 for every £2 of profit over £100,000
+- Basic Rate (20%): first £37,700 of taxable income
+- Higher Rate (40%): up to £125,140
+- Additional Rate (45%): above £125,140
+- Class 4 National Insurance: 6% on profits between £12,570 and £50,270, 2% above
