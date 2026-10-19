@@ -1,0 +1,13 @@
+name = "platetrack-ai"
+main = "index.js"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Secret (set by the GitHub Action from the ANTHROPIC_API_KEY repo secret, or `wrangler secret put ANTHROPIC_API_KEY`):
+# ANTHROPIC_API_KEY
+
+[vars]
+# Public values (the same ones the app ships with) used to check the caller's Supabase sign-in.
+SUPABASE_URL = "https://sedrloixvoqbhbywrrvr.supabase.co"
+ALLOWED_ORIGINS = "https://tyburtonc-stack.github.io"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlZHJsb2l4dm9xYmhieXdycnZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2NDU5OTIsImV4cCI6MjA5MzIyMTk5Mn0._JgbXq9nwZfUM32qM_nwSMfTJ0P3tAjQHPBneyTHO8g"

@@ -242,6 +242,8 @@ body.dark .week-bar-outer{background:rgba(255,255,255,0.07)}
 .week-bar-inner.past{background:rgba(139,92,246,0.22)}
 body.dark .week-bar-inner.past{background:rgba(139,92,246,0.25)}
 .week-bar-inner.future{background:rgba(0,0,0,0.05)}
+.week-bar-inner.loss{background:rgba(239,68,68,0.45)}
+.dash-hero-amount.loss{color:var(--danger)}
 body.dark .week-bar-inner.future{background:rgba(255,255,255,0.05)}
 .week-bar-label{font-size:10px;color:var(--text4);font-weight:500}
 .week-bar-label.today{color:var(--accent);font-weight:700}
@@ -1358,6 +1360,27 @@ function supaRefreshToken(cb){
   }).catch(function(e){if(cb)cb(e.message);});
 }
 
+// --- AI proxy ---
+// The AI worker only serves signed-in users, so every request carries the Supabase access token
+// (refreshed first if it's about to expire). Signed out: prompt to sign in and resolve with an
+// error in the Messages API shape, which every caller already handles.
+var AI_PROXY_URL='https://platetrack-ai.tyburtonc.workers.dev/';
+function aiFetch(body){
+  var errorResponse=function(msg){return new Response(JSON.stringify({type:'error',error:{type:'auth',message:msg}}),{status:401,headers:{'Content-Type':'application/json'}});};
+  if(!SUPA_USER||!SUPA_SESSION){
+    showToast('Sign in to use AI features');showAuthModal();
+    return Promise.resolve(errorResponse('Please sign in to use AI features.'));
+  }
+  var send=function(){
+    return fetch(AI_PROXY_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_SESSION.access_token},body:JSON.stringify(body)});
+  };
+  var expiresMs=(SUPA_SESSION.expires_at||0)*1000;
+  if(expiresMs&&expiresMs-Date.now()<120000){
+    return new Promise(function(res){supaRefreshToken(function(err){res(err||!SUPA_SESSION?errorResponse('Please sign in again to use AI features.'):send());});});
+  }
+  return send();
+}
+
 // Wrap fetch calls to auto-refresh on 401
 function supaFetchWithRefresh(url, opts, cb){
   fetch(url, opts).then(function(r){
@@ -1784,8 +1807,19 @@ function savePayslips(){try{localStorage.setItem('pt_payslips',JSON.stringify(PA
 try{var al=localStorage.getItem('pt_alloc');if(al){var alp=JSON.parse(al);ALLOC.invest=alp.invest||20;ALLOC.bills=alp.bills||10;}}catch(e){}
 
 // --- Helpers ---
-function tyear(d){var dt=new Date(d),y=dt.getFullYear();return dt>=new Date(y,3,6)?(y+'/'+(y+1)):((y-1)+'/'+y);}
-function money(n){return '\u00a3'+parseFloat(n||0).toFixed(2);}
+// UK tax year for a 'YYYY-MM-DD' date: 6 April to 5 April, e.g. '2026-04-05' -> '2025/26'.
+// Works on the date text so time zones and clock changes can't move an entry into another year.
+function tyear(d){
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(d||'');
+  if(!m)return '';
+  var y=+m[1],onOrAfter6Apr=(m[2]+m[3])>='0406';
+  var start=onOrAfter6Apr?y:y-1;
+  return start+'/'+String(start+1).slice(-2);
+}
+// Local calendar date from 'YYYY-MM-DD' (new Date('YYYY-MM-DD') would be UTC midnight).
+function parseYMD(ds){var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(ds||'');return m?new Date(+m[1],+m[2]-1,+m[3]):new Date(NaN);}
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function money(n){var v=parseFloat(n||0);return (v<0?'-':'')+'\u00a3'+Math.abs(v).toFixed(2);}
 function fdate(s){if(!s)return '';return new Date(s).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}
 function fdateShort(s){if(!s)return '';return new Date(s).toLocaleDateString('en-GB',{day:'2-digit',month:'short'});}
 function fdatePeriod(from,to){
@@ -1804,29 +1838,81 @@ function isReimbursedCat(cat){for(var i=0;i<REIMBURSED_CATS.length;i++){if(REIMB
 function inDateRange(d,from,to){if(!from&&!to)return true;if(from&&d<from)return false;if(to&&d>to)return false;return true;}
 function parseDuration(start,end){if(!start||!end||start.indexOf(':')<0||end.indexOf(':')<0)return 0;var s=start.split(':'),e=end.split(':'),mins=(parseInt(e[0])*60+parseInt(e[1]))-(parseInt(s[0])*60+parseInt(s[1]));return mins<0?mins+1440:mins;}
 function fmtHours(mins){if(!mins||mins<=0)return '';var h=Math.floor(mins/60),m=mins%60;return h>0?(h+'h'+(m>0?' '+m+'m':'')):(m+'m');}
-function getWeekKey(ds){var d=new Date(ds),day=d.getDay(),mon=new Date(d);mon.setDate(d.getDate()-((day+6)%7));return mon.getFullYear()+'-'+String(mon.getMonth()+1).padStart(2,'0')+'-'+String(mon.getDate()).padStart(2,'0');}
+// Monday of the week (Mon–Sun) containing the date, as 'YYYY-MM-DD'.
+function getWeekKey(ds){var d=parseYMD(ds);if(isNaN(d))return '';d.setDate(d.getDate()-((d.getDay()+6)%7));return ymd(d);}
 function getDayKey(ds){return ds.substr?ds.substr(0,10):'';}
 
 function getIncome(){return DB.income.filter(function(i){return(FYR==='All'||tyear(i.date)===FYR)&&(FCO==='All'||i.company===FCO)&&inDateRange(i.date,FDFROM,FDTO);});}
 function getExp(){return DB.expenses.filter(function(e){return(FYR==='All'||tyear(e.date)===FYR)&&(FCO==='All'||e.company===FCO||!e.company)&&inDateRange(e.date,FDFROM,FDTO);});}
-function getYears(){var y={};DB.income.forEach(function(i){y[tyear(i.date)]=1;});DB.expenses.forEach(function(e){y[tyear(e.date)]=1;});return Object.keys(y).sort().reverse();}
+function getYears(){var y={};DB.income.forEach(function(i){y[tyear(i.date)]=1;});DB.expenses.forEach(function(e){y[tyear(e.date)]=1;});return Object.keys(y).filter(Boolean).sort().reverse();}
 
-// UK self-employed rates for 2026/27 (England, Wales & NI). Allowance and bands are frozen to April 2028.
-var TAX_YEAR_LABEL='2026/27';
-function ukTax(profit){
+// UK self-employed rates by tax year (England, Wales & Northern Ireland; Scotland has its own
+// income tax bands). Sources: HMRC rates and allowances; Finance Act 2023 freezes the allowance
+// and basic rate band to 2027/28.
+//   pa      personal allowance (tapers £1 per £2 of income over £100,000)
+//   basic   basic rate band (taxable income taxed at 20%), then 40%
+//   addl    taxable income above which 45% applies
+//   lpl/upl Class 4 lower/upper profits limits; c4/c4u the rates between them / above upl
+//   c2      Class 2 weekly rate (0 from 2024/25, when it was abolished); c2from profits at which it's due
+var TAX_RATES={
+  '2021/22':{pa:12570,basic:37700,addl:150000,lpl:9568, upl:50270,c4:0.09,  c4u:0.02,  c2:3.05,c2from:6515},
+  '2022/23':{pa:12570,basic:37700,addl:150000,lpl:11908,upl:50270,c4:0.0973,c4u:0.0273,c2:3.15,c2from:11908},
+  '2023/24':{pa:12570,basic:37700,addl:125140,lpl:12570,upl:50270,c4:0.09,  c4u:0.02,  c2:3.45,c2from:12570},
+  '2024/25':{pa:12570,basic:37700,addl:125140,lpl:12570,upl:50270,c4:0.06,  c4u:0.02,  c2:0,   c2from:0},
+  '2025/26':{pa:12570,basic:37700,addl:125140,lpl:12570,upl:50270,c4:0.06,  c4u:0.02,  c2:0,   c2from:0},
+  '2026/27':{pa:12570,basic:37700,addl:125140,lpl:12570,upl:50270,c4:0.06,  c4u:0.02,  c2:0,   c2from:0}
+};
+// Years outside the table use the nearest known year (later years: thresholds are frozen to 2028).
+function taxRatesFor(ty){
+  if(TAX_RATES[ty])return TAX_RATES[ty];
+  var ys=Object.keys(TAX_RATES).sort();
+  return TAX_RATES[ty&&ty<ys[0]?ys[0]:ys[ys.length-1]];
+}
+var TAX_YEAR_LABEL=tyear(today());
+function ukTax(profit,ty){
+  var r=taxRatesFor(ty||tyear(today()));
   var p=Math.max(0,profit||0);
-  var pa=Math.max(0,12570-Math.max(0,p-100000)/2); // allowance tapers by £1 for every £2 over £100k
+  var pa=Math.max(0,r.pa-Math.max(0,p-100000)/2);
   var taxable=Math.max(0,p-pa);
-  var tax=Math.min(taxable,37700)*.20+Math.max(0,Math.min(taxable,125140)-37700)*.40+Math.max(0,taxable-125140)*.45;
-  var ni=Math.max(0,Math.min(p,50270)-12570)*.06+Math.max(0,p-50270)*.02; // Class 4
-  return {pa:pa,taxable:taxable,tax:tax,ni:ni};
+  var tax=Math.min(taxable,r.basic)*.20+Math.max(0,Math.min(taxable,r.addl)-r.basic)*.40+Math.max(0,taxable-r.addl)*.45;
+  var c4=Math.max(0,Math.min(p,r.upl)-r.lpl)*r.c4+Math.max(0,p-r.upl)*r.c4u;
+  var c2=r.c2&&p>=r.c2from?r.c2*52:0;
+  return {pa:pa,taxable:taxable,tax:tax,ni:c4+c2,c4:c4,c2:c2};
+}
+// Expenses that count against profit for the current filters. Unlike getExp() (which also lists
+// unassigned expenses under a company filter), a company filter only takes that company's costs.
+function getProfitExp(){return DB.expenses.filter(function(e){return(FYR==='All'||tyear(e.date)===FYR)&&(FCO==='All'||e.company===FCO)&&inDateRange(e.date,FDFROM,FDTO);});}
+// Profit = income minus deductible expenses. Reimbursed expenses are left out on both sides:
+// the company pays them back and that money isn't logged as income.
+function profitFor(incomeItems,expenseItems){
+  var inc=0,exp=0;
+  incomeItems.forEach(function(i){inc+=parseFloat(i.amount||0);});
+  expenseItems.forEach(function(e){if(!isReimbursedCat(e.category))exp+=parseFloat(e.amount||0);});
+  return {inc:inc,exp:exp,net:inc-exp};
+}
+function profitBetween(from,to){
+  var inR=function(d){return d&&d>=from&&d<=to;};
+  return profitFor(DB.income.filter(function(i){return inR(i.date);}),DB.expenses.filter(function(e){return inR(e.date);}));
 }
 function calcs(){
-  var fi=getIncome(),fe=getExp(),inc=0,totalExp=0,reimb=0,nonreimb=0;
+  var fi=getIncome(),fe=getProfitExp(),inc=0,totalExp=0,reimb=0,nonreimb=0;
   fi.forEach(function(i){inc+=parseFloat(i.amount||0);});
   fe.forEach(function(e){var a=parseFloat(e.amount||0);totalExp+=a;if(isReimbursedCat(e.category))reimb+=a;else nonreimb+=a;});
-  var deductible=totalExp-reimb,p=inc-deductible,ut=ukTax(p);
-  return {inc:inc,exp:totalExp,deductible:deductible,profit:p,tax:ut.tax,ni:ut.ni,pa:ut.pa,taxable:ut.taxable,reimb:reimb,nonreimb:nonreimb};
+  var deductible=totalExp-reimb,p=inc-deductible;
+  // Tax is charged per tax year, so with several years in view work each one out separately.
+  var byYear={};
+  fi.forEach(function(i){var y=tyear(i.date);byYear[y]=(byYear[y]||0)+parseFloat(i.amount||0);});
+  fe.forEach(function(e){if(isReimbursedCat(e.category))return;var y=tyear(e.date);byYear[y]=(byYear[y]||0)-parseFloat(e.amount||0);});
+  var tax=0,ni=0,c4=0,c2=0,pa=0,taxable=0;
+  Object.keys(byYear).forEach(function(y){var ut=ukTax(byYear[y],y);tax+=ut.tax;ni+=ut.ni;c4+=ut.c4;c2+=ut.c2;pa+=ut.pa;taxable+=ut.taxable;});
+  if(!Object.keys(byYear).length)pa=ukTax(0,FYR!=='All'?FYR:'').pa;
+  return {inc:inc,exp:totalExp,deductible:deductible,profit:p,tax:tax,ni:ni,c4:c4,c2:c2,pa:pa,taxable:taxable,reimb:reimb,nonreimb:nonreimb,years:Object.keys(byYear).length};
+}
+// Estimated tax + NI for one tax year (e.g. '2026/27'), ignoring the dashboard filters.
+function taxYearEstimate(ty){
+  var r=profitFor(DB.income.filter(function(i){return tyear(i.date)===ty;}),DB.expenses.filter(function(e){return tyear(e.date)===ty;}));
+  var ut=ukTax(r.net,ty);
+  return {profit:r.net,tax:ut.tax,ni:ut.ni,total:ut.tax+ut.ni};
 }
 function jobProfit(jr){
   var inc=0,exp=0;
@@ -2203,16 +2289,19 @@ function greeting(){
 }
 
 // --- Daily average comparison ---
+// Today's profit against the average profit of other days you worked (days with income).
 function dailyComparison(){
   var td=today(),todayInc=0;
   DB.income.filter(function(i){return i.date===td;}).forEach(function(i){todayInc+=parseFloat(i.amount||0);});
   var days={};
   DB.income.forEach(function(i){var dk=getDayKey(i.date);days[dk]=(days[dk]||0)+parseFloat(i.amount||0);});
+  DB.expenses.forEach(function(e){if(isReimbursedCat(e.category))return;var dk=getDayKey(e.date);if(days[dk]!==undefined)days[dk]-=parseFloat(e.amount||0);});
+  var todayNet=todayInc;
+  DB.expenses.forEach(function(e){if(e.date===td&&!isReimbursedCat(e.category))todayNet-=parseFloat(e.amount||0);});
   var dayKeys=Object.keys(days).filter(function(k){return k!==td;});
   if(!dayKeys.length) return null;
   var avg=0;dayKeys.forEach(function(k){avg+=days[k];});avg/=dayKeys.length;
-  var diff=todayInc-avg;
-  return {todayInc:todayInc,avg:avg,diff:diff};
+  return {todayInc:todayInc,avg:avg,diff:todayNet-avg};
 }
 
 // --- Onboarding ---
@@ -2564,7 +2653,7 @@ function generateReport(){
   fi.forEach(function(i){if(byC[i.company]!==undefined)byC[i.company]+=parseFloat(i.amount||0);});
   var dr=(FDFROM||FDTO)?((FDFROM||'Start')+' to '+(FDTO||'Today')):(FYR==='All'?'All Time':FYR);
   var coLines=[];COMPANIES.forEach(function(c){coLines.push((c.name+':').padEnd(16)+money(byC[c.name]||0));});
-  var lines=['PLATETRACK - SELF ASSESSMENT REPORT','Accountant Report (Self Assessment Ready)','==========================================','Period: '+dr,'Generated: '+new Date().toLocaleDateString('en-GB'),'','INCOME','------'].concat(coLines).concat(['Total Income:  '+money(t.inc),'','EXPENSES','--------','Total Expenses:         '+money(t.exp),'Reimbursed (excluded):  '+money(t.reimb),'Allowable Deductions:   '+money(t.deductible),'','PROFIT & TAX','------------','Net Taxable Profit:   '+money(t.profit),'Personal Allowance:   '+money(t.pa),'Taxable Income:       '+money(t.taxable),'Est. Income Tax:      '+money(t.tax),'Est. Class 4 NI:      '+money(t.ni),'Total Tax Liability:  '+money(t.tax+t.ni),'','NOTE: '+TAX_YEAR_LABEL+' UK rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p rate).','Consult a qualified accountant for your official return.','==========================================']);
+  var lines=['PLATETRACK - SELF ASSESSMENT REPORT','Accountant Report (Self Assessment Ready)','==========================================','Period: '+dr,'Generated: '+new Date().toLocaleDateString('en-GB'),'','INCOME','------'].concat(coLines).concat(['Total Income:  '+money(t.inc),'','EXPENSES','--------','Total Expenses:         '+money(t.exp),'Reimbursed (excluded):  '+money(t.reimb),'Allowable Deductions:   '+money(t.deductible),'','PROFIT & TAX','------------','Net Taxable Profit:   '+money(t.profit),'Personal Allowance:   '+money(t.pa),'Taxable Income:       '+money(t.taxable),'Est. Income Tax:      '+money(t.tax),'Est. Class 4 NI:      '+money(t.c4),].concat(t.c2>0?['Class 2 NI:           '+money(t.c2)]:[]).concat(['Total Tax Liability:  '+money(t.tax+t.ni),'','NOTE: Each tax year uses its own HMRC rates (England, Wales & NI). No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p rate).','Consult a qualified accountant for your official return.','==========================================']));
   try{var blob=new Blob([lines.join('\n')],{type:'text/plain'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='platetrack-sa-'+today()+'.txt';document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},100);showToast('Report downloaded!');}catch(e){showToast('Export failed');}
 }
 function csvEsc(v){
@@ -2633,17 +2722,12 @@ function ocrPayslip(file,idx){
     var reader=new FileReader();
     reader.onload=function(ev){
       var base64=ev.target.result.split(',')[1];
-      fetch('https://platetrack-ai.tyburtonc.workers.dev/',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          model:'claude-sonnet-4-5',
+      aiFetch({
           max_tokens:3000,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
             {type:'text',text:'Extract all data from this payslip. Return ONLY valid JSON, no markdown:\n{"periodFrom":"YYYY-MM-DD or null","periodTo":"YYYY-MM-DD or null","netPay":number_or_null,"items":[{"ref":"job number or null","type":"line type code or null","description":"1-6 word route or label","company":"client name or null","amount":number,"date":"YYYY-MM-DD or null","registration":"vehicle registration plate shown on the line or null"}]}\nRules: items[] lists every pay line (jobs, bonuses, deductions, travel charges, supplements). For BCA self-bill payslips (numeric job refs like 12027220, with Type column codes): ref is the Job column number (e.g. 12027220), NOT the Reference column; put the Type column value verbatim in the type field (JOB, INTRAV, RGNWGT, ADDPAY, RATESUPP, WT/NC, WTG, M25, etc.); put the route in description; set company to "BCA" on EVERY line (including deduction and Rate Supplement lines). For Rate Supplement / Inspection Payment lines set type to Rate Supplement, set description to Inspection Payment, and put the trailing vehicle registration plate (e.g. Inspection Payment-04-06-26 AJ23GXT has plate AJ23GXT) in the registration field. For BCA weekly statements (documents with a table of multiple job entries where each row has a job ref in J-XXXX-XXXX format, e.g. J-1234-AB56): extract EVERY J-XXXX-XXXX ref in the document as a separate item — do NOT stop at the first one; ref = the J-XXXX-XXXX job reference for that row; amount = the amount shown on that row; date = the job date for that row if shown or null; type = null; description = route or label if shown; company = "BCA"; netPay = the Net Total or Grand Total shown at the bottom. For Engineius invoices (single per-job invoice layout with J-XXXX-XXXX ref): ref is the Job code from the Job column (e.g. J-851B-8E65); type is null; description is the route or charge label; set company to "Engineius" on EVERY line, including the referral-bonus and Grab Weekly lines that have no job ref - do NOT write "BCA" on an Engineius invoice even though BCA is mentioned earlier in these instructions; check the invoice header (it says "Invoice To Engineius") before writing the company field. For DriiveMe and any other company: ref is whatever uniquely identifies the job; type is null unless a distinct type code is shown. Deductions and admin charges have negative amounts. netPay is the final total paid to the driver. Dates in YYYY-MM-DD. Amounts as plain GBP numbers, no currency symbol. SELF-CHECK before returning: sum the amount of every item in items[] (deductions are negative, so they subtract). If a Total Amount or Net Pay figure is printed on the document, compare your sum to it. If they do not match, you have misread at least one digit - re-read every JOB, RGNWGT, ADDPAY and INTRAV amount carefully, character by character, correct any digit you misread, and only return JSON once your item sum matches the printed total (or you are confident after a careful re-read that the document itself does not balance). SELF-CHECK 2 (job references): on a BCA self-bill payslip, every row that shares the same date and the same route description belongs to the same job and MUST have the identical ref number - these rows are usually adjacent or near each other in the table. Before returning, group your extracted items by (date, description) and verify every item in each group has the exact same ref digit-for-digit. If any group has refs that differ, you misread at least one digit in the job number - re-read that ref character by character against the other rows in the same group and correct it. A ref that appears only once for its date+description with no matching sibling rows is more likely to have a misread digit than one confirmed by repetition across multiple rows.'}
           ]}]
-        })
       })
       .then(function(r){return r.json();})
       .then(function(d){
@@ -3104,7 +3188,12 @@ function updateHeaderDate(){
 }
 
 // --- Deadline ---
-function daysToDeadline(){var now=new Date(),yr=now.getFullYear(),d=new Date(yr,0,31);if(d<now)d=new Date(yr+1,0,31);return Math.ceil((d-now)/86400000);}
+// Whole days until the next 31 January Self Assessment deadline (0 on the day itself).
+function daysToDeadline(){
+  var t=parseYMD(today()),d=new Date(t.getFullYear(),0,31);
+  if(d<t)d=new Date(t.getFullYear()+1,0,31);
+  return Math.round((d-t)/86400000);
+}
 
 // --- Smart job sort for expense linking ---
 function sortedJobRefs(date,company){
@@ -3553,22 +3642,15 @@ function goalWidgetHTML(todayInc, weekInc, monthInc){
 
 function rDash(){
   var t=calcs(),fi=getIncome(),fe=getExp();
-  var td=today(),todayInc=0,todayExp=0,todayJobs=[];
+  var td=today(),todayJobs=[];
   var _todayMs=new Date(td).getTime(),_tmrMs=_todayMs+86400000;
-  DB.income.filter(function(i){return i.date===td||(!i.date&&Number(i.id)>=_todayMs&&Number(i.id)<_tmrMs+9999);}).forEach(function(i){todayInc+=parseFloat(i.amount||0);todayJobs.push(i);});
-  DB.expenses.filter(function(e){return e.date===td&&!isReimbursedCat(e.category);}).forEach(function(e){todayExp+=parseFloat(e.amount||0);});
-  var todayTakeHome=Math.max(0,todayInc-todayExp);
+  var _todayIncItems=DB.income.filter(function(i){return i.date===td||(!i.date&&Number(i.id)>=_todayMs&&Number(i.id)<_tmrMs+9999);});
+  _todayIncItems.forEach(function(i){todayJobs.push(i);});
+  var todayP=profitFor(_todayIncItems,DB.expenses.filter(function(e){return e.date===td;}));
+  var todayInc=todayP.inc;
   var isFiltered=FYR!=='All'||FCO!=='All'||FDFROM||FDTO;
-  if(isFiltered){
-    var _fi=getIncome(),_fI=0,_fE=0;
-    _fi.forEach(function(i){_fI+=parseFloat(i.amount||0);});
-    // When company filter active, only deduct expenses linked to that company
-    var _fe=FCO!=='All'
-      ? DB.expenses.filter(function(e){return e.company===FCO&&(FYR==='All'||tyear(e.date)===FYR)&&inDateRange(e.date,FDFROM,FDTO);})
-      : getExp();
-    _fe.forEach(function(e){if(!isReimbursedCat(e.category))_fE+=parseFloat(e.amount||0);});
-    todayTakeHome=Math.max(0,_fI-_fE);
-  }
+  var heroP=isFiltered?profitFor(getIncome(),getProfitExp()):todayP;
+  var todayTakeHome=heroP.net;
 
   // Greeting & date
   var now=new Date();
@@ -3587,44 +3669,43 @@ function rDash(){
     else if(comp.diff<-0.5) compHTML='<div class="dash-hero-comparison behind">&#x2198; '+money(Math.abs(comp.diff))+' below your daily average</div>';
     else compHTML='<div class="dash-hero-comparison neutral">&#x2022; On par with your daily average</div>';
   } else if(comp&&comp.avg>0&&comp.todayInc===0) {
-    compHTML='<div class="dash-hero-comparison neutral">Daily average: '+money(comp.avg)+'</div>';
+    compHTML='<div class="dash-hero-comparison neutral">Daily average profit: '+money(comp.avg)+'</div>';
   }
 
   // Streak
   var streak=getStreak();
   var streakHTML=streak>=3?'<div style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:4px 12px;border-radius:100px;font-size:11px;font-weight:700;color:var(--orange);background:rgba(234,88,12,0.10);border:1px solid rgba(234,88,12,0.2)">&#x1F525; '+streak+'-day streak</div>':'';
 
-  // Weekly bar chart
+  // Weekly bar chart: profit per day (income minus deductible expenses)
   var wk=getWeekKey(td),weekDays=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  var weekMap={};DB.income.forEach(function(i){var dk=getDayKey(i.date);weekMap[dk]=(weekMap[dk]||0)+parseFloat(i.amount||0);});
-  var monDate=new Date(wk);
+  var weekMap={};
+  DB.income.forEach(function(i){var dk=getDayKey(i.date);weekMap[dk]=(weekMap[dk]||0)+parseFloat(i.amount||0);});
+  DB.expenses.forEach(function(e){if(isReimbursedCat(e.category))return;var dk=getDayKey(e.date);weekMap[dk]=(weekMap[dk]||0)-parseFloat(e.amount||0);});
+  var monDate=parseYMD(wk);
   var maxDay=1;
   var dayData=[];
   for(var di=0;di<7;di++){
     var dd=new Date(monDate);dd.setDate(monDate.getDate()+di);
-    var dkey=dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');
+    var dkey=ymd(dd);
     var val=weekMap[dkey]||0;
-    if(val>maxDay)maxDay=val;
+    if(Math.abs(val)>maxDay)maxDay=Math.abs(val);
     dayData.push({label:weekDays[di],key:dkey,val:val,isToday:dkey===td,isPast:dd<new Date()&&dkey!==td});
   }
   var barsHTML=dayData.map(function(d){
-    var pct=d.val>0?Math.max(10,(d.val/maxDay)*100):0;
-    var cls=d.isToday?'today':d.isPast&&d.val>0?'past':'future';
+    var pct=d.val!==0?Math.max(10,(Math.abs(d.val)/maxDay)*100):0;
+    var cls=d.val<0?'loss':d.isToday?'today':d.isPast&&d.val>0?'past':'future';
     return '<div class="week-bar-wrap">'
       +'<div class="week-bar-outer"><div class="week-bar-inner '+cls+'" style="height:'+pct+'%;transition:height .5s cubic-bezier(.34,1.56,.64,1)"></div></div>'
       +'<span class="week-bar-label'+(d.isToday?' today':'')+'">'+d.label+'</span>'
       +'</div>';
   }).join('');
 
-  // Stats — always current week/month from ALL income regardless of filters
-  var weekInc=0;var wkKey=getWeekKey(td);
-  DB.income.filter(function(i){return i.date&&getWeekKey(i.date)===wkKey;}).forEach(function(i){weekInc+=parseFloat(i.amount||0);});
-  var monthInc=0,monthExp=0;var ym=td.substr(0,7);
-  DB.income.filter(function(i){return i.date&&i.date.substr(0,7)===ym;}).forEach(function(i){monthInc+=parseFloat(i.amount||0);});
-  DB.expenses.filter(function(e){return e.date&&e.date.substr(0,7)===ym&&!isReimbursedCat(e.category);}).forEach(function(e){monthExp+=parseFloat(e.amount||0);});
-  var monthNet=Math.max(0,monthInc-monthExp);
-  var taxRate=t.inc>0?(t.tax+t.ni)/t.inc:0;
-  var alloc=allocate(t.inc,taxRate);
+  // Stats: always the current week (Mon–Sun) / month / tax year, regardless of filters
+  var wkKey=getWeekKey(td),ym=td.substr(0,7);
+  var weekP=profitFor(DB.income.filter(function(i){return i.date&&getWeekKey(i.date)===wkKey;}),DB.expenses.filter(function(e){return e.date&&getWeekKey(e.date)===wkKey;}));
+  var monthP=profitFor(DB.income.filter(function(i){return i.date&&i.date.substr(0,7)===ym;}),DB.expenses.filter(function(e){return e.date&&e.date.substr(0,7)===ym;}));
+  var weekInc=weekP.inc,monthInc=monthP.inc,weekNet=weekP.net,monthNet=monthP.net;
+  var potYear=FYR!=='All'?FYR:tyear(td),pot=taxYearEstimate(potYear);
 
   // Jobs - today when no filter, filtered range when filter active
   var jobsListTitle=isFiltered?'Jobs':'Today\'s Jobs';
@@ -3657,7 +3738,7 @@ function rDash(){
   var bLbl=isFiltered&&!DASH_FILTER_OPEN?'&#x2713; Filtered':'&#x25BC; Filter';
   var filterBtn='<button onclick="toggleDashFilter()" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--r-full);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+bBdr+';background:'+bBg+';color:'+bClr+';backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 8px rgba(0,0,0,0.08);-webkit-tap-highlight-color:transparent">'+bLbl+'</button>';
 
-  var heroLbl=isFiltered?'TAKE-HOME':'TODAY\'S TAKE-HOME';
+  var heroLbl=isFiltered?'PROFIT':'TODAY\'S PROFIT';
 
   // Greeting section (scrolls with content, sits below sticky util-hdr)
   var doCarAnim=!sessionStorage.getItem('pt_car_done');
@@ -3681,17 +3762,17 @@ function rDash(){
     +dashChipFilterHTML()
     +'<div class="dash-hero">'
     +'<div class="dash-hero-label">'+heroLbl+'</div>'
-    +'<div class="dash-hero-amount'+(todayTakeHome===0?' zero':'')+'">'+money(todayTakeHome)+'</div>'
-    +'<div class="dash-hero-sub">After tax &amp; deductible expenses</div>'
+    +'<div class="dash-hero-amount'+(todayTakeHome===0?' zero':todayTakeHome<0?' loss':'')+'">'+money(todayTakeHome)+'</div>'
+    +'<div class="dash-hero-sub">'+(heroP.exp>0?money(heroP.inc)+' income &minus; '+money(heroP.exp)+' expenses &middot; before tax':'Income minus expenses &middot; before tax')+'</div>'
     +(compHTML||streakHTML?'<div>'+compHTML+(streakHTML&&!compHTML?streakHTML:'')+'</div>':'')
     +'</div>'
     +'<div class="stat-row">'
-    +'<div class="stat-chip"><div class="stat-chip-label">This Week</div><div class="stat-chip-val '+(weekInc>0?'green':'text3')+'">'+money(weekInc)+'</div>'+(weekInc>0?'<div class="stat-chip-sub">&#x2197; this week</div>':'')+'</div>'
-    +'<div class="stat-chip"><div class="stat-chip-label">This Month</div><div class="stat-chip-val '+(monthNet>0?'green':'text3')+'">'+money(monthNet)+'</div><div class="stat-chip-sub">net profit</div></div>'
-    +'<div class="stat-chip"><div class="stat-chip-label">Tax Pot</div><div class="stat-chip-val red">'+money(alloc.tax)+'</div><div class="stat-chip-sub">set aside</div></div>'
+    +'<div class="stat-chip"><div class="stat-chip-label">This Week</div><div class="stat-chip-val '+(weekNet>0?'green':weekNet<0?'red':'text3')+'">'+money(weekNet)+'</div><div class="stat-chip-sub">net profit</div></div>'
+    +'<div class="stat-chip"><div class="stat-chip-label">This Month</div><div class="stat-chip-val '+(monthNet>0?'green':monthNet<0?'red':'text3')+'">'+money(monthNet)+'</div><div class="stat-chip-sub">net profit</div></div>'
+    +'<div class="stat-chip"><div class="stat-chip-label">Tax Pot</div><div class="stat-chip-val red">'+money(pot.total)+'</div><div class="stat-chip-sub">est. '+potYear+'</div></div>'
     +'</div>'
     +goalWidgetHTML(todayInc, weekInc, monthInc)
-    +'<div class="section"><div class="section-hdr" style="padding-top:4px"><span class="section-title">This Week</span><span style="font-size:12px;color:var(--text4)">'+(weekInc>0?money(weekInc):'')+'</span></div>'
+    +'<div class="section"><div class="section-hdr" style="padding-top:4px"><span class="section-title">This Week</span><span style="font-size:12px;color:var(--text4)">'+(weekInc||weekP.exp?money(weekNet)+' profit':'')+'</span></div>'
     +'<div class="week-chart"><div class="week-bars">'+barsHTML+'</div></div></div>'
     +'<div class="search-bar">'
     +'<div class="search-inner">'
@@ -4389,18 +4470,18 @@ function rSummary(){
   // Jobs
   var jobs={};
   fi.forEach(function(i){var jr=i.jobRef||'(no ref)';if(!jobs[jr])jobs[jr]={ref:jr,company:i.company,inc:0,exp:0,date:i.date,mins:0};jobs[jr].inc+=parseFloat(i.amount||0);jobs[jr].mins+=parseDuration(i.startTime,i.endTime);});
-  var fe=getExp();
+  var fe=getProfitExp();
   fe.forEach(function(e){if(!e.jobRef||isReimbursedCat(e.category)||!jobs[e.jobRef])return;jobs[e.jobRef].exp+=parseFloat(e.amount||0);});
   var jobArr=[];for(var k in jobs){if(k!=='(no ref)')jobArr.push(jobs[k]);}
   jobArr.sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
 
   // Monthly chart
   var monthMap={};
-  DB.income.forEach(function(i){var mk=i.date.substr(0,7);if(!monthMap[mk])monthMap[mk]={inc:0,exp:0};monthMap[mk].inc+=parseFloat(i.amount||0);});
-  getExp().forEach(function(e){var mk=e.date.substr(0,7);if(isReimbursedCat(e.category))return;if(!monthMap[mk])monthMap[mk]={inc:0,exp:0};monthMap[mk].exp+=parseFloat(e.amount||0);});
+  fi.forEach(function(i){var mk=(i.date||'').substr(0,7);if(!monthMap[mk])monthMap[mk]={inc:0,exp:0};monthMap[mk].inc+=parseFloat(i.amount||0);});
+  getProfitExp().forEach(function(e){var mk=(e.date||'').substr(0,7);if(isReimbursedCat(e.category))return;if(!monthMap[mk])monthMap[mk]={inc:0,exp:0};monthMap[mk].exp+=parseFloat(e.amount||0);});
   var weeks6Map={};
-  DB.income.forEach(function(i){var wk=getWeekKey(i.date);if(!weeks6Map[wk])weeks6Map[wk]={inc:0,exp:0};weeks6Map[wk].inc+=parseFloat(i.amount||0);});
-  getExp().forEach(function(e){var wk=getWeekKey(e.date);if(isReimbursedCat(e.category))return;if(!weeks6Map[wk])weeks6Map[wk]={inc:0,exp:0};weeks6Map[wk].exp+=parseFloat(e.amount||0);});
+  fi.forEach(function(i){var wk=getWeekKey(i.date);if(!weeks6Map[wk])weeks6Map[wk]={inc:0,exp:0};weeks6Map[wk].inc+=parseFloat(i.amount||0);});
+  getProfitExp().forEach(function(e){var wk=getWeekKey(e.date);if(isReimbursedCat(e.category))return;if(!weeks6Map[wk])weeks6Map[wk]={inc:0,exp:0};weeks6Map[wk].exp+=parseFloat(e.amount||0);});
 
   var months6=Object.keys(monthMap).sort().slice(-6);
   var weeks8=Object.keys(weeks6Map).sort().slice(-8);
@@ -4428,9 +4509,10 @@ function rSummary(){
     {label:'Personal Allowance',val:money(t.pa),cls:''},
     {label:'Taxable Income',val:money(t.taxable),cls:''},
     {label:'Est. Income Tax',val:money(t.tax),cls:'red'},
-    {label:'Est. Class 4 NI',val:money(t.ni),cls:'red'},
+    {label:'Est. Class 4 NI',val:money(t.c4),cls:'red'},
+  ].concat(t.c2>0?[{label:'Class 2 NI',val:money(t.c2),cls:'red'}]:[]).concat([
     {label:'Total Tax Bill',val:money(t.tax+t.ni),cls:'red',bold:true},
-  ];
+  ]);
   var rowsHTML=coRows.map(function(r){return '<div class="summary-row"><span class="summary-row-label">'+r.label+'</span><span class="summary-row-val" style="color:'+r.color+'">'+r.val+'</span></div>';}).join('');
   rowsHTML+=rows.map(function(r){return '<div class="summary-row'+(r.indent?' indent':'')+'"><span class="summary-row-label">'+r.label+'</span><span class="summary-row-val '+(r.cls||'')+'" style="'+(r.bold?'font-size:16px':'')+'">'+r.val+'</span></div>';}).join('');
 
@@ -4569,7 +4651,7 @@ function rSummary(){
     +'</div>'
     // SA breakdown
     +'<div class="summary-card"><div class="summary-card-hdr">Self Assessment Breakdown</div>'+rowsHTML
-    +'<div class="disc" style="padding:14px 16px;border-top:1px solid var(--border)">Estimates only &mdash; '+TAX_YEAR_LABEL+' UK tax rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p). Consult an accountant.</div></div>'
+    +'<div class="disc" style="padding:14px 16px;border-top:1px solid var(--border)">Estimates only &mdash; each tax year uses its own HMRC rates (England, Wales &amp; NI). No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p). Consult an accountant.</div></div>'
     // Payslip
     +payslipHTML
     // Export
@@ -4964,17 +5046,12 @@ function ocrReceipt(file){
     var reader=new FileReader();
     reader.onload=function(ev){
       var base64=ev.target.result.split(',')[1];
-      fetch('https://platetrack-ai.tyburtonc.workers.dev/',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          model:'claude-sonnet-4-5',
+      aiFetch({
           max_tokens:300,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
             {type:'text',text:'Today\'s date is '+today()+'. Extract data from this receipt. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","description":"2-5 word summary or null","category":"one of Fuel/Travel/EV Charging/Cleaning/Parking/Tolls/Other or null","travel_type":"use exactly one of Train/Bus/Taxi/Uber/Tube/Ferry/Other or null (only set when category is Travel)","receipt_ref":"receipt/transaction number printed on receipt or null"}. Amount is the GBP total as a plain number.'}
           ]}]
-        })
       })
       .then(function(r){return r.json();})
       .then(function(d){
@@ -5024,17 +5101,12 @@ function ocrIncomeReceipt(file){
       var base64=ev.target.result.split(',')[1];
       var coList=COMPANIES.map(function(c){return c.name;}).join(', ');
       var promptText='Today\'s date is '+today()+'. Extract data from this job or delivery confirmation for a UK trade plate driver. Return ONLY valid JSON, no markdown: {"amount":number_or_null,"date":"YYYY-MM-DD or null","job_ref":"alphanumeric job or booking reference ID such as J-0739-08CF (NOT the vehicle registration plate) or null","registration":"UK vehicle registration plate such as KJ25LTT or null","miles":miles_as_number_or_null,"company":"identify company from document branding or job number format, must be exactly one of ['+coList+'] or null","start_postcode":"UK postcode for collection/pickup location or null","end_postcode":"UK postcode for delivery/drop-off location or null"}. Amount is GBP total as a plain number. Postcodes must be uppercase UK format e.g. LU1 2AB. miles is a plain number (e.g. 39 for distances shown as \"39 mi\").';
-      fetch('https://platetrack-ai.tyburtonc.workers.dev/',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          model:'claude-sonnet-4-5',
+      aiFetch({
           max_tokens:500,
           messages:[{role:'user',content:[
             {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
             {type:'text',text:promptText}
           ]}]
-        })
       })
       .then(function(r){return r.json();})
       .then(function(d){
@@ -5875,17 +5947,10 @@ apiMsgs.push({ role: history[h].role === "user" ? "user" : "assistant", content:
 }
 apiMsgs.push({ role: "user", content: text });
 
-var PROXY_URL = "https://platetrack-ai.tyburtonc.workers.dev/";
-
-fetch(PROXY_URL, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({
-model: "claude-sonnet-4-5",
+aiFetch({
 max_tokens: 1000,
 system: systemPrompt,
 messages: apiMsgs
-})
 })
 .then(function(r) {
   return r.json().then(function(d) { d._status = r.status; d._ok = r.ok; return d; });

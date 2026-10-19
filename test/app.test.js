@@ -1,47 +1,10 @@
 // Browser tests against the built app in docs/. Run with `npm test` (builds first).
-const { test, before, after } = require('node:test');
+const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
 
-const DOCS = path.join(__dirname, '..', 'docs');
-const TYPES = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png' };
-let server, browser, base;
-
-before(async () => {
-  server = http.createServer((req, res) => {
-    let p = decodeURIComponent(req.url.split('?')[0]).replace(/^\/Plate-Track/, '');
-    if (p === '' || p.endsWith('/')) p += 'index.html';
-    const f = path.join(DOCS, p);
-    if (!f.startsWith(DOCS) || !fs.existsSync(f)) { res.writeHead(404); return res.end(); }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' });
-    fs.createReadStream(f).pipe(res);
-  });
-  await new Promise(r => server.listen(0, r));
-  base = `http://localhost:${server.address().port}/Plate-Track/`;
-  browser = await chromium.launch();
-});
-after(async () => { await browser.close(); server.close(); });
-
-// Fresh page with onboarding skipped and optional seed data in localStorage.
-async function openApp(seed) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
-  await page.addInitScript(db => {
-    if (sessionStorage.getItem('seeded')) return;
-    sessionStorage.setItem('seeded', '1');
-    localStorage.setItem('pt_onboarded', '1');
-    if (db) localStorage.setItem('pt9', db);
-  }, seed ? JSON.stringify(seed) : null);
-  page.on('dialog', d => d.dismiss());
-  await page.goto(base);
-  await page.waitForFunction(() => typeof DB === 'object');
-  return { page, errors, close: () => ctx.close() };
-}
+const { openApp, DOCS } = require('./helpers');
 
 const expense = (id, extra) => Object.assign({ id: String(id), date: '2026-10-01', category: 'Fuel (Not Reimbursed)', amount: '10', company: '', jobRef: '', receipt: '', description: '', receiptImage: '' }, extra);
 
@@ -211,5 +174,102 @@ test('notes auto-link to jobs by dashed job ref or by plate typed with a space',
   const { page, close } = await openApp(seed);
   const r = await page.evaluate(() => [noteAutoLink('keys for j-85ca-5d30 left'), noteAutoLink('Damage on AB12 CDE'), noteAutoLink('ref 1234567 is different'), noteAutoLink('nothing here')]);
   assert.deepEqual(r, ['J-85CA-5D30', 'J-85CA-5D30', '', '']);
+  await close();
+});
+
+// Dashboard stat chips read as text, e.g. { 'This Week': '£70.00', ... }
+async function dashStats(page) {
+  return page.evaluate(() => {
+    showTab(0);
+    const out = {};
+    document.querySelectorAll('#pg0 .stat-chip').forEach(c => { out[c.querySelector('.stat-chip-label').textContent] = c.querySelector('.stat-chip-val').textContent; });
+    out.hero = document.querySelector('#pg0 .dash-hero-amount').textContent;
+    return out;
+  });
+}
+
+test('dashboard figures are profit: expenses reduce today, this week and this month', async () => {
+  const { page, errors, close } = await openApp({ income: [], expenses: [] });
+  await page.evaluate(() => {
+    const td = today();
+    DB.income.push({ id: 'i1', date: td, company: 'BCA', amount: '100', jobRef: 'J1' });
+    DB.expenses.push({ id: 'e1', date: td, category: 'Fuel (Not Reimbursed)', amount: '30' });
+    DB.expenses.push({ id: 'e2', date: td, category: 'Fuel (Reimbursed)', amount: '20' }); // paid back: no effect
+    saveDB();
+  });
+  let s = await dashStats(page);
+  assert.equal(s.hero, '£70.00');
+  assert.equal(s['This Week'], '£70.00');
+  assert.equal(s['This Month'], '£70.00');
+
+  // adding another expense today must lower every figure straight away
+  await page.evaluate(() => { DB.expenses.push({ id: 'e3', date: today(), category: 'Tolls (Not Reimbursed)', amount: '15' }); saveDB(); });
+  s = await dashStats(page);
+  assert.equal(s.hero, '£55.00');
+  assert.equal(s['This Week'], '£55.00');
+  assert.equal(s['This Month'], '£55.00');
+
+  // a loss shows as a negative number, not £0
+  await page.evaluate(() => { DB.expenses.push({ id: 'e4', date: today(), category: 'Hotel (Not Reimbursed)', amount: '80' }); saveDB(); });
+  s = await dashStats(page);
+  assert.equal(s.hero, '-£25.00');
+  assert.equal(s['This Week'], '-£25.00');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('tax pot covers the current tax year only, and multi-year tax uses each year\'s rates', async () => {
+  const { page, close } = await openApp({ income: [
+    { id: 'a', date: '2026-10-01', company: 'BCA', amount: '30000' },
+    { id: 'b', date: '2023-10-01', company: 'BCA', amount: '30000' } ], expenses: [] }, { now: '2026-10-19T12:00:00' });
+  const r = await page.evaluate(() => {
+    showTab(0);
+    const pot = [...document.querySelectorAll('#pg0 .stat-chip')].find(c => c.textContent.includes('Tax Pot'));
+    const t = calcs();
+    return { pot: pot.querySelector('.stat-chip-val').textContent, potSub: pot.querySelector('.stat-chip-sub').textContent, tax: t.tax, ni: t.ni };
+  });
+  assert.equal(r.pot, '£4531.80');                         // 2026/27 only: 3486 tax + 1045.80 Class 4
+  assert.equal(r.potSub, 'est. 2026/27');
+  assert.ok(Math.abs(r.tax - 2 * 3486) < 0.01);             // two separate years, not one £60k year
+  assert.ok(Math.abs(r.ni - (1045.8 + 1568.7 + 179.4)) < 0.01); // 2023/24: Class 4 at 9% + Class 2 £3.45 x 52
+  await close();
+});
+
+test('company filter: profit only deducts that company\'s expenses', async () => {
+  const { page, close } = await openApp({ income: [
+    { id: 'i1', date: '2026-10-01', company: 'BCA', amount: '200' },
+    { id: 'i2', date: '2026-10-01', company: 'Engineius', amount: '300' } ], expenses: [
+    { id: 'e1', date: '2026-10-01', company: 'BCA', category: 'Fuel (Not Reimbursed)', amount: '50' },
+    { id: 'e2', date: '2026-10-01', company: '', category: 'Other', amount: '40' } ] });
+  const r = await page.evaluate(() => {
+    const all = calcs().profit;
+    FCO = 'BCA'; const bca = calcs().profit; FCO = 'All';
+    return { all, bca };
+  });
+  assert.equal(r.all, 410);  // 500 - 50 - 40
+  assert.equal(r.bca, 150);  // 200 - 50
+  await close();
+});
+
+test('AI requests carry the sign-in token, and signed-out users are asked to sign in', async () => {
+  const { page, close } = await openApp({ income: [], expenses: [] });
+  const r = await page.evaluate(async () => {
+    const sent = [];
+    const realFetch = window.fetch;
+    window.fetch = async (url, opts) => { sent.push({ url, opts }); return new Response('{"content":[{"type":"text","text":"ok"}]}'); };
+    const out = await (await aiFetch({ max_tokens: 10, messages: [{ role: 'user', content: 'hi' }] })).json();
+    const signedOut = { out, calls: sent.length };
+    SUPA_USER = { id: 'u1' }; SUPA_SESSION = { access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 };
+    const ok = await (await aiFetch({ max_tokens: 10, messages: [{ role: 'user', content: 'hi' }] })).json();
+    window.fetch = realFetch;
+    const call = sent[0];
+    return { signedOut, ok, url: call.url, auth: call.opts.headers.Authorization, body: JSON.parse(call.opts.body) };
+  });
+  assert.equal(r.signedOut.calls, 0);
+  assert.match(r.signedOut.out.error.message, /sign in/i);
+  assert.equal(r.ok.content[0].text, 'ok');
+  assert.equal(r.url, 'https://platetrack-ai.tyburtonc.workers.dev/');
+  assert.equal(r.auth, 'Bearer tok');
+  assert.equal(r.body.model, undefined); // the worker picks the model
   await close();
 });
