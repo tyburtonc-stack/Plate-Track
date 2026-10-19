@@ -1,15 +1,19 @@
-const CACHE_NAME = 'platetrack-v6';
+// CACHE_NAME is stamped with a content hash by build.js, so every deploy installs a fresh cache.
+const CACHE_NAME = 'platetrack-8a92939f3e';
 const URLS_TO_CACHE = [
   '/Plate-Track/',
-  '/Plate-Track/index.html',
+  '/Plate-Track/pt.css',
   '/Plate-Track/manifest.json',
-  '/Plate-Track/sw.js',
-  '/Plate-Track/apple-touch-icon.png'
+  '/Plate-Track/assets/logo.png',
+  '/Plate-Track/assets/touch-icon.png'
 ];
 
 self.addEventListener('install', event => {
+  // Cache files one by one so a single missing file doesn't abort the install.
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(URLS_TO_CACHE))
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.all(URLS_TO_CACHE.map(url => cache.add(url).catch(() => {})))
+    )
   );
   self.skipWaiting();
 });
@@ -23,7 +27,18 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
-  );
+  const req = event.request;
+  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  if (req.mode === 'navigate') {
+    // Network first for the app page so updates show up on the next open; cache when offline.
+    event.respondWith(
+      fetch(req).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put('/Plate-Track/', copy));
+        return res;
+      }).catch(() => caches.match('/Plate-Track/'))
+    );
+    return;
+  }
+  event.respondWith(caches.match(req).then(cached => cached || fetch(req)));
 });

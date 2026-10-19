@@ -1327,7 +1327,7 @@ function supaSignIn(email,pw,cb){
 
 function supaSignOut(cb){
   if(SUPA_SESSION)fetch(SUPA_URL+'/auth/v1/logout',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_SESSION.access_token}}).catch(function(){});
-  SUPA_SESSION=null;SUPA_USER=null;
+  SUPA_SESSION=null;SUPA_USER=null;_jobMetaPulled=false;
   try{localStorage.removeItem('pt_sess');}catch(e){}
   if(cb)cb();
 }
@@ -1433,6 +1433,42 @@ function supaCompaniesPull(cb){
     .catch(function(e){if(cb)cb(e.message);});
 }
 
+// Job status/notes (DB.jobs) and quick notes (DB.notes) sync as one JSON column on users.
+// Needs: ALTER TABLE users ADD COLUMN IF NOT EXISTS job_meta jsonb; (supabase/job-meta.sql).
+// Until that's run the requests fail quietly and the data just stays on this device.
+// Pushes wait until this session has pulled once, so a fresh device can't overwrite the cloud copy.
+var _jobMetaPulled=false,JOB_META_STATUS='Not synced yet this session';
+function supaJobMetaPush(cb,force){
+  if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
+  if(!_jobMetaPulled&&!force)return cb&&cb('not_pulled');
+  fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id),{
+    method:'PATCH',
+    headers:Object.assign(_supaHdr(),{'Prefer':'return=minimal'}),
+    body:JSON.stringify({job_meta:{jobs:DB.jobs||{},notes:DB.notes||[]}})
+  }).then(function(r){if(!r.ok)console.warn('push job_meta',r.status);if(cb)cb(null);}).catch(function(e){if(cb)cb(e.message);});
+}
+function supaJobMetaPull(cb){
+  if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
+  var h=_supaHdr();delete h['Content-Type'];
+  fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id)+'&select=job_meta',{headers:h})
+    .then(function(r){if(!r.ok)JOB_META_STATUS='Cloud not set up yet: run supabase/job-meta.sql ('+r.status+')';return r.ok?r.json():null;})
+    .then(function(rows){
+      if(!rows){if(cb)cb('unavailable');return;}
+      JOB_META_STATUS='Synced at '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      var jm=rows.length?rows[0].job_meta:null;
+      _jobMetaPulled=true;
+      if(jm&&typeof jm==='object'){
+        DB.jobs=jm.jobs&&typeof jm.jobs==='object'?jm.jobs:{};
+        DB.notes=Array.isArray(jm.notes)?jm.notes:[];
+        saveDB();render(CTAB);
+        if(cb)cb(null);
+      } else {
+        supaJobMetaPush(cb,true); // first sync from this account: upload what's on the device
+      }
+    })
+    .catch(function(e){if(cb)cb(e.message);});
+}
+
 function supaIncomeTypesPush(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
   fetch(SUPA_URL+'/rest/v1/users?id=eq.'+encodeURIComponent(SUPA_USER.id),{
@@ -1466,6 +1502,7 @@ function supaPushAll(cb){
   var h=Object.assign(_supaHdr(),{'Prefer':'resolution=merge-duplicates'});
   var ops=[];
   if(incRows.length)ops.push(fetch(SUPA_URL+'/rest/v1/income',{method:'POST',headers:h,body:JSON.stringify(incRows)}).then(function(r){if(!r.ok)r.text().then(function(t){console.warn('push income',r.status,t);});}).catch(function(e){console.warn('push income failed',e);}));
+  ops.push(new Promise(function(res){supaJobMetaPush(function(){res();});}));
   if(expRows.length)ops.push(fetch(SUPA_URL+'/rest/v1/expenses',{method:'POST',headers:h,body:JSON.stringify(expRows)}).then(function(r){if(!r.ok)r.text().then(function(t){console.warn('push exp',r.status,t);});}).catch(function(e){console.warn('push exp failed',e);}));
   Promise.all(ops).then(function(){
     supaUploadPendingReceipts(function(){
@@ -1488,8 +1525,9 @@ function supaPullAll(cb){
     if(!Array.isArray(inc)||!Array.isArray(exp)){console.warn('bad pull',inc,exp);return cb&&cb('bad_response');}
     if(inc.length===0&&exp.length===0){console.log('cloud empty, pushing local');supaPushAll(cb);return;}
     DB.income=inc.map(function(x){return{id:x.id,date:x.date||'',company:x.company||'',incomeType:x.income_type||'',amount:String(x.amount||0),jobRef:x.job_ref||'',startTime:x.start_time||'',endTime:x.end_time||'',miles:x.miles!=null?String(x.miles):'',registration:x.registration||'',startPostcode:x.start_postcode||'',endPostcode:x.end_postcode||'',description:x.description||''};});
-    DB.expenses=exp.map(function(x){return{id:x.id,date:x.date||'',category:x.category||'',amount:String(x.amount||0),company:x.company||'',jobRef:x.job_ref||'',receipt:x.receipt||'',description:x.description||'',receiptImage:x.receipt_image||''};});
-    saveDB();render(CTAB);showToast('☁️ Data loaded');supaCompaniesPull(function(e){supaIncomeTypesPull(cb);});return;
+    var localImg={};DB.expenses.forEach(function(e){if(e.receiptImage&&e.receiptImage.indexOf('supabase:')!==0)localImg[e.id]=e.receiptImage;});
+    DB.expenses=exp.map(function(x){return{id:x.id,date:x.date||'',category:x.category||'',amount:String(x.amount||0),company:x.company||'',jobRef:x.job_ref||'',receipt:x.receipt||'',description:x.description||'',receiptImage:x.receipt_image||localImg[x.id]||''};});
+    saveDB();render(CTAB);showToast('☁️ Data loaded');supaCompaniesPull(function(e){supaIncomeTypesPull(function(){supaJobMetaPull(cb);});});return;
   }).catch(function(e){console.warn('pull err',e);if(cb)cb(e.message);});
 }
 
@@ -1609,13 +1647,15 @@ function supaDeleteReceipt(path){
 function supaUploadPendingReceipts(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb();
   var pending=DB.expenses.filter(function(e){
-    return e.receiptImage&&e.receiptImage.indexOf('data:image')===0;
+    return e.receiptImage&&(e.receiptImage.indexOf('data:image')===0||e.receiptImage.indexOf('idb:')===0);
   });
   if(pending.length===0)return cb&&cb();
   var done=0;
   pending.forEach(function(exp){
+    var localRef=exp.receiptImage;
+    receiptData(localRef,function(dataUrl){
     // Convert base64 to blob
-    var parts=exp.receiptImage.split(',');
+    var parts=(dataUrl||'').split(',');
     var mimeMatch=parts[0].match(/:(.*?);/);
     if(!mimeMatch||!parts[1]){done++;if(done===pending.length){saveDB();if(cb)cb();}return;}
     var mime=mimeMatch[1];
@@ -1629,6 +1669,7 @@ function supaUploadPendingReceipts(cb){
     supaUploadReceipt(compressed, exp.id, function(err, path){
       if(path){
         exp.receiptImage='supabase:'+path;
+        if(localRef.indexOf('idb:')===0)rsDel(localRef.slice(4));
         // Update in expenses table too
         var h=Object.assign(_supaHdr(),{'Prefer':'resolution=merge-duplicates'});
         fetch(SUPA_URL+'/rest/v1/expenses?id=eq.'+exp.id,{
@@ -1640,6 +1681,7 @@ function supaUploadPendingReceipts(cb){
       if(done===pending.length){saveDB();if(cb)cb();}
     });
     }); // end compressImage
+    }); // end receiptData
   });
 }
 
@@ -1710,18 +1752,20 @@ function loadDB(){
   if(!raw){try{raw=localStorage.getItem('pt7');}catch(e){}}
   if(raw){try{var p=JSON.parse(raw);if(p&&p.income&&p.expenses)DB=p;}catch(e){}}
   if(!DB.jobOrder)DB.jobOrder={};
-  if(!DB.jobs)DB.jobs={}; // DB.jobs: job status/notes annotation layer, keyed by jobRef. Local-only — not yet in Supabase schema.
-  if(!DB.notes)DB.notes=[]; // DB.notes: global quick-jot notes. Local-only — not yet in Supabase schema.
+  if(!DB.jobs)DB.jobs={}; // DB.jobs: job status/notes annotation layer, keyed by jobRef. Synced via users.job_meta.
+  if(!DB.notes)DB.notes=[]; // DB.notes: global quick-jot notes.
+  // Older versions also mirrored the whole DB into a cookie, which was sent to the web host on
+  // every request. It's still read above as a last-resort fallback; expire it now.
+  try{if(document.cookie.indexOf('pt9=')>=0)document.cookie='pt9=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';}catch(e){}
 }
 function saveDB(){
   var s=JSON.stringify(DB);
   try{localStorage.setItem('pt9',s);}catch(e){showToast('⚠️ Storage full — data may not be saved. Free up space in your browser settings.');}
   try{sessionStorage.setItem('pt9',s);}catch(e){}
-  try{var exp=new Date();exp.setFullYear(exp.getFullYear()+2);document.cookie='pt9='+encodeURIComponent(s)+'; expires='+exp.toUTCString()+'; path=/; SameSite=Lax';}catch(e){}
   if(SUPA_USER&&SUPA_SESSION){clearTimeout(window._syncT);window._syncT=setTimeout(function(){supaPushAll(function(){updateSyncBar();});},2000);}
 }
 loadDB();loadGoal();
-setTimeout(shrinkLocalReceipts,300);
+setTimeout(migrateLocalReceipts,300);
 try{var _psArr=localStorage.getItem('pt_payslips');if(_psArr)PAYSLIPS=JSON.parse(_psArr);}catch(e){}
 if(!PAYSLIPS.length){try{var _psOld=localStorage.getItem('pt_payslip');if(_psOld){var _po=JSON.parse(_psOld);if(_po&&(_po.image||_po.manualTotal||(_po.items&&_po.items.length))){if(!_po.id)_po.id=newid();if(!_po.grpMatched)_po.grpMatched=true;if(!_po.grpMissing)_po.grpMissing=true;if(_po.grpExtra==null)_po.grpExtra=false;if(!Array.isArray(_po.items))_po.items=[];PAYSLIPS.push(_po);}}}catch(e){}}
 function savePayslips(){try{localStorage.setItem('pt_payslips',JSON.stringify(PAYSLIPS));}catch(e){}}
@@ -1743,7 +1787,7 @@ function fdatePeriod(from,to){
 }
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function newid(){return Date.now()+Math.floor(Math.random()*9999);}
-function htmlEsc(s){var m={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};return(s||'').replace(/[&<>"']/g,function(c){return m[c];});}
+function htmlEsc(s){var m={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};return(s==null?'':String(s)).replace(/[&<>"']/g,function(c){return m[c];});}
 function isReimbursedCat(cat){for(var i=0;i<REIMBURSED_CATS.length;i++){if(REIMBURSED_CATS[i]===cat)return true;}return false;}
 function inDateRange(d,from,to){if(!from&&!to)return true;if(from&&d<from)return false;if(to&&d>to)return false;return true;}
 function parseDuration(start,end){if(!start||!end||start.indexOf(':')<0||end.indexOf(':')<0)return 0;var s=start.split(':'),e=end.split(':'),mins=(parseInt(e[0])*60+parseInt(e[1]))-(parseInt(s[0])*60+parseInt(s[1]));return mins<0?mins+1440:mins;}
@@ -1755,13 +1799,22 @@ function getIncome(){return DB.income.filter(function(i){return(FYR==='All'||tye
 function getExp(){return DB.expenses.filter(function(e){return(FYR==='All'||tyear(e.date)===FYR)&&(FCO==='All'||e.company===FCO||!e.company)&&inDateRange(e.date,FDFROM,FDTO);});}
 function getYears(){var y={};DB.income.forEach(function(i){y[tyear(i.date)]=1;});DB.expenses.forEach(function(e){y[tyear(e.date)]=1;});return Object.keys(y).sort().reverse();}
 
+// UK self-employed rates for 2026/27 (England, Wales & NI). Allowance and bands are frozen to April 2028.
+var TAX_YEAR_LABEL='2026/27';
+function ukTax(profit){
+  var p=Math.max(0,profit||0);
+  var pa=Math.max(0,12570-Math.max(0,p-100000)/2); // allowance tapers by £1 for every £2 over £100k
+  var taxable=Math.max(0,p-pa);
+  var tax=Math.min(taxable,37700)*.20+Math.max(0,Math.min(taxable,125140)-37700)*.40+Math.max(0,taxable-125140)*.45;
+  var ni=Math.max(0,Math.min(p,50270)-12570)*.06+Math.max(0,p-50270)*.02; // Class 4
+  return {pa:pa,taxable:taxable,tax:tax,ni:ni};
+}
 function calcs(){
   var fi=getIncome(),fe=getExp(),inc=0,totalExp=0,reimb=0,nonreimb=0;
   fi.forEach(function(i){inc+=parseFloat(i.amount||0);});
   fe.forEach(function(e){var a=parseFloat(e.amount||0);totalExp+=a;if(isReimbursedCat(e.category))reimb+=a;else nonreimb+=a;});
-  var deductible=totalExp-reimb,p=inc-deductible,tx=p>12570?p-12570:0,tax=0,ni=0;
-  if(tx>0){tax=Math.min(tx,37700)*.20+Math.max(0,tx-37700)*.40;ni=Math.min(tx,37700)*.09+Math.max(0,tx-37700)*.02;}
-  return {inc:inc,exp:totalExp,deductible:deductible,profit:p,tax:tax,ni:ni,reimb:reimb,nonreimb:nonreimb};
+  var deductible=totalExp-reimb,p=inc-deductible,ut=ukTax(p);
+  return {inc:inc,exp:totalExp,deductible:deductible,profit:p,tax:ut.tax,ni:ut.ni,pa:ut.pa,taxable:ut.taxable,reimb:reimb,nonreimb:nonreimb};
 }
 function jobProfit(jr){
   var inc=0,exp=0;
@@ -2041,7 +2094,7 @@ function openNotesPanel(){
   document.body.appendChild(overlay);
   var updateCount=function(){
     var c=document.getElementById('notesCount');
-    if(c)c.textContent=DB.notes.length+(DB.notes.length===1?' note':' notes')+' · on this device';
+    if(c)c.textContent=DB.notes.length+(DB.notes.length===1?' note':' notes')+(SUPA_USER?' · synced':' · on this device');
   };
   updateCount();
   renderNotesList();
@@ -2220,6 +2273,7 @@ function checkMilestones(){
 // --- Receipt viewer ---
 function viewReceipt(src){
   if(!src)return;
+  if(src.indexOf('idb:')===0){receiptData(src,function(d){if(d)viewReceipt(d);else alert('Receipt image not found on this device.');});return;}
   if(src.indexOf('supabase:')===0){
     if(!SUPA_USER||!SUPA_SESSION){alert('Please sign in to view receipts.');return;}
     var path=src.replace('supabase:','');
@@ -2243,31 +2297,97 @@ function viewReceipt(src){
 }
 
 function viewExpReceipt(id){for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===String(id)){viewReceipt(DB.expenses[i].receiptImage);return;}}}
-// Older local receipts were stored as full-resolution base64 photos (several MB each), which
-// crashed iOS Safari when the Expenses list rendered them. Downscale them once, one at a time.
-var RECEIPT_MAX_PX=1200,RECEIPT_MAX_LEN=400000;
-function shrinkLocalReceipts(){
-  var todo=DB.expenses.filter(function(e){return e.receiptImage&&e.receiptImage.indexOf('data:')===0&&e.receiptImage.length>RECEIPT_MAX_LEN;});
-  if(!todo.length)return;
+
+// --- Local receipt store (IndexedDB) ---
+// Receipts saved while signed out used to live as base64 inside the pt9 localStorage blob, which
+// tops out around 5MB. They now live in IndexedDB and the expense holds 'idb:<key>'. Plain
+// 'data:' values are still understood if IndexedDB is unavailable.
+var RECEIPT_MAX_PX=1200,RECEIPT_MAX_LEN=400000,_rsDB=null;
+function rsOpen(cb){
+  if(_rsDB)return cb(_rsDB);
+  try{
+    var req=indexedDB.open('platetrack',1);
+    req.onupgradeneeded=function(){req.result.createObjectStore('receipts');};
+    req.onsuccess=function(){_rsDB=req.result;cb(_rsDB);};
+    req.onerror=function(){cb(null);};
+  }catch(e){cb(null);}
+}
+function rsTx(mode,fn,cb){
+  rsOpen(function(db){
+    if(!db)return cb&&cb(null,'no_idb');
+    try{
+      var tx=db.transaction('receipts',mode),st=tx.objectStore('receipts'),out=fn(st);
+      tx.oncomplete=function(){if(cb)cb(out&&out.result!==undefined?out.result:null);};
+      tx.onerror=tx.onabort=function(){if(cb)cb(null,'tx_failed');};
+    }catch(e){if(cb)cb(null,e.message);}
+  });
+}
+function rsPut(key,dataUrl,cb){rsTx('readwrite',function(st){return st.put(dataUrl,key);},function(r,err){cb&&cb(err||null);});}
+function rsGet(key,cb){rsTx('readonly',function(st){return st.get(key);},function(r){cb(r||'');});}
+function rsDel(key){rsTx('readwrite',function(st){return st.delete(key);});}
+function rsKeys(cb){rsTx('readonly',function(st){return st.getAllKeys();},function(r){cb(r||[]);});}
+// Resolve a local receipt reference ('idb:' or 'data:') to something an <img> can show.
+function receiptData(ref,cb){
+  if(!ref)return cb('');
+  if(ref.indexOf('idb:')===0)return rsGet(ref.slice(4),cb);
+  if(ref.indexOf('data:')===0)return cb(ref);
+  cb('');
+}
+// Store a data URL locally; calls back with the reference to keep on the expense.
+function storeLocalReceipt(key,dataUrl,cb){
+  rsPut(key,dataUrl,function(err){cb(err?dataUrl:'idb:'+key);});
+}
+// Fill in <img data-rid> thumbnails after a list render.
+function hydrateReceiptThumbs(root){
+  if(!root)return;
+  Array.prototype.forEach.call(root.querySelectorAll('img[data-rid]'),function(img){
+    var key=img.getAttribute('data-rid');img.removeAttribute('data-rid');
+    rsGet(key,function(d){if(d)img.src=d;});
+  });
+}
+function shrinkDataUrl(dataUrl,cb){
+  if(dataUrl.length<=RECEIPT_MAX_LEN)return cb(dataUrl);
+  var img=new Image();
+  img.onload=function(){
+    var out=dataUrl;
+    try{
+      var scale=Math.min(RECEIPT_MAX_PX/img.width,RECEIPT_MAX_PX/img.height,1);
+      var c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+      var ctx=c.getContext('2d');ctx.fillStyle='#FFFFFF';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);
+      var d=c.toDataURL('image/jpeg',0.7);
+      if(d&&d.length>100&&d.length<dataUrl.length)out=d;
+      c.width=c.height=0;
+    }catch(err){console.warn('Receipt shrink failed',err);}
+    img.src='';cb(out);
+  };
+  img.onerror=function(){cb(dataUrl);};
+  img.src=dataUrl;
+}
+// One-off migration: older receipts were full-resolution base64 photos inside pt9 (these
+// crashed iOS Safari on the Expenses tab). Shrink each and move it into IndexedDB, one at a
+// time, then drop IndexedDB entries no expense points at any more.
+function migrateLocalReceipts(){
+  var todo=DB.expenses.filter(function(e){return e.receiptImage&&e.receiptImage.indexOf('data:')===0;});
   var changed=false;
   (function next(){
     var e=todo.shift();
-    if(!e){if(changed){saveDB();if(CTAB===2)rExpenses();}return;}
-    var img=new Image();
-    img.onload=function(){
-      try{
-        var scale=Math.min(RECEIPT_MAX_PX/img.width,RECEIPT_MAX_PX/img.height,1);
-        var c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
-        var ctx=c.getContext('2d');ctx.fillStyle='#FFFFFF';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);
-        var d=c.toDataURL('image/jpeg',0.7);
-        if(d&&d.length>100&&d.length<e.receiptImage.length){e.receiptImage=d;changed=true;}
-        c.width=c.height=0;
-      }catch(err){console.warn('Receipt shrink failed',err);}
-      img.src='';setTimeout(next,50);
-    };
-    img.onerror=function(){setTimeout(next,50);};
-    img.src=e.receiptImage;
+    if(!e){
+      if(changed){saveDB();if(CTAB===2)rExpenses();}
+      pruneLocalReceipts();
+      return;
+    }
+    shrinkDataUrl(e.receiptImage,function(d){
+      storeLocalReceipt(String(e.id),d,function(ref){
+        if(ref!==e.receiptImage){e.receiptImage=ref;changed=true;}
+        setTimeout(next,30);
+      });
+    });
   })();
+}
+function pruneLocalReceipts(){
+  var used={};
+  DB.expenses.forEach(function(e){if(e.receiptImage&&e.receiptImage.indexOf('idb:')===0)used[e.receiptImage.slice(4)]=1;});
+  rsKeys(function(keys){keys.forEach(function(k){if(!used[k])rsDel(k);});});
 }
 
 function closeReceiptViewer(){
@@ -2295,14 +2415,111 @@ function saveReceiptToDevice(){
   }
 }
 
+// --- Backup reminder ---
+// Without an account, data lives only in this browser (and Safari and a home-screen app keep
+// separate copies), so nudge signed-out users to back up every couple of weeks.
+var BACKUP_NAG_DAYS=14;
+function backupReminderHTML(){
+  if(SUPA_USER||(DB.income.length+DB.expenses.length)===0)return '';
+  var last=0,snooze=0;
+  try{last=parseInt(localStorage.getItem('pt_last_backup')||'0',10);snooze=parseInt(localStorage.getItem('pt_backup_snooze')||'0',10);}catch(e){}
+  var now=Date.now();
+  if(now<snooze||now-last<BACKUP_NAG_DAYS*86400000)return '';
+  var never=!last,days=Math.floor((now-last)/86400000);
+  return '<div class="limit-banner" style="flex-wrap:wrap;gap:8px">'
+    +'<span class="limit-banner-text" style="flex:1 1 100%">&#x26A0;&#xFE0F; Your data is only saved on this device'+(never?' and has never been backed up.':' &mdash; last backup '+days+' days ago.')+'</span>'
+    +'<button class="limit-banner-btn" onclick="showAuthModal()">Sign in to sync</button>'
+    +'<button class="limit-banner-btn" onclick="doExport()">Back up now</button>'
+    +'<button class="limit-banner-btn" style="background:none;color:var(--text4);box-shadow:none" onclick="snoozeBackupReminder()">Later</button>'
+    +'</div>';
+}
+function snoozeBackupReminder(){try{localStorage.setItem('pt_backup_snooze',String(Date.now()+3*86400000));}catch(e){}if(CTAB===0)rDash();}
+
+// --- Diagnostics ---
+// A checklist screen so the recent fixes can be verified on a phone without dev tools.
+var DIAG_TEST_ID='diag-test';
+function openDiagnostics(){
+  var old=document.getElementById('diag-overlay');if(old)old.remove();
+  var ov=document.createElement('div');ov.id='diag-overlay';ov.className='overlay';ov.style.display='flex';
+  ov.innerHTML='<div class="sheet" style="max-height:88vh;overflow-y:auto;width:100%;max-width:520px;padding:20px 18px calc(24px + env(safe-area-inset-bottom))">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-size:18px;font-weight:800">&#x1FA7A; Diagnostics</div><button class="diag-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3)">&#x2715;</button></div>'
+    +'<div id="diag-body" style="font-size:13px;line-height:1.5;color:var(--text2)">Checking&hellip;</div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector('.diag-close').onclick=function(){ov.remove();};
+  ov.onclick=function(e){if(e.target===ov)ov.remove();};
+  renderDiagnostics();
+}
+function renderDiagnostics(){
+  var body=document.getElementById('diag-body');if(!body)return;
+  var row=function(ok,title,detail){return '<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-size:16px">'+(ok===true?'&#x2705;':ok===false?'&#x274C;':'&#x2139;&#xFE0F;')+'</span><div><div style="font-weight:700;color:var(--text)">'+title+'</div><div style="color:var(--text4)">'+detail+'</div></div></div>';};
+  var btn=function(label,fn){return '<button class="settings-btn" style="margin-top:8px" onclick="'+fn+'">'+label+'</button>';};
+  rsKeys(function(keys){
+    fetch('/Plate-Track/sw.js',{cache:'no-store'}).then(function(r){return r.text();}).catch(function(){return '';}).then(function(sw){
+      var ver=(sw.match(/CACHE_NAME = '([^']+)'/)||[])[1]||'unknown';
+      var t=ukTax(30000),taxOk=Math.abs(t.tax-3486)<0.01&&Math.abs(t.ni-1045.8)<0.01;
+      var inline=0,local=0,cloud=0;
+      DB.expenses.forEach(function(e){var r=e.receiptImage||'';if(r.indexOf('data:')===0)inline++;else if(r.indexOf('idb:')===0)local++;else if(r.indexOf('supabase:')===0)cloud++;});
+      var last=0;try{last=parseInt(localStorage.getItem('pt_last_backup')||'0',10);}catch(e){}
+      var hasTest=DB.expenses.some(function(e){return e.id===DIAG_TEST_ID;});
+      var h='';
+      h+=row(true,'App version',htmlEsc(ver));
+      h+=row(taxOk,'Tax rates '+TAX_YEAR_LABEL,'On £30,000 profit: tax '+money(t.tax)+' (expect £3486.00), Class 4 NI '+money(t.ni)+' (expect £1045.80)');
+      h+=row(document.cookie.indexOf('pt9=')<0,'No data in cookies',document.cookie.indexOf('pt9=')<0?'Your data is not being sent in cookies.':'An old data cookie is still present.');
+      h+=row(inline===0,'Receipt storage',local+' on this device (IndexedDB), '+cloud+' in the cloud, '+inline+' in old format'+(keys.length!==local?' &middot; '+keys.length+' stored':''));
+      h+=row(SUPA_USER?JOB_META_STATUS.indexOf('Synced')===0:null,'Job status &amp; notes sync',SUPA_USER?htmlEsc(JOB_META_STATUS):'Sign in to sync job statuses and notes between devices.');
+      h+=row(SUPA_USER?true:null,'Backups',SUPA_USER?'Signed in &mdash; data syncs to the cloud.':(last?'Last backup '+new Date(last).toLocaleDateString('en-GB'):'Never backed up')+'. The Home screen reminds you every '+BACKUP_NAG_DAYS+' days.');
+      h+=row(EXP_SAFE?null:true,'Expenses tab',EXP_SAFE?'Safe mode is on (receipts shown as icons).':'Normal mode. Crash detector is active.');
+      h+='<div style="font-weight:800;color:var(--text);margin:16px 0 4px">Test tools</div>';
+      h+=btn('&#x1F514; Show backup reminder now','diagShowBackupReminder()');
+      h+=btn(hasTest?'&#x1F5D1;&#xFE0F; Remove test expense':'&#x1F9EA; Add test expense (tricky text)',hasTest?'diagRemoveTestExpense()':'diagAddTestExpense()');
+      h+=btn('&#x1F4A5; Simulate Expenses crash','diagSimulateCrash()');
+      if(SUPA_USER)h+=btn('&#x1F504; Sync job notes now','diagSyncJobMeta()');
+      body.innerHTML=h;
+    });
+  });
+}
+function diagShowBackupReminder(){
+  try{localStorage.removeItem('pt_last_backup');localStorage.removeItem('pt_backup_snooze');}catch(e){}
+  var ov=document.getElementById('diag-overlay');if(ov)ov.remove();
+  showTab(0);window.scrollTo(0,0);
+  showToast(SUPA_USER?'Reminder only shows when signed out':'Reminder shown at the top of Home');
+}
+function diagAddTestExpense(){
+  DB.expenses.unshift({id:DIAG_TEST_ID,date:today(),category:'Other',amount:'0.01',company:'',jobRef:'<i>TEST</i>',receipt:'',description:'Test "quotes" & <b>not bold</b>',receiptImage:''});
+  saveDB();showToast('Test expense added to Expenses');renderDiagnostics();
+}
+function diagRemoveTestExpense(){
+  DB.expenses=DB.expenses.filter(function(e){return e.id!==DIAG_TEST_ID;});
+  saveDB();showToast('Test expense removed');renderDiagnostics();
+}
+function diagSimulateCrash(){
+  if(!confirm('The app will reload as if the Expenses tab had crashed. You should see the crash message, then Expenses opens in safe mode. Continue?'))return;
+  try{localStorage.setItem('pt_exp_render','step=simulated test (not a real crash)');}catch(e){}
+  location.reload();
+}
+function diagSyncJobMeta(){
+  showToast('Syncing…');
+  supaJobMetaPull(function(){renderDiagnostics();showToast(JOB_META_STATUS);});
+}
+
 // --- Export/Import ---
 function doExport(){
-  try{var blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='platetrack-'+today()+'.json';document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},100);showToast('Backup downloaded!');}catch(e){showToast('Export failed');}
+  // Local receipts live in IndexedDB, so gather them into the backup file alongside DB.
+  var refs=DB.expenses.filter(function(e){return e.receiptImage&&e.receiptImage.indexOf('idb:')===0;}).map(function(e){return e.receiptImage.slice(4);});
+  var receipts={},left=refs.length;
+  if(!left)return doExportWrite(receipts);
+  refs.forEach(function(k){rsGet(k,function(d){if(d)receipts[k]=d;if(--left===0)doExportWrite(receipts);});});
+}
+function doExportWrite(receipts){
+  try{localStorage.setItem('pt_last_backup',String(Date.now()));}catch(e){}
+  if(CTAB===0)rDash();
+  var out=Object.assign({},DB);if(Object.keys(receipts).length)out.receipts=receipts;
+  try{var blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='platetrack-'+today()+'.json';document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},100);showToast('Backup downloaded!');}catch(e){showToast('Export failed');}
 }
 document.getElementById('impfile').onchange=function(e){
   var f=e.target.files[0];if(!f)return;
   var r=new FileReader();
-  r.onload=function(ev){try{var d=JSON.parse(ev.target.result);if(!d.income||!d.expenses)throw new Error('bad');if(!confirm('Replace all data with this backup?'))return;DB=d;saveDB();showToast('Restored '+DB.income.length+' income + '+DB.expenses.length+' expense records!');render(CTAB);}catch(e2){showToast('Invalid backup file');}};
+  r.onload=function(ev){try{var d=JSON.parse(ev.target.result);if(!d.income||!d.expenses)throw new Error('bad');if(!confirm('Replace all data with this backup?'))return;var rc=d.receipts||{};delete d.receipts;DB=d;if(!DB.jobs)DB.jobs={};if(!DB.notes)DB.notes=[];Object.keys(rc).forEach(function(k){rsPut(k,rc[k]);});saveDB();setTimeout(migrateLocalReceipts,300);showToast('Restored '+DB.income.length+' income + '+DB.expenses.length+' expense records!');render(CTAB);}catch(e2){showToast('Invalid backup file');}};
   r.readAsText(f);e.target.value='';
 };
 function generateReport(){
@@ -2311,7 +2528,7 @@ function generateReport(){
   fi.forEach(function(i){if(byC[i.company]!==undefined)byC[i.company]+=parseFloat(i.amount||0);});
   var dr=(FDFROM||FDTO)?((FDFROM||'Start')+' to '+(FDTO||'Today')):(FYR==='All'?'All Time':FYR);
   var coLines=[];COMPANIES.forEach(function(c){coLines.push((c.name+':').padEnd(16)+money(byC[c.name]||0));});
-  var lines=['PLATETRACK - SELF ASSESSMENT REPORT','Accountant Report (Self Assessment Ready)','==========================================','Period: '+dr,'Generated: '+new Date().toLocaleDateString('en-GB'),'','INCOME','------'].concat(coLines).concat(['Total Income:  '+money(t.inc),'','EXPENSES','--------','Total Expenses:         '+money(t.exp),'Reimbursed (excluded):  '+money(t.reimb),'Allowable Deductions:   '+money(t.deductible),'','PROFIT & TAX','------------','Net Taxable Profit:   '+money(t.profit),'Personal Allowance:   '+money(12570),'Taxable Income:       '+money(Math.max(0,t.profit-12570)),'Est. Income Tax:      '+money(t.tax),'Est. Class 4 NI:      '+money(t.ni),'Total Tax Liability:  '+money(t.tax+t.ni),'','NOTE: 2024/25 UK rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p rate).','Consult a qualified accountant for your official return.','==========================================']);
+  var lines=['PLATETRACK - SELF ASSESSMENT REPORT','Accountant Report (Self Assessment Ready)','==========================================','Period: '+dr,'Generated: '+new Date().toLocaleDateString('en-GB'),'','INCOME','------'].concat(coLines).concat(['Total Income:  '+money(t.inc),'','EXPENSES','--------','Total Expenses:         '+money(t.exp),'Reimbursed (excluded):  '+money(t.reimb),'Allowable Deductions:   '+money(t.deductible),'','PROFIT & TAX','------------','Net Taxable Profit:   '+money(t.profit),'Personal Allowance:   '+money(t.pa),'Taxable Income:       '+money(t.taxable),'Est. Income Tax:      '+money(t.tax),'Est. Class 4 NI:      '+money(t.ni),'Total Tax Liability:  '+money(t.tax+t.ni),'','NOTE: '+TAX_YEAR_LABEL+' UK rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p rate).','Consult a qualified accountant for your official return.','==========================================']);
   try{var blob=new Blob([lines.join('\n')],{type:'text/plain'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='platetrack-sa-'+today()+'.txt';document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},100);showToast('Report downloaded!');}catch(e){showToast('Export failed');}
 }
 function csvEsc(v){
@@ -2882,7 +3099,7 @@ function filtersHTML(){
   var yo='<option value="All"'+(FYR==='All'?' selected':'')+'>All Years</option>';
   yrs.forEach(function(y){yo+='<option value="'+y+'"'+(FYR===y?' selected':'')+'>'+y+'</option>';});
   var co='<option value="All"'+(FCO==='All'?' selected':'')+'>All Companies</option>';
-  COMPANIES.forEach(function(c){co+='<option value="'+c.name+'"'+(FCO===c.name?' selected':'')+'>'+c.name+'</option>';});
+  COMPANIES.forEach(function(c){co+='<option value="'+htmlEsc(c.name)+'"'+(FCO===c.name?' selected':'')+'>'+htmlEsc(c.name)+'</option>';});
   var clearBtn=(FDFROM||FDTO)?'<button onclick="clearDates()" style="background:none;border:none;color:var(--gold-dim);font-size:12px;cursor:pointer;font-weight:600;padding:4px 0;display:block;text-align:right;width:100%">Clear dates</button>':'';
   var colStyle='flex:1;min-width:0';
   var inputStyle='width:100%;min-width:0;box-sizing:border-box;padding:9px 8px;font-size:13px;-webkit-appearance:none;appearance:none;border-radius:var(--r-lg)';
@@ -2941,7 +3158,7 @@ function filterExpenses(val){
   var allItems=getExp().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
   var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_EXP);});
   var el=document.getElementById('expense-results');
-  if(el)el.innerHTML=items.length===0?'<div style="text-align:center;padding:28px;color:var(--text4)">No results for &ldquo;'+htmlEsc(SEARCH_EXP)+'&rdquo;</div>':buildExpenseListHTML(items);
+  if(el){el.innerHTML=items.length===0?'<div style="text-align:center;padding:28px;color:var(--text4)">No results for &ldquo;'+htmlEsc(SEARCH_EXP)+'&rdquo;</div>':buildExpenseListHTML(items);hydrateReceiptThumbs(el);}
   var inp=document.getElementById('expense-search-input');
   if(inp&&inp.value!==val)inp.value=val;
 }
@@ -3423,6 +3640,7 @@ function rDash(){
     +'</div>';
 
   var pg=greetingSection
+    +backupReminderHTML()
     +filterRow
     +dashChipFilterHTML()
     +'<div class="dash-hero">'
@@ -3912,7 +4130,7 @@ function openJobDetail(jobRef,fallbackId){
     +'<span>'+fdateShort(date)+'</span>'+jobStatusChip(jobRef)
     +(miles?'<span>&#x1F4CD; '+miles+' mi</span>':'')
     +(totalMins>0?'<span>&#x23F1; '+fmtHours(totalMins)+'</span>':'')
-    +(registration?'<span>&#x1F697; '+registration+'</span>':'')
+    +(registration?'<span>&#x1F697; '+htmlEsc(registration)+'</span>':'')
     +((startPostcode||endPostcode)?'<span>'+(startPostcode||'?')+' &rarr; '+(endPostcode||'?')+'</span>':'')
     +'</div>';
   var overlay=document.createElement('div');
@@ -3920,7 +4138,7 @@ function openJobDetail(jobRef,fallbackId){
   overlay.innerHTML='<div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 -4px 32px rgba(0,0,0,.35)">'
     +'<div style="padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0">'
     +'<div>'
-    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+cobadge(company)+(!isSingleton&&jobRef?'<span style="font-size:17px;font-weight:800;color:var(--text)">'+jobRef+'</span>':'')+'</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+cobadge(company)+(!isSingleton&&jobRef?'<span style="font-size:17px;font-weight:800;color:var(--text)">'+htmlEsc(jobRef)+'</span>':'')+'</div>'
     +metaHTML
     +'</div>'
     +'<button class="jd-close" style="background:var(--bg3);border:none;border-radius:100px;width:32px;height:32px;font-size:18px;color:var(--text3);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;line-height:1">&#x2715;</button>'
@@ -4048,12 +4266,13 @@ function buildExpenseListHTML(items){
     var icon=CAT_ICONS[x.category]||'&#x1F4CB;',color=CAT_COLORS[x.category]||'#57606A';
     var tag=isReimb?'<span class="exp-reimb-tag">Reimbursed</span>':x.category?'<span class="exp-ded-tag">Deductible</span>':'';
     var coBH=x.company?cobadge(x.company)+' ':'';
-    var linkedTag=x.jobRef?'<span class="linked-tag">'+x.jobRef+'</span>':'';
+    var linkedTag=x.jobRef?'<span class="linked-tag">'+htmlEsc(x.jobRef)+'</span>':'';
     var thumbHTML='';
     if(x.receiptImage&&(EXP_SAFE||x.receiptImage.indexOf('supabase:')===0)){
       thumbHTML='<div class="receipt-thumb" onclick="event.stopPropagation();viewExpReceipt(\''+x.id+'\')" style="background:var(--bg3);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;cursor:pointer"><span style="font-size:18px">&#x1F9FE;</span><span style="font-size:8px;color:var(--text4);font-weight:700">VIEW</span></div>';
     } else if(x.receiptImage){
-      thumbHTML='<img class="receipt-thumb" src="'+x.receiptImage+'" loading="lazy" decoding="async" onclick="event.stopPropagation();viewExpReceipt(\''+x.id+'\')" alt="Receipt">';
+      var rid=x.receiptImage.indexOf('idb:')===0?x.receiptImage.slice(4):'';
+      thumbHTML='<img class="receipt-thumb" '+(rid?'data-rid="'+htmlEsc(rid)+'" style="background:var(--bg3)"':'src="'+x.receiptImage+'"')+' loading="lazy" decoding="async" onclick="event.stopPropagation();viewExpReceipt(\''+x.id+'\')" alt="Receipt">';
     }
     html+='<div class="swipe-wrap" data-id="'+x.id+'">';
       html+='<div class="swipe-delete-btn" onclick="swipeDelete(\'expense\',\''+x.id+'\')">';
@@ -4061,7 +4280,7 @@ function buildExpenseListHTML(items){
       html+='<div class="exp-card" onclick="openSheet(\'expense\',\''+x.id+'\')">'
       +thumbHTML
       +'<div class="exp-icon-wrap" style="background:'+color+'1a"><span style="color:'+color+'">'+icon+'</span></div>'
-      +'<div class="exp-card-body"><div class="exp-card-cat">'+coBH+x.category+linkedTag+'</div>'
+      +'<div class="exp-card-body"><div class="exp-card-cat">'+coBH+htmlEsc(x.category)+linkedTag+'</div>'
       +'<div class="exp-card-meta">'+fdateShort(x.date)+(x.receipt?' &middot; '+htmlEsc(x.receipt):'')+(x.description?' &middot; '+htmlEsc(x.description):'')+'</div>'
       +tag+'</div>'
       +'<div class="exp-card-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">'
@@ -4112,6 +4331,7 @@ function rExpenses(){
     +'</div></div>';
   expCrumb('paint',items);
   document.getElementById('pg2').innerHTML=content;
+  hydrateReceiptThumbs(document.getElementById('pg2'));
   setTimeout(function(){try{localStorage.removeItem('pt_exp_render');}catch(e){}},2500);
 }
 function exitExpSafe(){EXP_SAFE=false;try{localStorage.removeItem('pt_exp_safe');}catch(e){}rExpenses();}
@@ -4162,8 +4382,8 @@ function rSummary(){
     {label:'Allowable Deductions',val:money(t.deductible),cls:'orange',bold:true},
     {label:'Miles Recorded',val:mi.toLocaleString()+' mi',cls:''},
     {label:'Net Taxable Profit',val:money(t.profit),cls:t.profit>=0?'green':'red',bold:true},
-    {label:'Personal Allowance',val:money(12570),cls:''},
-    {label:'Taxable Income',val:money(Math.max(0,t.profit-12570)),cls:''},
+    {label:'Personal Allowance',val:money(t.pa),cls:''},
+    {label:'Taxable Income',val:money(t.taxable),cls:''},
     {label:'Est. Income Tax',val:money(t.tax),cls:'red'},
     {label:'Est. Class 4 NI',val:money(t.ni),cls:'red'},
     {label:'Total Tax Bill',val:money(t.tax+t.ni),cls:'red',bold:true},
@@ -4306,7 +4526,7 @@ function rSummary(){
     +'</div>'
     // SA breakdown
     +'<div class="summary-card"><div class="summary-card-hdr">Self Assessment Breakdown</div>'+rowsHTML
-    +'<div class="disc" style="padding:14px 16px;border-top:1px solid var(--border)">Estimates only &mdash; 2024/25 UK tax rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p). Consult an accountant.</div></div>'
+    +'<div class="disc" style="padding:14px 16px;border-top:1px solid var(--border)">Estimates only &mdash; '+TAX_YEAR_LABEL+' UK tax rates. No mileage allowance (trade plate drivers cannot claim HMRC 45p/25p). Consult an accountant.</div></div>'
     // Payslip
     +payslipHTML
     // Export
@@ -4320,6 +4540,7 @@ function rSummary(){
     +'<button class="settings-btn" onclick="openCoModal()"><span>&#x1F3E2;</span> Manage Companies</button>'
     +'<button class="settings-btn" onclick="openIncomeTypesModal()"><span>&#x1F4B0;</span> Manage Income Types</button>'
     +'<button class="settings-btn" onclick="openNameModal()"><span>&#x2712;</span> Change Your Name</button>'
+    +'<button class="settings-btn" onclick="openDiagnostics()"><span>&#x1FA7A;</span> Diagnostics</button>'
     +'</div></div>'
     // Tips
     +'<div style="padding-bottom:8px">'
@@ -4533,19 +4754,19 @@ function openSheet(type,id){
     // Type chips
     var typeOpts=INCOME_TYPES;
     var typeChips=typeOpts.map(function(tp){var sel=fit===tp;return '<button type="button" class="cat-chip'+(sel?' selected':'')+'" onclick="this.parentNode.querySelectorAll(\'.cat-chip\').forEach(function(b){b.className=\'cat-chip\';});this.className=\'cat-chip selected\';document.getElementById(\'f_type\').value=\''+tp+'\'">'+tp+'</button>';}).join('');
-    html='<input type="hidden" id="f_co" value="'+fco+'">'
-      +'<input type="hidden" id="f_type" value="'+fit+'">'
+    html='<input type="hidden" id="f_co" value="'+htmlEsc(fco)+'">'
+      +'<input type="hidden" id="f_type" value="'+htmlEsc(fit)+'">'
       +'<div class="field"><label class="field-label">Company</label><div class="co-chips">'+coChips+'</div></div>'
-      +'<div class="field"><label class="field-label">Amount</label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" min="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
+      +'<div class="field"><label class="field-label">Amount</label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" min="0.01" placeholder="0.00" value="'+htmlEsc(fam)+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
       +'<div class="field"><label class="field-label">Income Type</label><div class="cat-chips">'+typeChips+'</div></div>'
-      +'<div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+fd2+'"></div>'
-      +'<div class="field"><label class="field-label">Job Reference <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f4" class="std-input" placeholder="e.g. BCA-1234" value="'+fjr+'"><div class="field-hint">Same ref groups entries & links expenses</div></div>'
+      +'<div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+htmlEsc(fd2)+'"></div>'
+      +'<div class="field"><label class="field-label">Job Reference <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f4" class="std-input" placeholder="e.g. BCA-1234" value="'+htmlEsc(fjr)+'"><div class="field-hint">Same ref groups entries & links expenses</div></div>'
       +'<div style="border-top:1px solid var(--border);margin:16px 0"></div>'
-      +'<div class="field-row"><div class="field"><label class="field-label">Start Time</label><input type="time" id="f_start" class="std-input" value="'+fst+'"></div><div class="field"><label class="field-label">End Time</label><input type="time" id="f_end" class="std-input" value="'+fet+'"></div></div>'
-      +'<div class="field-row"><div class="field"><label class="field-label">Miles</label><input type="number" id="f5" class="std-input" placeholder="0" value="'+fml+'" inputmode="numeric"></div><div class="field"><label class="field-label">Registration</label><input type="text" id="f_reg" class="std-input" placeholder="AB12 CDE" value="'+freg+'" style="text-transform:uppercase"></div></div>'
-      +'<div class="field-row"><div class="field"><label class="field-label">Start Postcode</label><input type="text" id="f_sp" class="std-input" placeholder="LU1 2AB" value="'+fsp+'" style="text-transform:uppercase"></div><div class="field"><label class="field-label">End Postcode</label><input type="text" id="f_ep" class="std-input" placeholder="M1 4BT" value="'+fep+'" style="text-transform:uppercase"></div></div>'
+      +'<div class="field-row"><div class="field"><label class="field-label">Start Time</label><input type="time" id="f_start" class="std-input" value="'+htmlEsc(fst)+'"></div><div class="field"><label class="field-label">End Time</label><input type="time" id="f_end" class="std-input" value="'+htmlEsc(fet)+'"></div></div>'
+      +'<div class="field-row"><div class="field"><label class="field-label">Miles</label><input type="number" id="f5" class="std-input" placeholder="0" value="'+htmlEsc(fml)+'" inputmode="numeric"></div><div class="field"><label class="field-label">Registration</label><input type="text" id="f_reg" class="std-input" placeholder="AB12 CDE" value="'+htmlEsc(freg)+'" style="text-transform:uppercase"></div></div>'
+      +'<div class="field-row"><div class="field"><label class="field-label">Start Postcode</label><input type="text" id="f_sp" class="std-input" placeholder="LU1 2AB" value="'+htmlEsc(fsp)+'" style="text-transform:uppercase"></div><div class="field"><label class="field-label">End Postcode</label><input type="text" id="f_ep" class="std-input" placeholder="M1 4BT" value="'+htmlEsc(fep)+'" style="text-transform:uppercase"></div></div>'
       +'<button type="button" id="miles-calc-btn" class="miles-calc-btn" onclick="calcMilesFromPostcodes()">&#x1F4CD; Calculate miles from postcodes</button>'
-      +'<div class="field"><label class="field-label">Notes</label><input type="text" id="f6" class="std-input" placeholder="Optional notes" value="'+fds+'"></div>'
+      +'<div class="field"><label class="field-label">Notes</label><input type="text" id="f6" class="std-input" placeholder="Optional notes" value="'+htmlEsc(fds)+'"></div>'
       +'<input type="file" id="f_img" accept="image/*,.heic,.heif" style="display:none">';
   } else {
     var fd2=rec?rec.date:today(),fcat=rec?rec.category:'';
@@ -4567,9 +4788,9 @@ function openSheet(type,id){
     expCoChips+='</div>';
     // Job ref autocomplete
     var sortedRefs=sortedJobRefs(fd2,fco2);
-    var dlOpts=sortedRefs.map(function(r){return '<option value="'+r.ref+'">';}).join('');
+    var dlOpts=sortedRefs.map(function(r){return '<option value="'+htmlEsc(r.ref)+'">';}).join('');
     var imgPreview='';
-    if(fimg&&fimg.indexOf('supabase:')===0){
+    if(fimg&&fimg.indexOf('data:')!==0){
       imgPreview='<div style="margin-top:8px">'
         +'<div onclick="viewExpReceipt(\''+EID+'\')" style="width:72px;height:72px;border-radius:var(--r-md);border:1.5px solid var(--border);background:var(--bg3);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:3px">'
         +'<span style="font-size:22px">&#x1F9FE;</span>'
@@ -4578,8 +4799,8 @@ function openSheet(type,id){
     } else if(fimg){
       imgPreview='<div style="margin-top:8px"><img src="'+fimg+'" style="width:72px;height:72px;object-fit:cover;border-radius:var(--r-md);cursor:pointer;border:1px solid var(--border)" onclick="viewExpReceipt(\''+EID+'\')" alt="Receipt"></div>';
     }
-    html='<input type="hidden" id="f_cat" value="'+fcat+'">'
-      +'<input type="hidden" id="f_exco" value="'+fco2+'">'
+    html='<input type="hidden" id="f_cat" value="'+htmlEsc(fcat)+'">'
+      +'<input type="hidden" id="f_exco" value="'+htmlEsc(fco2)+'">'
       +'<div class="field"><label class="field-label">Company <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label>'+expCoChips+'</div>'
       +'<div class="field"><label class="field-label">Category</label><div class="cat-chips" id="cat-chips-wrap">'+catChips+'</div></div>'
       +'<div id="travel-subtypes" style="'+(isTravelCat(fcat)?'':'display:none')+'"><div class="field"><label class="field-label">Travel Type</label>'
@@ -4591,13 +4812,13 @@ function openSheet(type,id){
       +'<button type="button" class="reimb-opt'+(fcat&&isReimb?' selected-yes':'')+'" id="reimb-yes" onclick="setReimb(true)">&#x2705; YES &mdash; Company pays</button>'
       +'<button type="button" class="reimb-opt'+(fcat&&!isReimb?' selected-no':'')+'" id="reimb-no" onclick="setReimb(false)">&#x1F4B8; NO &mdash; My cost</button>'
       +'</div><div class="field-hint" id="reimb-hint">'+(fcat?(isReimb?'Won\'t reduce your tax bill (already paid back)':'Will reduce your tax bill as a deductible expense'):'Select a category first')+'</div></div>'
-      +'<div class="field"><label class="field-label">Amount</label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" min="0.01" placeholder="0.00" value="'+fam+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
-      +'<div class="field-row"><div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+fd2+'"></div>'
-      +'<div class="field"><label class="field-label">Receipt Ref <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f4" class="std-input" placeholder="REC-001" value="'+frc+'"></div></div>'
+      +'<div class="field"><label class="field-label">Amount</label><div class="amount-input-wrap"><span class="amount-prefix">&#xA3;</span><input type="number" id="f3" class="amount-input" step="0.01" min="0.01" placeholder="0.00" value="'+htmlEsc(fam)+'" inputmode="decimal" oninput="updateSaveBtn()"></div></div>'
+      +'<div class="field-row"><div class="field"><label class="field-label">Date</label><input type="date" id="f1" class="std-input" value="'+htmlEsc(fd2)+'"></div>'
+      +'<div class="field"><label class="field-label">Receipt Ref <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f4" class="std-input" placeholder="REC-001" value="'+htmlEsc(frc)+'"></div></div>'
       +'<div class="field"><label class="field-label">Link to Job <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label>'
-      +'<input type="text" id="f4c" class="std-input" list="joblist" placeholder="Type to search jobs..." value="'+fjr2+'" autocomplete="off">'
+      +'<input type="text" id="f4c" class="std-input" list="joblist" placeholder="Type to search jobs..." value="'+htmlEsc(fjr2)+'" autocomplete="off">'
       +'<datalist id="joblist">'+dlOpts+'</datalist></div>'
-      +'<div class="field"><label class="field-label">Description <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f5" class="std-input" placeholder="What was this for?" value="'+fds+'"></div>'
+      +'<div class="field"><label class="field-label">Description <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px">optional</span></label><input type="text" id="f5" class="std-input" placeholder="What was this for?" value="'+htmlEsc(fds)+'"></div>'
       +(fimg?'<div style="display:flex;gap:14px;align-items:center;margin-bottom:12px">'
         +'<button type="button" style="font-size:12px;color:var(--text4);background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px" onclick="viewExpReceipt(\''+EID+'\')">&#x1F9FE; View receipt</button>'
         +'<button type="button" style="font-size:12px;color:var(--danger);background:none;border:none;cursor:pointer;padding:0" onclick="deleteReceiptImage(\''+EID+'\')">&#x2715; Remove receipt</button>'
@@ -4690,7 +4911,7 @@ function applyCoExpenseDefaults(coName){
 }
 
 function deleteReceiptImage(expId){
-  for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===String(expId)){DB.expenses[i].receiptImage='';saveDB();render(CTAB);showToast('Receipt removed');return;}}
+  for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===String(expId)){DB.expenses[i].receiptImage='';saveDB();pruneLocalReceipts();render(CTAB);showToast('Receipt removed');return;}}
 }
 
 function ocrReceipt(file){
@@ -4871,7 +5092,7 @@ function doSave(){
       } else {
         // Fallback: store as base64 locally
         var reader=new FileReader();
-        reader.onload=function(ev){ci.receiptImage=ev.target.result;if(ceid){for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===ceid){DB.expenses[i]=ci;break;}}}else DB.expenses.unshift(ci);saveDB();closeSheet();render(CTAB);if(!ceid)playExpenseSound();showToast('✓ Saved with receipt');checkMilestones();};
+        reader.onload=function(ev){storeLocalReceipt(String(ci.id),ev.target.result,function(ref){ci.receiptImage=ref;if(ceid){for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===ceid){DB.expenses[i]=ci;break;}}}else DB.expenses.unshift(ci);saveDB();closeSheet();render(CTAB);if(!ceid)playExpenseSound();showToast('✓ Saved with receipt');checkMilestones();});};
         compressImage(file,RECEIPT_MAX_PX,0.7,function(blob){reader.readAsDataURL(blob);});
       }
       return;
@@ -5205,7 +5426,7 @@ function dashChipFilterHTML(){
   var co='';
   co+='<option value="All"'+(FCO==='All'?' selected':'')+'>All Companies</option>';
   COMPANIES.forEach(function(c){
-    co+='<option value="'+c.name+'"'+(FCO===c.name?' selected':'')+'>'+c.name+'</option>';
+    co+='<option value="'+htmlEsc(c.name)+'"'+(FCO===c.name?' selected':'')+'>'+htmlEsc(c.name)+'</option>';
   });
   var clearBtn='';
   if(FDFROM||FDTO){

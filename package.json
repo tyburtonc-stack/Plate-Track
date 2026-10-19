@@ -5,7 +5,7 @@
   "description": "> Income & expense tracker for UK self-employed trade plate drivers",
   "main": "sw.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run build && node --test test/*.test.js",
     "build": "node build.js"
   },
   "repository": {
@@ -16,6 +16,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "html-minifier-terser": "^7.2.0"
+    "html-minifier-terser": "^7.2.0",
+    "playwright": "^1.56.1"
   }
 }
