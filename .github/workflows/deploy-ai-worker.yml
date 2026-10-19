@@ -36,8 +36,21 @@ jobs:
           if [ -n "$missing" ]; then echo "::error::Add these repository secrets first:$missing"; exit 1; fi
       - run: npm ci
       - run: npm test
-      - run: npx wrangler deploy
+      # Wrangler's own error lines are repeated as annotations so they show in the run summary
+      # and the failure email, not only in the full log.
+      - name: Deploy to Cloudflare
+        run: |
+          set -o pipefail
+          npx wrangler deploy 2>&1 | tee deploy.log || {
+            grep -E 'ERROR|✘|Authentication|Could not|code: [0-9]+|workers.dev|subdomain|account' deploy.log | head -15 | sed 's/^/::error::/'
+            exit 1
+          }
       - name: Set the Anthropic API key on the worker
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: printf '%s' "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY
+        run: |
+          set -o pipefail
+          printf '%s' "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY 2>&1 | tee secret.log || {
+            grep -E 'ERROR|✘|Authentication|Could not|code: [0-9]+' secret.log | head -15 | sed 's/^/::error::/'
+            exit 1
+          }
