@@ -41,6 +41,9 @@ CREATE POLICY "pt expenses delete own" ON public.expenses FOR DELETE TO authenti
 -- ── Receipt photos (Storage bucket "Receipts", files stored as {userId}/{expenseId}.jpg) ──
 UPDATE storage.buckets SET public = false WHERE id = 'Receipts';
 
+-- An older dashboard-made policy that only checked the bucket, not the owner, so any signed-in
+-- user could reach every receipt. Policies are OR'd together, so it has to go.
+DROP POLICY IF EXISTS "Users can manage their own receipts" ON storage.objects;
 DROP POLICY IF EXISTS "pt receipts select own" ON storage.objects;
 DROP POLICY IF EXISTS "pt receipts insert own" ON storage.objects;
 DROP POLICY IF EXISTS "pt receipts update own" ON storage.objects;
