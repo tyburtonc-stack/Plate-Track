@@ -2936,6 +2936,7 @@ function filterIncome(val){
   else if(!SEARCH_INCOME&&clr)clr.remove();
 }
 function filterExpenses(val){
+  if(val!==SEARCH_EXP)EXP_SHOW=40;
   SEARCH_EXP=val;
   var allItems=getExp().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
   var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_EXP);});
@@ -4041,15 +4042,15 @@ function showJobNotePrompt(jobRef,fallbackId){
 // --- EXPENSES ---
 function buildExpenseListHTML(items){
   if(!items||items.length===0)return '';
-  var html='';
-  items.forEach(function(x){
+  var html='',more=items.length-EXP_SHOW;
+  items.slice(0,EXP_SHOW).forEach(function(x){
     var isReimb=isReimbursedCat(x.category);
     var icon=CAT_ICONS[x.category]||'&#x1F4CB;',color=CAT_COLORS[x.category]||'#57606A';
     var tag=isReimb?'<span class="exp-reimb-tag">Reimbursed</span>':x.category?'<span class="exp-ded-tag">Deductible</span>':'';
     var coBH=x.company?cobadge(x.company)+' ':'';
     var linkedTag=x.jobRef?'<span class="linked-tag">'+x.jobRef+'</span>':'';
     var thumbHTML='';
-    if(x.receiptImage&&x.receiptImage.indexOf('supabase:')===0){
+    if(x.receiptImage&&(EXP_SAFE||x.receiptImage.indexOf('supabase:')===0)){
       thumbHTML='<div class="receipt-thumb" onclick="event.stopPropagation();viewExpReceipt(\''+x.id+'\')" style="background:var(--bg3);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;cursor:pointer"><span style="font-size:18px">&#x1F9FE;</span><span style="font-size:8px;color:var(--text4);font-weight:700">VIEW</span></div>';
     } else if(x.receiptImage){
       thumbHTML='<img class="receipt-thumb" src="'+x.receiptImage+'" loading="lazy" decoding="async" onclick="event.stopPropagation();viewExpReceipt(\''+x.id+'\')" alt="Receipt">';
@@ -4070,16 +4071,37 @@ function buildExpenseListHTML(items){
       +'</div>';
       html+='</div>';
   });
+  if(more>0)html+='<button class="add-btn" style="width:100%;margin-top:4px" onclick="EXP_SHOW+=40;filterExpenses(SEARCH_EXP)">Show '+Math.min(more,40)+' more ('+more+' left)</button>';
   return html;
+}
+
+// Crash breadcrumb: iOS Safari kills the page outright when the Expenses tab runs it out of
+// memory, so no JS error is ever seen. Mark the render as in-progress and clear it once painted;
+// if the mark survives to the next launch, report it and open Expenses in safe mode.
+var EXP_SHOW=40,EXP_SAFE=false;
+(function(){
+  var crumb=null;try{crumb=localStorage.getItem('pt_exp_render');}catch(e){}
+  if(!crumb)return;
+  EXP_SAFE=true;
+  try{localStorage.removeItem('pt_exp_render');localStorage.setItem('pt_exp_safe','1');}catch(e){}
+  setTimeout(function(){alert('PlateTrack: the Expenses tab crashed last time, so it will open in safe mode (no receipt thumbnails).\n\nPlease screenshot this for support:\n'+crumb);},800);
+})();
+try{if(localStorage.getItem('pt_exp_safe'))EXP_SAFE=true;}catch(e){}
+function expCrumb(step,items){
+  var maxImg=0,totImg=0;
+  DB.expenses.forEach(function(e){var l=(e.receiptImage||'').length;totImg+=l;if(l>maxImg)maxImg=l;});
+  var info='step='+step+' safe='+EXP_SAFE+' shown='+Math.min(items.length,EXP_SHOW)+'/'+DB.expenses.length+' maxImg='+Math.round(maxImg/1024)+'KB totImg='+Math.round(totImg/1024)+'KB pro='+isPro()+' signedIn='+!!SUPA_USER+' bank='+BANK_CONNECTIONS.length+'/'+PENDING_TXN.length;
+  try{localStorage.setItem('pt_exp_render',info);}catch(e){}
 }
 
 function rExpenses(){
   var allItems=getExp().slice().sort(function(a,b){var dd=new Date(b.date)-new Date(a.date);return dd!==0?dd:Number(b.id)-Number(a.id);});
   var items=allItems.filter(function(x){return matchesSearch(x,SEARCH_EXP);});
+  expCrumb('build',items);
   var html=buildExpenseListHTML(items);
   var content='<div style="padding:0 16px 14px">'
     +'<div class="tab-hdr"><span class="tab-hdr-title">Expenses</span><button class="add-btn" onclick="openSheet(\'expense\',\'\')">&#x2B; Add</button></div></div>'
-    +bankSectionHTML()
+    +(EXP_SAFE?'<div class="limit-banner"><span class="limit-banner-text">&#x1F6E1;&#xFE0F; Safe mode: receipts shown as icons</span><button class="limit-banner-btn" onclick="exitExpSafe()">Turn off</button></div>':bankSectionHTML())
     +limitBannerHTML()
     +filtersHTML()
     +'<div class="search-bar"><div class="search-inner"><span class="search-icon-left">&#x1F50D;</span>'
@@ -4088,8 +4110,11 @@ function rExpenses(){
     +'<div style="padding:10px 16px 16px"><div id="expense-results">'
     +(items.length===0?'<div class="empty-state"><div class="empty-state-icon">&#x1F9FE;</div><div class="empty-state-title">'+(SEARCH_EXP?'No results':'No expenses yet')+'</div><div class="empty-state-sub">'+(SEARCH_EXP?'Try a different search':'Log receipts to track your costs')+'</div>'+(SEARCH_EXP?'':'<button class="empty-state-btn" onclick="openSheet(\'expense\',\'\')">&#x2B; Add Expense</button>')+'</div>':html)
     +'</div></div>';
+  expCrumb('paint',items);
   document.getElementById('pg2').innerHTML=content;
+  setTimeout(function(){try{localStorage.removeItem('pt_exp_render');}catch(e){}},2500);
 }
+function exitExpSafe(){EXP_SAFE=false;try{localStorage.removeItem('pt_exp_safe');}catch(e){}rExpenses();}
 
 // --- SUMMARY ---
 function rSummary(){
