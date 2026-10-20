@@ -4,8 +4,11 @@
 // own site can use it. The model and output limit are fixed here, not chosen by the caller.
 import Anthropic from '@anthropic-ai/sdk';
 
-const MODEL = 'claude-sonnet-4-5';
-const MAX_TOKENS_CAP = 3000;
+const MODEL = 'claude-opus-5-5';
+// Claude Opus 5.5 always thinks before answering and the thinking counts toward max_tokens, so
+// the worker sets a generous limit itself (only tokens actually used are billed).
+const MAX_TOKENS = 16000;
+const EFFORT = 'medium';
 const MAX_BODY_BYTES = 8 * 1024 * 1024; // a few compressed receipt photos at most
 
 function corsHeaders(origin, env) {
@@ -61,13 +64,21 @@ export default {
 
     const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL || undefined });
     try {
-      const message = await client.messages.create({
+      const message = await client.beta.messages.create({
         model: MODEL,
-        max_tokens: Math.min(Math.max(1, Number(body.max_tokens) || 1000), MAX_TOKENS_CAP),
+        max_tokens: MAX_TOKENS,
+        output_config: { effort: EFFORT },
+        // If a safety classifier declines, Anthropic re-runs the request on its recommended model.
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
         ...(typeof body.system === 'string' && body.system ? { system: body.system } : {}),
         messages: body.messages,
       });
-      return reply(message, 200, origin, env);
+      if (message.stop_reason === 'refusal') {
+        return fail(422, 'The AI declined to process this request.', origin, env);
+      }
+      // The app reads content[0].text, so return only the answer text (no thinking/fallback blocks).
+      return reply({ ...message, content: message.content.filter(b => b.type === 'text') }, 200, origin, env);
     } catch (err) {
       if (err instanceof Anthropic.APIError) {
         // Pass Anthropic's own explanation through (e.g. invalid key, low credit balance) so the
