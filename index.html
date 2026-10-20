@@ -1381,6 +1381,9 @@ function aiFetch(body){
   return send();
 }
 
+// The worker (and aiFetch when signed out) reply with {error:{message}} instead of content.
+function aiErrorText(d){return d&&d.error?(d.error.message||String(d.error)):'';}
+
 // Wrap fetch calls to auto-refresh on 401
 function supaFetchWithRefresh(url, opts, cb){
   fetch(url, opts).then(function(r){
@@ -2599,6 +2602,7 @@ function renderDiagnostics(){
       h+=btn(hasTest?'&#x1F5D1;&#xFE0F; Remove test expense':'&#x1F9EA; Add test expense (tricky text)',hasTest?'diagRemoveTestExpense()':'diagAddTestExpense()');
       h+=btn('&#x1F4A5; Simulate Expenses crash','diagSimulateCrash()');
       if(SUPA_USER)h+=btn('&#x1F504; Sync job notes now','diagSyncJobMeta()');
+      h+=btn('&#x1F916; Test AI connection','diagTestAI()');
       body.innerHTML=h;
     });
   });
@@ -2621,6 +2625,16 @@ function diagSimulateCrash(){
   if(!confirm('The app will reload as if the Expenses tab had crashed. You should see the crash message, then Expenses opens in safe mode. Continue?'))return;
   try{localStorage.setItem('pt_exp_render','step=simulated test (not a real crash)');}catch(e){}
   location.reload();
+}
+function diagTestAI(){
+  showToast('Testing AI…');
+  aiFetch({max_tokens:20,messages:[{role:'user',content:'Reply with just: OK'}]})
+    .then(function(r){return r.json().then(function(d){return {status:r.status,d:d};});})
+    .then(function(x){
+      var err=aiErrorText(x.d);
+      alert(err?('AI connection failed (HTTP '+x.status+'):\n\n'+err):'AI connection working \u2713');
+    })
+    .catch(function(e){alert('AI connection failed: could not reach the AI service ('+e.message+').');});
 }
 function diagSyncJobMeta(){
   showToast('Syncing…');
@@ -2732,6 +2746,7 @@ function ocrPayslip(file,idx){
       .then(function(r){return r.json();})
       .then(function(d){
         if(!PAYSLIPS[idx]){return;}
+        if(aiErrorText(d))showToast('Payslip scan failed: '+aiErrorText(d));
         if(!d.content||!d.content[0])console.warn('Unexpected API response',d);
         var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
         var m=txt.match(/\{[\s\S]*\}/);
@@ -5056,6 +5071,7 @@ function ocrReceipt(file){
       .then(function(r){return r.json();})
       .then(function(d){
         if(statusEl)statusEl.textContent='';
+        if(aiErrorText(d)){showToast('Scan failed: '+aiErrorText(d));return;}
         var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
         var m=txt.match(/\{[\s\S]*\}/);
         if(!m){showToast('Could not read receipt');return;}
@@ -5111,6 +5127,7 @@ function ocrIncomeReceipt(file){
       .then(function(r){return r.json();})
       .then(function(d){
         if(statusEl)statusEl.textContent='';
+        if(aiErrorText(d)){showToast('Scan failed: '+aiErrorText(d));return;}
         var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
         var m=txt.match(/\{[\s\S]*\}/);
         if(!m)return;

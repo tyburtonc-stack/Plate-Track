@@ -15,6 +15,10 @@ before(async () => {
         res.writeHead(ok ? 200 : 401, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(ok ? { id: 'user-1' } : { msg: 'bad jwt' }));
       }
+      if (req.url === '/fail/v1/messages') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } }));
+      }
       if (req.url === '/v1/messages') {
         lastAnthropicBody = JSON.parse(raw);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -67,4 +71,15 @@ test('CORS preflight allows the Authorization header', async () => {
   const res = await call({ method: 'OPTIONS' });
   assert.equal(res.status, 204);
   assert.match(res.headers.get('Access-Control-Allow-Headers'), /Authorization/);
+});
+
+test('Anthropic errors are passed through so the app can show them', async () => {
+  const env2 = { ...env(), ANTHROPIC_BASE_URL: base + '/fail' };
+  const res = await worker.fetch(new Request('https://platetrack-ai.example/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: 'https://tyburtonc-stack.github.io', Authorization: 'Bearer good-token' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+  }), env2);
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error.message, /credit balance is too low/);
 });
