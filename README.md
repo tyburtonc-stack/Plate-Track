@@ -303,7 +303,7 @@ Always commit the rebuilt `docs/` alongside changes to `index.html`.
 `supabase/rls.sql` turns on Row Level Security so each signed-in user can only read and change their own `users`, `income` and `expenses` rows and their own files in the `Receipts` bucket. Run it once in the Supabase SQL editor; it is safe to re-run.
 
 ### AI worker
-`platetrack-ai-worker/` is the Cloudflare Worker behind receipt/payslip scanning and the AI assistant. It only serves signed-in users calling from the app's own site, fixes the model and output cap server-side, and keeps the Anthropic key as a worker secret. The **Deploy AI worker** GitHub Action deploys it on every change to that folder on `main` (repo secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`). `cd platetrack-ai-worker && npm test` runs its tests.
+`platetrack-ai-worker/` is the Cloudflare Worker behind receipt/payslip scanning and the AI assistant. It only serves signed-in users calling from the app's own site, fixes the model (Claude Opus 5.5, effort `medium`, server-side refusal fallback) and output limit server-side, returns only the answer text (Opus 5.5 replies start with thinking blocks), and keeps the Anthropic key as a worker secret. The **Deploy AI worker** GitHub Action deploys it on every change to that folder on `main` (repo secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`). `cd platetrack-ai-worker && npm test` runs its tests.
 
 Ideas for later live in `BACKLOG.md`.
 
