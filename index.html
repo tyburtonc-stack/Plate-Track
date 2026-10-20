@@ -1306,25 +1306,72 @@ function _supaHdr(){
   return h;
 }
 
+// Supabase Auth reports failures as {error_code, msg} (newer) or {error, error_description}
+// (older), with a non-2xx status. Turn either into a message a driver can act on.
+function supaAuthError(r,d){
+  d=d||{};
+  var code=d.error_code||d.code||d.error||'';
+  var raw=d.msg||d.message||d.error_description||(typeof d.error==='string'?d.error:'')||'';
+  var known={
+    invalid_credentials:'Wrong email or password. Please try again.',
+    invalid_grant:'Wrong email or password. Please try again.',
+    email_not_confirmed:'Please confirm your email first \u2014 check your inbox for the link.',
+    user_already_exists:'There\'s already an account with this email. Sign in instead.',
+    weak_password:'That password is too weak. Use at least 6 characters.',
+    over_email_send_rate_limit:'Too many emails sent. Please wait a few minutes and try again.',
+    over_request_rate_limit:'Too many attempts. Please wait a minute and try again.',
+    same_password:'Choose a different password from your old one.'
+  };
+  if(known[code])return known[code];
+  if(/invalid login credentials/i.test(raw))return known.invalid_credentials;
+  return raw||('Something went wrong (error '+(r&&r.status||'?')+'). Please try again.');
+}
+function supaNetworkError(){return 'Can\'t connect. Check your internet and try again.';}
+function supaJSON(r){return r.json().catch(function(){return {};}).then(function(d){return {r:r,d:d};});}
+
 function supaSignUp(email,pw,cb){
   fetch(SUPA_URL+'/auth/v1/signup',{method:'POST',headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:email,password:pw})})
-  .then(function(r){return r.json();}).then(function(d){
-    if(d.error||d.msg){return cb(d.error_description||d.msg||d.error,null);}
+  .then(supaJSON).then(function(x){
+    var r=x.r,d=x.d;
+    if(!r.ok||d.error||d.error_code){return cb(supaAuthError(r,d),null);}
     var sess=d.session||d;SUPA_SESSION=sess.access_token?sess:null;SUPA_USER=d.user||null;
     if(SUPA_SESSION)try{localStorage.setItem('pt_sess',JSON.stringify(SUPA_SESSION));}catch(e){}
     if(!SUPA_USER){return cb('Account created — please sign in.',null);}
     cb(null,SUPA_USER);
-  }).catch(function(e){cb(e.message,null);});
+  }).catch(function(){cb(supaNetworkError(),null);});
 }
 
 function supaSignIn(email,pw,cb){
   fetch(SUPA_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:email,password:pw})})
-  .then(function(r){return r.json();}).then(function(d){
-    if(d.error_description||d.error){return cb(d.error_description||d.error,null);}
+  .then(supaJSON).then(function(x){
+    var r=x.r,d=x.d;
+    // Only a response carrying an access token is a successful sign-in.
+    if(!r.ok||!d.access_token){return cb(supaAuthError(r,d),null);}
     SUPA_SESSION=d;SUPA_USER=d.user;
     try{localStorage.setItem('pt_sess',JSON.stringify(d));}catch(e){}
     cb(null,d.user);
-  }).catch(function(e){cb(e.message,null);});
+  }).catch(function(){cb(supaNetworkError(),null);});
+}
+
+// Email a password-reset link. The link returns to the app with #...&type=recovery (handled by
+// handleAuthRedirect). Supabase replies the same whether or not the email has an account.
+var PASSWORD_RESET_URL='https://tyburtonc-stack.github.io/Plate-Track/';
+function supaRequestReset(email,cb){
+  fetch(SUPA_URL+'/auth/v1/recover?redirect_to='+encodeURIComponent(PASSWORD_RESET_URL),{method:'POST',headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:email})})
+  .then(supaJSON).then(function(x){cb(x.r.ok?null:supaAuthError(x.r,x.d));})
+  .catch(function(){cb(supaNetworkError());});
+}
+// Set a new password using the access token from a reset link, then load the user.
+function supaSetPassword(accessToken,pw,cb){
+  var h={'apikey':SUPA_KEY,'Content-Type':'application/json','Authorization':'Bearer '+accessToken};
+  fetch(SUPA_URL+'/auth/v1/user',{method:'PUT',headers:h,body:JSON.stringify({password:pw})})
+  .then(supaJSON).then(function(x){
+    if(!x.r.ok||!x.d.id){
+      var expired=x.r.status===401||/expired|invalid jwt/i.test(x.d.msg||'');
+      return cb(expired?'This reset link has expired. Request a new one from the sign-in screen.':supaAuthError(x.r,x.d),null);
+    }
+    cb(null,x.d);
+  }).catch(function(){cb(supaNetworkError(),null);});
 }
 
 function supaSignOut(cb){
@@ -1345,8 +1392,9 @@ function supaRefreshToken(cb){
     method:'POST',
     headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
     body:JSON.stringify({refresh_token:SUPA_SESSION.refresh_token})
-  }).then(function(r){return r.json();}).then(function(d){
-    if(d.error_description||d.error){
+  }).then(supaJSON).then(function(x){
+    var d=x.d;
+    if(!x.r.ok||!d.access_token){
       // Refresh failed — clear session, ask user to sign in again
       supaSignOut(null);
       updateSyncBar();
@@ -5409,29 +5457,55 @@ function showAuthModal(){
 }
 function hideAuthModal(){var m=document.getElementById('auth-modal');if(m)m.style.display='none';}
 
-function authToggleMode(){
-  AUTH_MODE=AUTH_MODE==='signin'?'signup':'signin';
-  document.getElementById('auth-btn').textContent=AUTH_MODE==='signin'?'Sign In':'Create Account';
-  document.getElementById('auth-sub').textContent=AUTH_MODE==='signin'?'Sign in to sync across devices':'Create a free account to back up your data';
-  document.getElementById('auth-toggle').innerHTML=AUTH_MODE==='signin'?'No account? <span onclick="authToggleMode()">Sign up free</span>':'Have an account? <span onclick="authToggleMode()">Sign in</span>';
-  document.getElementById('auth-err').textContent='';
+function authToggleMode(){authSetMode(AUTH_MODE==='signin'?'signup':'signin');}
+function authSetMode(mode){
+  AUTH_MODE=mode;
+  var t={signin:['Sign In','Sign in to sync across devices','No account? <span onclick="authToggleMode()">Sign up free</span>'],
+         signup:['Create Account','Create a free account to back up your data','Have an account? <span onclick="authToggleMode()">Sign in</span>'],
+         reset:['Send Reset Link','Enter your email and we\'ll send you a link to set a new password.','Remembered it? <span onclick="authSetMode(\'signin\')">Back to sign in</span>']}[mode];
+  document.getElementById('auth-btn').textContent=t[0];
+  document.getElementById('auth-sub').textContent=t[1];
+  document.getElementById('auth-toggle').innerHTML=t[2];
+  document.getElementById('auth-pw-wrap').style.display=mode==='reset'?'none':'block';
+  document.getElementById('auth-forgot').style.display=mode==='signin'?'block':'none';
+  authMsg('');
 }
+// Error (red) or confirmation (green) under the form.
+function authMsg(text,ok){var el=document.getElementById('auth-err');el.textContent=text||'';el.style.color=ok?'#16A34A':'#EF4444';}
 
 function authSubmit(){
   var email=(document.getElementById('auth-email').value||'').trim();
   var pw=document.getElementById('auth-pw').value||'';
-  var errEl=document.getElementById('auth-err');
-  errEl.textContent='';
-  if(!email||!pw){errEl.textContent='Please enter email and password.';return;}
-  var btn=document.getElementById('auth-btn');
+  var btn=document.getElementById('auth-btn'),label=btn.textContent;
+  authMsg('');
+  if(AUTH_MODE==='reset'){
+    if(!email){authMsg('Please enter your email.');return;}
+    btn.textContent='...';btn.disabled=true;
+    supaRequestReset(email,function(err){
+      btn.disabled=false;btn.textContent=label;
+      if(err){authMsg(err);return;}
+      authMsg('If there\'s an account for '+email+', a reset link is on its way. Check your inbox (and spam), then open the link on this phone.',true);
+    });
+    return;
+  }
+  if(!email||!pw){authMsg('Please enter email and password.');return;}
   btn.textContent='...';btn.disabled=true;
   var fn=AUTH_MODE==='signup'?supaSignUp:supaSignIn;
   fn(email,pw,function(err,user){
-    btn.disabled=false;
-    btn.textContent=AUTH_MODE==='signin'?'Sign In':'Create Account';
-    if(err){errEl.textContent=err;return;}
+    btn.disabled=false;btn.textContent=label;
+    if(err){
+      authMsg(err);
+      if(AUTH_MODE==='signin'){var pwEl=document.getElementById('auth-pw');pwEl.value='';pwEl.focus();}
+      return;
+    }
+    authSignedIn();
+  });
+}
+// After any successful sign-in: close the box and load this account's data.
+function authSignedIn(){
     hideAuthModal();
     updateSyncBar();
+    showToast('Signed in as '+(SUPA_USER&&SUPA_USER.email||''));
     supaEnsureUser(function(){
       supaNamePull(function(){
         supaIncomeTypesPull(function(){
@@ -5439,7 +5513,59 @@ function authSubmit(){
         });
       });
     });
-  });
+}
+
+// Reset links (and expired/invalid ones) come back as #access_token=...&type=recovery or
+// #error=...&error_code=otp_expired. Show the new-password screen or explain the problem.
+function handleAuthRedirect(){
+  var h=(location.hash||'').replace(/^#/,'');
+  if(!/(^|&)(type=recovery|error_code=|error=)/.test(h))return false;
+  var p={};h.split('&').forEach(function(kv){var i=kv.indexOf('=');if(i>0)p[kv.slice(0,i)]=decodeURIComponent(kv.slice(i+1).replace(/\+/g,' '));});
+  try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
+  // This runs while the page is still loading; the sign-in box markup comes later in the page.
+  var whenReady=function(fn){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn);else fn();};
+  if(p.error||p.error_code){
+    whenReady(function(){
+      showAuthModal();authSetMode('reset');
+      authMsg(p.error_code==='otp_expired'?'That reset link has expired or was already used. Enter your email to get a new one.':(p.error_description||'That link didn\'t work. Please request a new one.'));
+    });
+    return true;
+  }
+  if(p.type==='recovery'&&p.access_token){whenReady(function(){showNewPasswordModal(p);});return true;}
+  return false;
+}
+function showNewPasswordModal(p){
+  var old=document.getElementById('newpw-overlay');if(old)old.remove();
+  var ov=document.createElement('div');ov.id='newpw-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box';
+  var inp='width:100%;padding:14px 16px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;font-size:16px;color:var(--text);box-sizing:border-box;-webkit-appearance:none;margin-bottom:12px';
+  ov.innerHTML='<div style="background:var(--card);border-radius:20px;padding:28px 22px;width:100%;max-width:380px">'
+    +'<div style="font-size:22px;font-weight:800;margin-bottom:6px">Set a new password</div>'
+    +'<div style="font-size:14px;color:var(--text3);margin-bottom:18px;line-height:1.5">Choose a new password for your PlateTrack account.</div>'
+    +'<input type="password" id="newpw-1" placeholder="New password (6+ characters)" autocomplete="new-password" style="'+inp+'">'
+    +'<input type="password" id="newpw-2" placeholder="Type it again" autocomplete="new-password" style="'+inp+'">'
+    +'<div id="newpw-err" style="color:#EF4444;font-size:13px;min-height:18px;font-weight:600;margin-bottom:10px;text-align:center"></div>'
+    +'<button id="newpw-btn" style="width:100%;padding:16px;background:#E8C94A;color:#1A1A2E;font-size:17px;font-weight:800;border:none;border-radius:12px;cursor:pointer">Save Password</button>'
+    +'</div>';
+  document.body.appendChild(ov);
+  var err=ov.querySelector('#newpw-err'),btn=ov.querySelector('#newpw-btn');
+  btn.onclick=function(){
+    var a=ov.querySelector('#newpw-1').value,b=ov.querySelector('#newpw-2').value;
+    err.textContent='';
+    if(a.length<6){err.textContent='Use at least 6 characters.';return;}
+    if(a!==b){err.textContent='The two passwords don\'t match.';return;}
+    btn.disabled=true;btn.textContent='...';
+    supaSetPassword(p.access_token,a,function(e,user){
+      btn.disabled=false;btn.textContent='Save Password';
+      if(e){err.textContent=e;return;}
+      SUPA_SESSION={access_token:p.access_token,refresh_token:p.refresh_token||'',token_type:'bearer',expires_in:+p.expires_in||3600,expires_at:+p.expires_at||Math.floor(Date.now()/1000)+(+p.expires_in||3600),user:user};
+      SUPA_USER=user;
+      try{localStorage.setItem('pt_sess',JSON.stringify(SUPA_SESSION));}catch(x){}
+      ov.remove();
+      alert('Password updated. You\'re signed in, and you can use the new password on any device (including the home-screen app).');
+      authSignedIn();
+    });
+  };
 }
 
 function updateSyncBar(){
@@ -5522,7 +5648,9 @@ function dashClearSearch(){
 }
 embedLogo();
 setInterval(function(){if(SUPA_USER)updateSyncBar();},30000);
-if(supaRestoreSession()){
+if(handleAuthRedirect()){
+  // reset link or link error: handled by its own screen
+} else if(supaRestoreSession()){
   updateSyncBar();
   // Check if token is close to expiry (within 10 mins) and refresh proactively
   var tokenExpiry=SUPA_SESSION&&SUPA_SESSION.expires_at?SUPA_SESSION.expires_at*1000:0;
@@ -6011,10 +6139,11 @@ rAI();
       <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email"
         style="width:100%;padding:14px 16px;background:#F6F8FA;border:1.5px solid #D0D7DE;border-radius:10px;font-size:16px;color:#0D1117;box-sizing:border-box;-webkit-appearance:none;outline:none;transition:border .2s">
     </div>
-    <div style="margin-bottom:20px">
+    <div id="auth-pw-wrap" style="margin-bottom:20px">
       <label style="display:block;font-size:11px;font-weight:700;color:#57606A;margin-bottom:6px;letter-spacing:.06em;text-transform:uppercase">Password</label>
       <input type="password" id="auth-pw" placeholder="••••••••" autocomplete="current-password"
         style="width:100%;padding:14px 16px;background:#F6F8FA;border:1.5px solid #D0D7DE;border-radius:10px;font-size:16px;color:#0D1117;box-sizing:border-box;-webkit-appearance:none;outline:none;transition:border .2s">
+      <div id="auth-forgot" style="text-align:right;margin-top:8px"><span onclick="authSetMode('reset')" style="font-size:13px;font-weight:700;color:#C9922A;cursor:pointer">Forgot password?</span></div>
     </div>
     <div id="auth-err" style="color:#EF4444;font-size:13px;text-align:center;margin-bottom:10px;min-height:18px;font-weight:600"></div>
     <button id="auth-btn" onclick="authSubmit()"

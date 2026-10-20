@@ -40,7 +40,8 @@ async function openApp(seed, opts = {}) {
     if (db) localStorage.setItem('pt9', db);
   }, seed ? JSON.stringify(seed) : null);
   page.on('dialog', d => d.dismiss());
-  await page.goto(base);
+  if (opts.route) await page.route('https://sedrloixvoqbhbywrrvr.supabase.co/**', opts.route);
+  await page.goto(base + (opts.hash || ''));
   await page.waitForFunction(() => typeof DB === 'object');
   return { page, errors, close: () => ctx.close() };
 }

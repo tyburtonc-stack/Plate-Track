@@ -3,7 +3,6 @@
 Ideas agreed for later, from the October 2026 review. Highest value first.
 
 ## Next up
-- **"Forgot password" in the app.** There is no self-service password reset; resets currently have to be done in the Supabase SQL editor.
 - **Making Tax Digital quarterly summaries.** MTD for Income Tax applies to sole traders over £50k income from April 2026 and over £30k from April 2027. Add a quarterly view (6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan, 6 Jan–5 Apr) with income and expenses mapped to HMRC categories, and an export an accountant or MTD bridging software can use.
 
 ## If the app is sold to other drivers
