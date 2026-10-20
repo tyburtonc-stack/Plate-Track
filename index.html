@@ -1579,43 +1579,151 @@ function supaIncomeTypesPull(cb){
     .catch(function(e){if(cb)cb(e.message);});
 }
 
+// ── Sync ──────────────────────────────────────────────────────────────────
+// Row <-> app item mapping for the income and expenses tables.
+function incToRow(x,uid){return{id:String(x.id),user_id:uid,date:x.date,company:x.company||'',income_type:x.incomeType||'',amount:parseFloat(x.amount||0),job_ref:x.jobRef||'',start_time:x.startTime||'',end_time:x.endTime||'',miles:x.miles?parseFloat(x.miles):null,registration:x.registration||'',start_postcode:x.startPostcode||'',end_postcode:x.endPostcode||'',description:x.description||''};}
+function expToRow(x,uid){return{id:String(x.id),user_id:uid,date:x.date,category:x.category||'',amount:parseFloat(x.amount||0),company:x.company||'',job_ref:x.jobRef||'',receipt:x.receipt||'',description:x.description||'',receipt_image:x.receiptImage&&x.receiptImage.indexOf('supabase:')===0?x.receiptImage:''};}
+function incFromRow(x){return{id:x.id,date:x.date||'',company:x.company||'',incomeType:x.income_type||'',amount:String(x.amount||0),jobRef:x.job_ref||'',startTime:x.start_time||'',endTime:x.end_time||'',miles:x.miles!=null?String(x.miles):'',registration:x.registration||'',startPostcode:x.start_postcode||'',endPostcode:x.end_postcode||'',description:x.description||''};}
+// A receipt kept only on this phone (not yet uploaded) survives a pull.
+function expFromRow(x,local){var keep=local&&local.receiptImage&&local.receiptImage.indexOf('supabase:')!==0?local.receiptImage:'';return{id:x.id,date:x.date||'',category:x.category||'',amount:String(x.amount||0),company:x.company||'',jobRef:x.job_ref||'',receipt:x.receipt||'',description:x.description||'',receiptImage:x.receipt_image||keep};}
+// Order-independent fingerprint of a row, used to tell which side changed.
+function rowKey(row){var r=Object.assign({},row);delete r.user_id;delete r.created_at;r.id=String(r.id);if(typeof r.amount==='number')r.amount=Math.round(r.amount*100)/100;return JSON.stringify(r,Object.keys(r).sort());}
+var SYNC_TABLES={income:{to:incToRow,from:incFromRow},expenses:{to:expToRow,from:expFromRow}};
+
+// pt_sync_base: per table, {id: rowKey} of the rows this phone and the cloud last agreed on.
+// It lets a pull tell "added/edited here, not uploaded yet" from "changed or deleted elsewhere".
+function getSyncBase(){try{var b=JSON.parse(localStorage.getItem('pt_sync_base')||'null');return b&&b.income&&b.expenses?b:null;}catch(e){return null;}}
+function setSyncBase(b){try{localStorage.setItem('pt_sync_base',JSON.stringify(b));}catch(e){}}
+function syncBaseFromDB(){var b={income:{},expenses:{}};DB.income.forEach(function(x){b.income[String(x.id)]=rowKey(incToRow(x));});DB.expenses.forEach(function(x){b.expenses[String(x.id)]=rowKey(expToRow(x));});return b;}
+// Deletes that couldn't reach the cloud (no signal); retried on the next sync.
+function getPendingDeletes(){try{return JSON.parse(localStorage.getItem('pt_pending_deletes')||'[]');}catch(e){return [];}}
+function setPendingDeletes(a){try{localStorage.setItem('pt_pending_deletes',JSON.stringify(a));}catch(e){}}
+function addPendingDelete(table,id){var a=getPendingDeletes();a.push({t:table,id:String(id)});setPendingDeletes(a);}
+// Delete a row in the cloud; remember it if that fails so it can't come back on the next pull.
+function supaDeleteRow(table,id,cb){
+  if(!SUPA_USER||!SUPA_SESSION){addPendingDelete(table,id);return cb&&cb(false);}
+  var h={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_SESSION.access_token,'Content-Type':'application/json'};
+  fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+encodeURIComponent(String(id)),{method:'DELETE',headers:h})
+    .then(function(r){if(!r.ok){addPendingDelete(table,id);console.warn('Delete sync failed:',r.status);}if(cb)cb(r.ok);})
+    .catch(function(){addPendingDelete(table,id);if(cb)cb(false);});
+}
+function retryPendingDeletes(cb){
+  var a=getPendingDeletes();if(!a.length)return cb&&cb();
+  setPendingDeletes([]);var left=a.length;
+  a.forEach(function(d){supaDeleteRow(d.t,d.id,function(){if(--left===0&&cb)cb();});});
+}
+
+// Three-way merge of this phone's items with the cloud's rows for one table.
+function mergeTable(table,localItems,serverRows,base,pendingDel){
+  var T=SYNC_TABLES[table],out=[],serverById={},localById={},changedHere=false;
+  serverRows.forEach(function(r){serverById[String(r.id)]=r;});
+  localItems.forEach(function(x){localById[String(x.id)]=x;});
+  localItems.forEach(function(x){
+    var id=String(x.id),srow=serverById[id],lk=rowKey(T.to(x));
+    if(srow){
+      var sItem=T.from(srow,x),sk=rowKey(T.to(sItem));
+      if(lk===sk){out.push(sItem);return;}
+      if(base&&base[id]===sk){out.push(x);changedHere=true;}  // only edited here: keep the edit
+      else out.push(sItem);                                     // edited elsewhere (or both): cloud wins
+    } else if(base&&base[id]!==undefined){
+      // was in the cloud before and isn't now: deleted on another device
+    } else {out.push(x);changedHere=true;}                      // added here, not uploaded yet
+  });
+  serverRows.forEach(function(r){
+    var id=String(r.id);
+    if(localById[id]||pendingDel[table+':'+id])return;          // already merged, or deleted here
+    out.push(T.from(r,null));
+  });
+  return {items:out,changedHere:changedHere};
+}
+
+// Make sure the access token has a few minutes left before talking to Supabase (iOS pauses
+// timers in the background, so the 50-minute refresh can be missed).
+function supaFresh(cb){
+  if(!SUPA_SESSION)return cb('not_logged_in');
+  var exp=(SUPA_SESSION.expires_at||0)*1000;
+  if(exp&&exp-Date.now()<120000)return supaRefreshToken(function(err){cb(err||(!SUPA_SESSION?'signed_out':null));});
+  cb(null);
+}
+
+function setSyncFailed(on){try{if(on)localStorage.setItem('pt_sync_failed','1');else localStorage.removeItem('pt_sync_failed');}catch(e){}}
+function syncFailed(){try{return !!localStorage.getItem('pt_sync_failed');}catch(e){return false;}}
+
 function supaPushAll(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
-  var uid=SUPA_USER.id;
-  if(DB.income.length===0&&DB.expenses.length===0){supaJobMetaPush(function(){if(cb)cb(null);});return;}
-  var incRows=DB.income.map(function(x){return{id:x.id,user_id:uid,date:x.date,company:x.company||'',income_type:x.incomeType||'',amount:parseFloat(x.amount||0),job_ref:x.jobRef||'',start_time:x.startTime||'',end_time:x.endTime||'',miles:x.miles?parseFloat(x.miles):null,registration:x.registration||'',start_postcode:x.startPostcode||'',end_postcode:x.endPostcode||'',description:x.description||''};});
-  var expRows=DB.expenses.map(function(x){return{id:x.id,user_id:uid,date:x.date,category:x.category||'',amount:parseFloat(x.amount||0),company:x.company||'',job_ref:x.jobRef||'',receipt:x.receipt||'',description:x.description||'',receipt_image:x.receiptImage&&x.receiptImage.indexOf('supabase:')===0?x.receiptImage:''};});
-  var h=Object.assign(_supaHdr(),{'Prefer':'resolution=merge-duplicates'});
-  var ops=[];
-  if(incRows.length)ops.push(fetch(SUPA_URL+'/rest/v1/income',{method:'POST',headers:h,body:JSON.stringify(incRows)}).then(function(r){if(!r.ok)r.text().then(function(t){console.warn('push income',r.status,t);});}).catch(function(e){console.warn('push income failed',e);}));
-  ops.push(new Promise(function(res){supaJobMetaPush(function(){res();});}));
-  if(expRows.length)ops.push(fetch(SUPA_URL+'/rest/v1/expenses',{method:'POST',headers:h,body:JSON.stringify(expRows)}).then(function(r){if(!r.ok)r.text().then(function(t){console.warn('push exp',r.status,t);});}).catch(function(e){console.warn('push exp failed',e);}));
-  Promise.all(ops).then(function(){
-    supaUploadPendingReceipts(function(){
-      window._lastSync=new Date();updateSyncBar();
-      showToast('☁️ Synced to cloud');
-      if(cb)cb(null);
-    });
-  }).catch(function(e){console.warn('push err',e);showToast('❌ Sync failed');if(cb)cb(e.message);});
+  supaFresh(function(err){
+    if(err){setSyncFailed(true);return cb&&cb(err);}
+    var uid=SUPA_USER.id;
+    var snapshot=syncBaseFromDB();
+    var incRows=DB.income.map(function(x){return incToRow(x,uid);});
+    var expRows=DB.expenses.map(function(x){return expToRow(x,uid);});
+    var h=Object.assign(_supaHdr(),{'Prefer':'resolution=merge-duplicates'});
+    var upsert=function(table,rows){
+      if(!rows.length)return Promise.resolve(true);
+      return fetch(SUPA_URL+'/rest/v1/'+table,{method:'POST',headers:h,body:JSON.stringify(rows)})
+        .then(function(r){if(!r.ok)r.text().then(function(t){console.warn('push '+table,r.status,t);});return r.ok;})
+        .catch(function(e){console.warn('push '+table+' failed',e);return false;});
+    };
+    Promise.all([upsert('income',incRows),upsert('expenses',expRows),new Promise(function(res){supaJobMetaPush(function(){res(true);});})])
+      .then(function(ok){
+        if(ok[0]&&ok[1]){
+          setSyncBase(snapshot);setSyncFailed(false);
+          retryPendingDeletes(function(){
+            supaUploadPendingReceipts(function(){
+              window._lastSync=new Date();updateSyncBar();
+              showToast('☁️ Synced to cloud');
+              if(cb)cb(null);
+            });
+          });
+        } else {
+          setSyncFailed(true);updateSyncBar();
+          showToast('⚠️ Saved on this phone — will sync when you’re back online');
+          if(cb)cb('push_failed');
+        }
+      });
+  });
 }
 
 function supaPullAll(cb){
   if(!SUPA_USER||!SUPA_SESSION)return cb&&cb('not_logged_in');
-  var uid=encodeURIComponent(SUPA_USER.id);
-  var h=_supaHdr(); delete h['Content-Type'];
-  Promise.all([
-    fetch(SUPA_URL+'/rest/v1/income?select=*&user_id=eq.'+uid+'&order=date.desc',{headers:h}).then(function(r){return r.ok?r.json():r.text().then(function(t){console.warn('pull inc',r.status,t);return [];});}),
-    fetch(SUPA_URL+'/rest/v1/expenses?select=*&user_id=eq.'+uid+'&order=date.desc',{headers:h}).then(function(r){return r.ok?r.json():r.text().then(function(t){console.warn('pull exp',r.status,t);return [];});})
-  ]).then(function(res){
-    var inc=res[0],exp=res[1];
-    if(!Array.isArray(inc)||!Array.isArray(exp)){console.warn('bad pull',inc,exp);return cb&&cb('bad_response');}
-    if(inc.length===0&&exp.length===0){console.log('cloud empty, pushing local');supaPushAll(cb);return;}
-    DB.income=inc.map(function(x){return{id:x.id,date:x.date||'',company:x.company||'',incomeType:x.income_type||'',amount:String(x.amount||0),jobRef:x.job_ref||'',startTime:x.start_time||'',endTime:x.end_time||'',miles:x.miles!=null?String(x.miles):'',registration:x.registration||'',startPostcode:x.start_postcode||'',endPostcode:x.end_postcode||'',description:x.description||''};});
-    var localImg={};DB.expenses.forEach(function(e){if(e.receiptImage&&e.receiptImage.indexOf('supabase:')!==0)localImg[e.id]=e.receiptImage;});
-    DB.expenses=exp.map(function(x){return{id:x.id,date:x.date||'',category:x.category||'',amount:String(x.amount||0),company:x.company||'',jobRef:x.job_ref||'',receipt:x.receipt||'',description:x.description||'',receiptImage:x.receipt_image||localImg[x.id]||''};});
-    saveDB();render(CTAB);showToast('☁️ Data loaded');supaCompaniesPull(function(e){supaIncomeTypesPull(function(){supaJobMetaPull(cb);});});return;
-  }).catch(function(e){console.warn('pull err',e);if(cb)cb(e.message);});
+  supaFresh(function(err){
+    if(err)return cb&&cb(err);
+    var uid=encodeURIComponent(SUPA_USER.id);
+    var h=_supaHdr(); delete h['Content-Type'];
+    var get=function(table){
+      return fetch(SUPA_URL+'/rest/v1/'+table+'?select=*&user_id=eq.'+uid+'&order=date.desc',{headers:h})
+        .then(function(r){return r.ok?r.json():r.text().then(function(t){console.warn('pull '+table,r.status,t);return null;});})
+        .catch(function(){return null;});
+    };
+    Promise.all([get('income'),get('expenses')]).then(function(res){
+      var inc=res[0],exp=res[1];
+      // Never replace data on this phone with a partial or failed download.
+      if(!Array.isArray(inc)||!Array.isArray(exp)){console.warn('pull failed',inc,exp);return cb&&cb('bad_response');}
+      // An empty cloud is treated as "nothing uploaded yet", never as "everything deleted".
+      if(inc.length===0&&exp.length===0){console.log('cloud empty, pushing local');supaPushAll(cb);return;}
+      var base=getSyncBase(),pend={};
+      getPendingDeletes().forEach(function(d){pend[d.t+':'+d.id]=1;});
+      var mi=mergeTable('income',DB.income,inc,base&&base.income,pend);
+      var me=mergeTable('expenses',DB.expenses,exp,base&&base.expenses,pend);
+      DB.income=mi.items;DB.expenses=me.items;
+      saveDB();render(CTAB);
+      var after=function(){supaCompaniesPull(function(e){supaIncomeTypesPull(function(){supaJobMetaPull(cb);});});};
+      if(mi.changedHere||me.changedHere||getPendingDeletes().length){
+        clearTimeout(window._syncT);
+        supaPushAll(function(){after();});                       // upload what only this phone had
+      } else {
+        setSyncBase(syncBaseFromDB());showToast('☁️ Data loaded');after();
+      }
+    });
+  });
 }
+
+// Retry a failed sync when the signal comes back or the app is reopened from the background.
+window.addEventListener('online',function(){if(SUPA_USER&&syncFailed())supaPushAll(null);});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState!=='visible'||!SUPA_USER)return;
+  if(syncFailed())supaPushAll(null);
+});
 
 // ── Receipt Storage ──────────────────────────────────────────────────────
 function compressImage(file, maxPx, quality, cb){
@@ -5320,14 +5428,8 @@ function doDelete(){
     try{sessionStorage.setItem('pt9',JSON.stringify(DB));}catch(e){}
     closeSheet();render(CTAB);showToast('Deleted');
     if(SUPA_USER&&SUPA_SESSION){
-      var h={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_SESSION.access_token,'Content-Type':'application/json'};
-      fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+_eid,{method:'DELETE',headers:h})
-        .then(function(r){
-          if(!r.ok)r.text().then(function(t){console.warn('Delete sync failed:',r.status,t);});
-          supaPushAll(function(){updateSyncBar();});
-        })
-        .catch(function(e){console.warn('Delete sync error:',e);});
-    }
+      supaDeleteRow(table,_eid,function(){supaPushAll(function(){updateSyncBar();});});
+    } else if(SUPA_USER){addPendingDelete(table,_eid);}
   });
 }
 
@@ -5835,10 +5937,7 @@ function doSwipeDelete(type,id){
   render(CTAB);
   showToast('Deleted');
   if(SUPA_USER&&SUPA_SESSION){
-    var h={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_SESSION.access_token,'Content-Type':'application/json'};
-    fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+sid,{method:'DELETE',headers:h})
-      .then(function(){supaPushAll(function(){updateSyncBar();});})
-      .catch(function(e){console.warn('Delete sync error:',e);});
+    supaDeleteRow(table,sid,function(){supaPushAll(function(){updateSyncBar();});});
   }
 }
 
@@ -6066,7 +6165,12 @@ var recentExpList = fe.slice().sort(function(a,b){return new Date(b.date)-new Da
 var systemPrompt = "You are a financial assistant built into PlateTrack, an expense and income tracker for UK self-employed trade plate drivers."
 + " The driver name is " + userName + "."
 + " Today is " + todayStr + ". Current tax year: " + tyearStr + "."
-+ " UK personal allowance: \u00a312,570. Basic rate: 20% up to \u00a337,700 above allowance. Higher rate: 40%. Class 4 NI: 9% and 2%."
++ (function(){var r=taxRatesFor(tyearStr),pc=function(x){return Math.round(x*10000)/100+'%';};
+    return " UK rates for " + tyearStr + " (England, Wales & NI): personal allowance \u00a3" + r.pa.toLocaleString() + " (reduced by \u00a31 for every \u00a32 of income over \u00a3100,000);"
+    + " income tax 20% on the first \u00a3" + r.basic.toLocaleString() + " of taxable income, 40% above that, 45% above \u00a3" + r.addl.toLocaleString() + ";"
+    + " Class 4 NI " + pc(r.c4) + " on profits between \u00a3" + r.lpl.toLocaleString() + " and \u00a3" + r.upl.toLocaleString() + " and " + pc(r.c4u) + " above;"
+    + (r.c2?" Class 2 NI \u00a3"+r.c2+"/week.":" no Class 2 NI (abolished April 2024).")
+    + " Each tax year uses its own rates.";})()
 + " Trade plate drivers CANNOT claim the HMRC 45p/25p mileage allowance."
 + "\n\nDRIVER FINANCIAL SUMMARY:"
 + "\nTotal income: " + money(t.inc)
@@ -6074,8 +6178,9 @@ var systemPrompt = "You are a financial assistant built into PlateTrack, an expe
 + "\nReimbursed expenses excluded from tax: " + money(t.reimb)
 + "\nAllowable deductions: " + money(t.deductible)
 + "\nNet taxable profit: " + money(t.profit)
-+ "\nEst income tax: " + money(t.tax)
-+ "\nEst Class 4 NI: " + money(t.ni)
++ "\nEst income tax (each tax year at its own rates): " + money(t.tax)
++ "\nEst National Insurance: " + money(t.ni)
++ (function(){var y=taxYearEstimate(tyearStr);return "\nCurrent tax year (" + tyearStr + ") profit so far: " + money(y.profit) + ", estimated tax + NI: " + money(y.total);})()
 + "\nIncome by company: " + (coLines || "none")
 + "\nExpenses by category: " + (catLines || "none")
 + "\nTotal income entries: " + fi.length
