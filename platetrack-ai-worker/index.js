@@ -70,8 +70,12 @@ export default {
       return reply(message, 200, origin, env);
     } catch (err) {
       if (err instanceof Anthropic.APIError) {
-        console.warn('anthropic error', user.id, err.status, err.message);
-        return fail(err.status || 502, err.status === 429 ? 'AI is busy, please try again shortly.' : 'AI request failed.', origin, env);
+        // Pass Anthropic's own explanation through (e.g. invalid key, low credit balance) so the
+        // app can show it; it never contains the key itself.
+        const detail = (err.error && err.error.error && err.error.error.message) || err.message || '';
+        console.warn('anthropic error', user.id, err.status, detail);
+        const message = err.status === 429 ? 'AI is busy, please try again shortly.' : `AI service error (${err.status || 'unknown'}): ${detail}`;
+        return fail(err.status || 502, message, origin, env);
       }
       console.error('proxy error', err);
       return fail(502, 'AI request failed.', origin, env);
