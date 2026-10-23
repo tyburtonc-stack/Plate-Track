@@ -165,8 +165,8 @@ test('Sort out with AI sends the notes to the AI worker and shows its rows for r
       if (String(url).startsWith(AI_PROXY_URL)) {
         window.__sent.push(JSON.parse(opts.body));
         const rows = [
-          { kind: 'income', date: '2026-10-06', amount: 85, company: 'BCA', incomeType: null, category: null, reimbursed: null, description: 'Leeds to Manchester' },
-          { kind: 'expense', date: '2026-10-06', amount: 22.4, company: null, category: 'Travel', reimbursed: false, description: 'Train back' },
+          ['i', '2026-10-06', 85, 'BCA', null, null, null, null, 'Leeds to Manchester'],
+          ['e', '2026-10-06', 22.4, null, 'Travel', false, null, null, 'Train back'],
         ];
         return new Response(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ rows }) }] }));
       }
@@ -237,5 +237,92 @@ test('an import can be removed later, taking only the entries it added, on the d
 test('users who never import keep the same synced job notes as before', async () => {
   const { page, close } = await openApp({ income: [], expenses: [] }, NOW);
   assert.deepEqual(JSON.parse(await page.evaluate(() => jobMetaJSON())), { jobs: {}, notes: [] });
+  await close();
+});
+
+// Fake AI worker: answer(prompt, callNo) returns the reply text; calls are recorded in window.__sent.
+async function fakeAI(page, answer) {
+  await page.exposeFunction('__answer', answer);
+  await page.evaluate(() => {
+    SUPA_USER = { id: 'u1' }; SUPA_SESSION = { access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 };
+    window.__sent = [];
+    window.fetch = async (url, opts) => {
+      if (!String(url).startsWith(AI_PROXY_URL)) return new Response('[]');
+      const prompt = JSON.parse(opts.body).messages[0].content;
+      window.__sent.push(prompt);
+      const r = await window.__answer(prompt, window.__sent.length);
+      if (r === 'hang') return new Promise(() => {});
+      return new Response(JSON.stringify({ content: [{ type: 'text', text: r.text }], stop_reason: r.stop || 'end_turn' }));
+    };
+  });
+}
+const BCA_NOTES = '11/04/25\n\nJob 36.60\nCas/nc 61.81\nWt/nc 26.26\nJob 34.80\nIntrav 8.50';
+
+test('BCA payslip codes in notes are read without AI', async () => {
+  const { page, close } = await openApp({ income: [], expenses: [] }, NOW);
+  await paste(page, BCA_NOTES);
+  assert.deepEqual((await items(page)).map(x => [x.kind, x.rec.date, x.rec.amount, x.rec.company, x.rec.incomeType || x.rec.category, x.rec.description]), [
+    ['income', '2025-04-11', '36.60', 'BCA', 'Delivery', 'Job'],
+    ['income', '2025-04-11', '61.81', '', 'Delivery', 'Cas/nc'],
+    ['income', '2025-04-11', '26.26', 'BCA', 'Waiting Time', 'Wt/nc'],
+    ['income', '2025-04-11', '34.80', 'BCA', 'Delivery', 'Job'],
+    ['expense', '2025-04-11', '8.50', 'BCA', 'Travel (Reimbursed)', 'Intrav'],
+  ]);
+  await close();
+});
+
+test('long notes go to the AI in parts, each told the date it follows on from', async () => {
+  const { page, errors, close } = await openApp({ income: [], expenses: [] }, NOW);
+  let notes = '';
+  for (let d = 1; d <= 30; d++) notes += `${String(d).padStart(2, '0')}/04/25\nJob ${30 + d}.00\nWt/nc 5.00\n\n`;
+  await fakeAI(page, prompt => {
+    const part = prompt.split('NOTES:\n')[1];
+    const rows = [];
+    let date = (/the last date before these notes was (\S+)\)/.exec(prompt) || [])[1] || null;
+    for (const line of part.split('\n')) {
+      const d = /^(\d\d)\/04\/25$/.exec(line);
+      if (d) date = `2025-04-${d[1]}`;
+      const m = /^(Job|Wt\/nc) (\S+)$/.exec(line);
+      if (m) rows.push(m[1] === 'Job' ? ['i', date, +m[2], 'BCA', 'Delivery', null, null, null, 'Job'] : ['i', date, +m[2], 'BCA', 'Waiting Time', null, null, null, 'Wt/nc']);
+    }
+    return { text: JSON.stringify({ rows }) };
+  });
+  await paste(page, notes, 'Sort out with AI');
+  await page.waitForFunction(() => IMP && IMP.step === 'review');
+  const sent = await page.evaluate(() => window.__sent);
+  assert.ok(sent.length >= 2, `sent in ${sent.length} part(s)`);
+  for (const p of sent) {
+    const lines = p.split('NOTES:\n')[1].split('\n').length;
+    assert.ok(lines <= 80, `part has ${lines} lines`);
+    assert.match(p.split('NOTES:\n')[1], /^\d\d\/04\/25/); // parts start at a date line
+  }
+  assert.doesNotMatch(sent[0], /last date before/);
+  assert.match(sent[1], /the last date before these notes was 2025-04-\d\d\)/);
+  const r = await items(page);
+  assert.equal(r.length, 60);
+  assert.deepEqual([r[0].rec.date, r[0].rec.amount, r[59].rec.date, r[59].rec.incomeType], ['2025-04-01', '31.00', '2025-04-30', 'Waiting Time']);
+  assert.doesNotMatch(await page.textContent('#imp-body'), /couldn.t be sorted/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('a reply cut off part-way keeps the complete rows and says some notes were missed', async () => {
+  const { page, close } = await openApp({ income: [], expenses: [] }, NOW);
+  await fakeAI(page, () => ({ text: '{"rows":[["i","2025-04-11",36.6,"BCA","Delivery",null,null,null,"Job"],["i","2025-04-11",61.81,"BCA","Cas/nc",null,null,null,"Cas/nc ]"],["i","2025-04-11",26.2', stop: 'max_tokens' }));
+  await paste(page, BCA_NOTES, 'Sort out with AI');
+  await page.waitForFunction(() => IMP && IMP.step === 'review');
+  assert.deepEqual((await items(page)).map(x => [x.rec.amount, x.rec.incomeType]), [['36.60', 'Delivery'], ['61.81', 'Cas/nc']]);
+  assert.match(await page.textContent('#imp-body'), /Some of your notes couldn.t be sorted \(the AI.s reply was cut off\)/);
+  await close();
+});
+
+test('while the AI works there is a timer and Cancel, which keeps the notes', async () => {
+  const { page, close } = await openApp({ income: [], expenses: [] }, NOW);
+  await fakeAI(page, () => 'hang');
+  await paste(page, BCA_NOTES, 'Sort out with AI');
+  assert.match(await page.textContent('#imp-body'), /Sorting your notes[\s\S]*0:00[\s\S]*Cancel/);
+  await page.click('#imp-body button:has-text("Cancel")');
+  assert.equal(await page.evaluate(() => [IMP.step, IMP.busy, IMP.aiRun].join('|')), 'start||');
+  assert.equal(await page.inputValue('#imp-text'), BCA_NOTES); // notes are kept to try again
   await close();
 });
