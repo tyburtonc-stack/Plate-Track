@@ -263,7 +263,7 @@ test('BCA payslip codes in notes are read without AI', async () => {
   await paste(page, BCA_NOTES);
   assert.deepEqual((await items(page)).map(x => [x.kind, x.rec.date, x.rec.amount, x.rec.company, x.rec.incomeType || x.rec.category, x.rec.description]), [
     ['income', '2025-04-11', '36.60', 'BCA', 'Delivery', 'Job'],
-    ['income', '2025-04-11', '61.81', 'BCA', 'Delivery', 'Cas/nc'], // unknown code: the import's only company
+    ['expense', '2025-04-11', '61.81', 'BCA', 'Fuel (Reimbursed)', 'Cas/nc'],
     ['income', '2025-04-11', '26.26', 'BCA', 'Waiting Time', 'Wt/nc'],
     ['income', '2025-04-11', '34.80', 'BCA', 'Delivery', 'Job'],
     ['expense', '2025-04-11', '8.50', 'BCA', 'Travel (Reimbursed)', 'Intrav'],
@@ -308,10 +308,10 @@ test('long notes go to the AI in parts, each told the date it follows on from', 
 
 test('a reply cut off part-way keeps the complete rows and says some notes were missed', async () => {
   const { page, close } = await openApp({ income: [], expenses: [] }, NOW);
-  await fakeAI(page, () => ({ text: '{"rows":[["i","2025-04-11",36.6,"BCA","Delivery",null,null,null,"Job"],["i","2025-04-11",61.81,"BCA","Cas/nc",null,null,null,"Cas/nc ]"],["i","2025-04-11",26.2', stop: 'max_tokens' }));
+  await fakeAI(page, () => ({ text: '{"rows":[["i","2025-04-11",36.6,"BCA","Delivery",null,null,null,"Job"],["e","2025-04-11",61.81,"BCA","Fuel",true,null,null,"Cas/nc ]"],["i","2025-04-11",26.2', stop: 'max_tokens' }));
   await paste(page, BCA_NOTES, 'Sort out with AI');
   await page.waitForFunction(() => IMP && IMP.step === 'review');
-  assert.deepEqual((await items(page)).map(x => [x.rec.amount, x.rec.incomeType]), [['36.60', 'Delivery'], ['61.81', 'Cas/nc']]);
+  assert.deepEqual((await items(page)).map(x => [x.rec.amount, x.rec.incomeType || x.rec.category]), [['36.60', 'Delivery'], ['61.81', 'Fuel (Reimbursed)']]);
   assert.match(await page.textContent('#imp-body'), /Some of your notes couldn.t be sorted \(the AI.s reply was cut off\)/);
   await close();
 });
@@ -336,7 +336,7 @@ test('rows without a company take the one company the import names, which can be
   assert.match(await page.textContent('#imp-body'), /Rows without a company/);
   await page.selectOption('#imp-body select >> nth=0', '');
   r = await items(page);
-  assert.deepEqual(r.filter(x => !x.rec.company).map(x => x.rec.description), ['Cas/nc', 'something']);
+  assert.deepEqual(r.filter(x => !x.rec.company).map(x => x.rec.description), ['something']);
   await close();
 
   const app = await openApp({ income: [], expenses: [] }, NOW);
