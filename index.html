@@ -490,6 +490,8 @@ body.dark .std-select{color-scheme:dark;background-color:var(--input);color:var(
 .imp-warn,.imp-err-txt{color:var(--danger)}
 .imp-warn{font-size:12px;font-weight:600;margin-top:4px}
 .imp-dupw{color:var(--orange)}
+.imp-hist{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:8px}
+.imp-rm{background:none;border:1px solid var(--danger);color:var(--danger);border-radius:var(--r-md);padding:7px 12px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
 .imp-busy{display:flex;flex-direction:column;align-items:center;gap:14px;padding:60px 20px;color:var(--text3);font-size:15px;font-weight:600;text-align:center}
 .imp-spin{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:impSpin .8s linear infinite}
 @keyframes impSpin{to{transform:rotate(360deg)}}
@@ -1569,7 +1571,7 @@ function supaCompaniesPull(cb){
 var _jobMetaPulled=false,JOB_META_STATUS='Not synced yet this session';
 // pt_jobmeta_synced holds the last copy agreed with the cloud. If the local copy differs from it,
 // there are edits (e.g. a deleted note) that haven't uploaded yet, and a pull must not undo them.
-function jobMetaJSON(){return JSON.stringify({jobs:DB.jobs||{},notes:DB.notes||[]});}
+function jobMetaJSON(){var m={jobs:DB.jobs||{},notes:DB.notes||[]};if(DB.imports&&DB.imports.length)m.imports=DB.imports;return JSON.stringify(m);}
 function jobMetaMarkSynced(){try{localStorage.setItem('pt_jobmeta_synced',jobMetaJSON());}catch(e){}}
 function jobMetaDirty(){var last=null;try{last=localStorage.getItem('pt_jobmeta_synced');}catch(e){}return last!==null&&last!==jobMetaJSON();}
 function supaJobMetaPush(cb,force){
@@ -1600,6 +1602,7 @@ function supaJobMetaPull(cb){
       if(jm&&typeof jm==='object'){
         DB.jobs=jm.jobs&&typeof jm.jobs==='object'?jm.jobs:{};
         DB.notes=Array.isArray(jm.notes)?jm.notes:[];
+        DB.imports=Array.isArray(jm.imports)?jm.imports:[];
         jobMetaMarkSynced();
         saveDB();render(CTAB);renderNotesList();
         if(cb)cb(null);
@@ -1895,6 +1898,7 @@ function loadDB(){
   if(!DB.jobOrder)DB.jobOrder={};
   if(!DB.jobs)DB.jobs={}; // DB.jobs: job status/notes annotation layer, keyed by jobRef. Synced via users.job_meta.
   if(!DB.notes)DB.notes=[]; // DB.notes: global quick-jot notes.
+  if(!DB.imports)DB.imports=[]; // DB.imports: what each import added, so it can be removed. Synced via users.job_meta.
   // Older versions also mirrored the whole DB into a cookie, which was sent to the web host on
   // every request. It's still read above as a last-resort fallback; expire it now.
   try{if(document.cookie.indexOf('pt9=')>=0)document.cookie='pt9=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';}catch(e){}
@@ -2812,6 +2816,7 @@ function generateCSV(){
 // Google Sheets, or notes). Everything is shown for review first and nothing is saved until the
 // user taps Import; it only ever adds entries. Messy notes can be sorted into rows by the AI worker.
 var IMP=null;
+var IMP_KEEP=20; // imports remembered for removing
 var IMP_FIELDS={
   income:[['date','Date'],['amount','Amount'],['company','Company'],['incomeType','Income type'],['jobRef','Job ref'],['registration','Registration'],['startTime','Start time'],['endTime','End time'],['miles','Miles'],['startPostcode','Start postcode'],['endPostcode','End postcode'],['description','Notes']],
   expense:[['date','Date'],['amount','Amount'],['category','Category'],['reimbursed','Reimbursed?'],['company','Company'],['jobRef','Job ref'],['receipt','Receipt ref'],['description','Description']]
@@ -3333,14 +3338,58 @@ function impCommit(){
     if(nn.cos.length)saveCompanies();
     if(nn.types.length)saveIncomeTypes();
   }
+  var batch={id:String(nid),at:new Date().toISOString(),label:IMP.label||'Import',income:[],expenses:[]};
   pick.forEach(function(it){
     while(used[String(nid)])nid++;
     used[String(nid)]=1;
     var rec=Object.assign({id:nid++},it.rec);
-    if(it.kind==='income'){DB.income.unshift(rec);inc++;}else{DB.expenses.unshift(rec);exp++;}
+    if(it.kind==='income'){DB.income.unshift(rec);batch.income.push(String(rec.id));inc++;}else{DB.expenses.unshift(rec);batch.expenses.push(String(rec.id));exp++;}
   });
+  if(!DB.imports)DB.imports=[];
+  DB.imports.unshift(batch);
+  DB.imports=DB.imports.slice(0,IMP_KEEP);
   saveDB();closeImport();render(CTAB);
-  showToast('\u2713 Imported '+[inc?inc+' income':'',exp?exp+' expense'+(exp>1?'s':''):''].filter(Boolean).join(' + '));
+  showToast('\u2713 Imported '+[inc?inc+' income':'',exp?exp+' expense'+(exp>1?'s':''):''].filter(Boolean).join(' + ')+' \u2014 undo from Import');
+}
+// Entries an import added that are still here (the user may have deleted some since).
+function impLeft(b){
+  var has=function(list,ids){var set={};ids.forEach(function(id){set[id]=1;});return list.filter(function(x){return set[String(x.id)];});};
+  return {income:has(DB.income,b.income||[]),expenses:has(DB.expenses,b.expenses||[])};
+}
+function impRecentHTML(){
+  var list=(DB.imports||[]).map(function(b){var l=impLeft(b);return {b:b,n:l.income.length+l.expenses.length};}).filter(function(x){return x.n;});
+  if(!list.length)return '';
+  return '<div class="imp-sec">Recent imports</div>'+list.map(function(x){
+    var when=new Date(x.b.at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    return '<div class="imp-hist"><div class="imp-map-col"><div class="imp-map-name">'+htmlEsc(x.b.label)+'</div><div class="imp-map-eg">'+when+' · '+x.n+' entr'+(x.n===1?'y':'ies')+'</div></div>'
+      +'<button class="imp-rm" onclick="impRemove(\''+htmlEsc(x.b.id)+'\')">Remove</button></div>';
+  }).join('');
+}
+// Deletes what an import added, on this device and in the cloud. Entries edited since are removed too.
+function impRemove(bid){
+  var b=(DB.imports||[]).filter(function(x){return x.id===bid;})[0];
+  if(!b)return;
+  var l=impLeft(b),n=l.income.length+l.expenses.length;
+  swipeConfirm('Remove the '+n+' entr'+(n===1?'y':'ies')+' added by <b>'+htmlEsc(b.label)+'</b>?<br><span style="font-weight:400;font-size:13px;color:var(--text3)">Any changes made to them since are removed too.</span>',function(){
+    var gone={};l.income.concat(l.expenses).forEach(function(x){gone[String(x.id)]=1;});
+    DB.income=DB.income.filter(function(x){return !gone[String(x.id)];});
+    DB.expenses=DB.expenses.filter(function(x){return !gone[String(x.id)];});
+    DB.imports=DB.imports.filter(function(x){return x.id!==bid;});
+    clearTimeout(window._syncT);
+    try{localStorage.setItem('pt9',JSON.stringify(DB));}catch(e){}
+    try{sessionStorage.setItem('pt9',JSON.stringify(DB));}catch(e){}
+    if(SUPA_USER&&SUPA_SESSION){
+      var h={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_SESSION.access_token,'Content-Type':'application/json'},ops=[];
+      [['income',l.income],['expenses',l.expenses]].forEach(function(t){
+        for(var i=0;i<t[1].length;i+=100){
+          var ids=t[1].slice(i,i+100).map(function(x){return encodeURIComponent(String(x.id));}).join(',');
+          ops.push(fetch(SUPA_URL+'/rest/v1/'+t[0]+'?id=in.('+ids+')',{method:'DELETE',headers:h}).then(function(r){if(!r.ok)r.text().then(function(tx){console.warn('Import remove sync failed:',r.status,tx);});}).catch(function(e){console.warn('Import remove sync error:',e);}));
+        }
+      });
+      Promise.all(ops).then(function(){supaPushAll(function(){updateSyncBar();});});
+    }
+    render(CTAB);impRender();showToast('Removed '+n+' imported entr'+(n===1?'y':'ies'));
+  },'Remove');
 }
 function impRender(){
   var el=document.getElementById('imp-body'),foot=document.getElementById('imp-foot');
@@ -3354,7 +3403,8 @@ function impRender(){
       +'<textarea id="imp-text" class="std-input imp-ta" placeholder="Paste cells copied from Excel or Google Sheets, or text from Notes, e.g.\n3/10 BCA Leeds to Manchester \u00a385\nTrain back \u00a322.40" oninput="IMP.text=this.value">'+htmlEsc(IMP.text)+'</textarea>'
       +'<div class="imp-btns"><button class="imp-btn2" onclick="impReadPaste()">Read pasted text</button>'
       +'<button class="imp-btn2 imp-ai" onclick="impAI()">&#x2728; Sort out with AI</button></div>'
-      +'<p class="imp-hint">Use AI for messy notes \u2014 it works out the dates, amounts, companies and expense types for you (needs you to be signed in). From Apple Numbers, export as Excel or CSV first.</p>';
+      +'<p class="imp-hint">Use AI for messy notes \u2014 it works out the dates, amounts, companies and expense types for you (needs you to be signed in). From Apple Numbers, export as Excel or CSV first.</p>'
+      +impRecentHTML();
     el.innerHTML=h;foot.innerHTML='';return;
   }
   var items=IMP.items,mixed=IMP.mode==='list',hasExp=items.some(function(it){return it.kind==='expense';});

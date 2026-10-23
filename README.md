@@ -51,6 +51,7 @@ PlateTrack is a Progressive Web App (PWA) that helps gig economy trade plate dri
 - Review screen before anything is saved: rows already in PlateTrack are unticked, rows missing a date or amount are flagged
 - Expense categories worked out from the text (e.g. "Shell diesel" → Fuel); reimbursed from the text, a Reimbursed column or company settings
 - "Sort out with AI" turns messy notes into rows via the AI worker (signed-in users)
+- Recent imports can be removed again from the Import screen; this deletes only the entries that import added, on the device and in the cloud (the list syncs via `users.job_meta`)
 - `.xlsx` is read in the browser (unzipped with `DecompressionStream`), with no library and no network needed
 
 ### Other

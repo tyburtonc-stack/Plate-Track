@@ -198,3 +198,44 @@ test('signed out, Sort out with AI asks the user to sign in', async () => {
   assert.match(await page.textContent('#toast'), /sign in/i);
   await close();
 });
+
+test('an import can be removed later, taking only the entries it added, on the device and in the cloud', async () => {
+  const mine = { id: 99, date: '2026-10-01', company: 'BCA', incomeType: 'Delivery', amount: '50', jobRef: '', description: 'typed in by hand' };
+  const { page, errors, close } = await openApp({ income: [mine], expenses: [] }, NOW);
+  await paste(page, 'Date,Amount,Company,Notes\n03/10/2026,85,BCA,first\n04/10/2026,90,BCA,second\n05/10/2026,95,BCA,third');
+  await page.click('#imp-foot button');
+  let st = await page.evaluate(() => ({ n: DB.income.length, imports: DB.imports, meta: JSON.parse(jobMetaJSON()) }));
+  assert.equal(st.n, 4);
+  assert.equal(st.imports.length, 1);
+  assert.equal(st.imports[0].label, 'Pasted text');
+  assert.equal(st.imports[0].income.length, 3);
+  assert.deepEqual(st.meta.imports, st.imports); // syncs between devices with the job notes
+
+  // The user deletes one imported entry by hand; the import now has 2 left.
+  await page.evaluate(() => { DB.income = DB.income.filter(x => x.description !== 'third'); saveDB(); });
+  await page.evaluate(() => {
+    SUPA_USER = { id: 'u1' }; SUPA_SESSION = { access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 };
+    window.__calls = [];
+    window.fetch = async (url, opts) => { window.__calls.push({ url: String(url), method: (opts && opts.method) || 'GET' }); return new Response('[]'); };
+  });
+  await startImport(page);
+  assert.match(await page.textContent('#imp-body'), /Recent imports[\s\S]*Pasted text[\s\S]*2 entries/);
+  await page.click('#imp-body .imp-rm');
+  await page.click('#sc-yes');
+  st = await page.evaluate(() => ({ income: DB.income.map(x => x.description), imports: DB.imports, saved: JSON.parse(localStorage.getItem('pt9')).income.length, calls: window.__calls }));
+  assert.deepEqual(st.income, ['typed in by hand']);
+  assert.deepEqual(st.imports, []);
+  assert.equal(st.saved, 1);
+  const del = st.calls.filter(c => c.method === 'DELETE');
+  assert.equal(del.length, 1);
+  assert.match(del[0].url, /\/rest\/v1\/income\?id=in\.\(\d+,\d+\)$/);
+  assert.doesNotMatch(await page.textContent('#imp-body'), /Recent imports/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('users who never import keep the same synced job notes as before', async () => {
+  const { page, close } = await openApp({ income: [], expenses: [] }, NOW);
+  assert.deepEqual(JSON.parse(await page.evaluate(() => jobMetaJSON())), { jobs: {}, notes: [] });
+  await close();
+});
