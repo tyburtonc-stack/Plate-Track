@@ -3130,6 +3130,13 @@ function impBuild(){
     if(named.length===1&&IMP.items.some(function(it){return it.noCo;}))IMP.defCo=named[0];
   }
   build();
+  // New companies and income types written in different cases ("Tol/dv", "TOL/dv") become one.
+  var first={};
+  IMP.items.forEach(function(it){['company','incomeType'].forEach(function(k){
+    var v=it.rec[k],key=k+'|'+String(v||'').toLowerCase();
+    if(!v)return;
+    if(first[key]===undefined)first[key]=v;else it.rec[k]=first[key];
+  });});
   IMP.addNew=IMP.addNew!==false;
 }
 

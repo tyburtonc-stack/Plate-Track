@@ -345,3 +345,13 @@ test('rows without a company take the one company the import names, which can be
   assert.deepEqual(shown, ['fix', 'ok', 'ok']);
   await app.close();
 });
+
+test('new income types that differ only in capitals are added once', async () => {
+  const { page, close } = await openApp({ income: [], expenses: [] }, NOW);
+  await paste(page, 'Date,Amount,Company,Income type\n01/04/2025,10,BCA,Tol/dv\n02/04/2025,11,BCA,TOL/dv\n03/04/2025,12,BCA,bonus');
+  assert.deepEqual((await items(page)).map(x => x.rec.incomeType), ['Tol/dv', 'Tol/dv', 'Bonus']);
+  assert.match(await page.textContent('#imp-body'), /Also add new income types: Tol\/dv(?!,)/);
+  await page.click('#imp-foot button');
+  assert.equal(await page.evaluate(() => INCOME_TYPES.filter(t => t.toLowerCase() === 'tol/dv').length), 1);
+  await close();
+});
