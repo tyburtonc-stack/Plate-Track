@@ -182,7 +182,7 @@ test('Sort out with AI sends the notes to the AI worker and shows its rows for r
   const r = await items(page);
   assert.deepEqual(r.map(x => [x.kind, x.rec.amount, x.rec.company, x.rec.category || x.rec.incomeType]), [
     ['income', '85.00', 'BCA', 'Delivery'],
-    ['expense', '22.40', '', 'Travel (Not Reimbursed)'],
+    ['expense', '22.40', 'BCA', 'Travel (Not Reimbursed)'], // no company given: the import's only company
   ]);
   assert.match(await page.textContent('#imp-body'), /Sorted by AI/);
   await page.click('#imp-foot button');
@@ -263,7 +263,7 @@ test('BCA payslip codes in notes are read without AI', async () => {
   await paste(page, BCA_NOTES);
   assert.deepEqual((await items(page)).map(x => [x.kind, x.rec.date, x.rec.amount, x.rec.company, x.rec.incomeType || x.rec.category, x.rec.description]), [
     ['income', '2025-04-11', '36.60', 'BCA', 'Delivery', 'Job'],
-    ['income', '2025-04-11', '61.81', '', 'Delivery', 'Cas/nc'],
+    ['income', '2025-04-11', '61.81', 'BCA', 'Delivery', 'Cas/nc'], // unknown code: the import's only company
     ['income', '2025-04-11', '26.26', 'BCA', 'Waiting Time', 'Wt/nc'],
     ['income', '2025-04-11', '34.80', 'BCA', 'Delivery', 'Job'],
     ['expense', '2025-04-11', '8.50', 'BCA', 'Travel (Reimbursed)', 'Intrav'],
@@ -325,4 +325,23 @@ test('while the AI works there is a timer and Cancel, which keeps the notes', as
   assert.equal(await page.evaluate(() => [IMP.step, IMP.busy, IMP.aiRun].join('|')), 'start||');
   assert.equal(await page.inputValue('#imp-text'), BCA_NOTES); // notes are kept to try again
   await close();
+});
+
+test('rows without a company take the one company the import names, which can be changed; rows to fix are listed first', async () => {
+  const { page, close } = await openApp({ income: [], expenses: [] }, NOW);
+  await paste(page, BCA_NOTES + '\nsomething 5.00\n\n12/04/25\nJob 40.00');
+  let r = await items(page);
+  assert.equal(await page.evaluate(() => IMP.defCo), 'BCA');
+  assert.ok(r.every(x => x.rec.company === 'BCA'), JSON.stringify(r.map(x => x.rec.company)));
+  assert.match(await page.textContent('#imp-body'), /Rows without a company/);
+  await page.selectOption('#imp-body select >> nth=0', '');
+  r = await items(page);
+  assert.deepEqual(r.filter(x => !x.rec.company).map(x => x.rec.description), ['Cas/nc', 'something']);
+  await close();
+
+  const app = await openApp({ income: [], expenses: [] }, NOW);
+  await paste(app.page, 'Date,Amount\n01/04/2025,10\n02/04/2025,\n03/04/2025,12');
+  const shown = await app.page.$$eval('#imp-body .imp-row', rows => rows.map(r => r.querySelector('.imp-warn') ? 'fix' : 'ok'));
+  assert.deepEqual(shown, ['fix', 'ok', 'ok']);
+  await app.close();
 });

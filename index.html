@@ -2949,7 +2949,7 @@ function impRecord(kind,f){
   var a=impAmount(g('amount'));
   if(!(a>0))errs.push(g('amount')&&isNaN(a)?'Amount "'+g('amount')+'" not recognised':'No amount');
   r.amount=a>0?a.toFixed(2):'';
-  r.company=impMatchName(g('company'),coNames());
+  r.company=impMatchName(g('company')||(IMP&&IMP.defCo)||'',coNames());
   r.jobRef=g('jobRef');
   r.description=g('description');
   if(kind==='income'){
@@ -2964,7 +2964,7 @@ function impRecord(kind,f){
     r.receipt=g('receipt');
   }
   r.receiptImage='';
-  return {kind:kind,rec:r,errs:errs};
+  return {kind:kind,rec:r,errs:errs,noCo:!g('company')};
 }
 function impDupKey(kind,r){
   var amt=parseFloat(r.amount||0).toFixed(2);
@@ -3089,7 +3089,7 @@ function impLoadRows(rows,label){
   for(var c=0;c<width;c++)headers.push(h>=0&&rows[h][c]?rows[h][c]:impColName(c));
   var data=rows.slice(h+1);
   if(!data.length){showToast('Only a heading row was found');impShow('start');return;}
-  IMP.mode='table';IMP.label=label;IMP.headers=headers;IMP.data=data;
+  IMP.mode='table';IMP.label=label;IMP.headers=headers;IMP.data=data;IMP.defCo=undefined;
   IMP.kind=impGuessKind(headers,data,label);
   IMP.map=impAutoMap(headers,IMP.kind,data);
   IMP.step='review';IMP.busy='';
@@ -3106,7 +3106,7 @@ function impFields(r,map){
 }
 // list: [{kind, f:{field:text}}] from notes, the AI or a PlateTrack export.
 function impLoadList(list,label,how){
-  IMP.aiNote='';IMP.mode='list';IMP.label=label;IMP.how=how;IMP.list=list;IMP.step='review';IMP.busy='';
+  IMP.aiNote='';IMP.defCo=undefined;IMP.mode='list';IMP.label=label;IMP.how=how;IMP.list=list;IMP.step='review';IMP.busy='';
   impBuild();impRender();
 }
 function impBuild(){
@@ -3114,12 +3114,22 @@ function impBuild(){
   DB.income.forEach(function(x){have[impDupKey('income',x)]=1;});
   DB.expenses.forEach(function(x){have[impDupKey('expense',x)]=1;});
   var src=IMP.mode==='table'?IMP.data.map(function(r){return {kind:IMP.kind,f:impFields(r,IMP.map)};}):IMP.list;
-  IMP.items=src.map(function(s){
-    var it=impRecord(s.kind,s.f);
-    it.dup=!it.errs.length&&!!have[impDupKey(it.kind,it.rec)];
-    it.sel=!it.errs.length&&!it.dup;
-    return it;
-  });
+  var build=function(){
+    IMP.items=src.map(function(s){
+      var it=impRecord(s.kind,s.f);
+      it.dup=!it.errs.length&&!!have[impDupKey(it.kind,it.rec)];
+      it.sel=!it.errs.length&&!it.dup;
+      return it;
+    });
+  };
+  // Rows with no company get the one company the rest of the import names, if there's only one.
+  if(IMP.defCo===undefined){
+    IMP.defCo='';build();
+    var cos={};IMP.items.forEach(function(it){if(!it.noCo)cos[it.rec.company]=1;});
+    var named=Object.keys(cos);
+    if(named.length===1&&IMP.items.some(function(it){return it.noCo;}))IMP.defCo=named[0];
+  }
+  build();
   IMP.addNew=IMP.addNew!==false;
 }
 
@@ -3366,6 +3376,7 @@ function impSetMap(i,v){
   if(v)IMP.map=IMP.map.map(function(m){return m===v?'':m;});
   IMP.map[i]=v;impBuild();impRender();
 }
+function impSetDefCo(v){IMP.defCo=v;impBuild();impRender();}
 function impSetReimb(v){IMP.reimb=v;impBuild();impRender();}
 function impToggle(i,on){var it=IMP.items[i];if(it&&!it.errs.length)it.sel=on;impRender();}
 function impSetAll(on){IMP.items.forEach(function(it){if(!it.errs.length&&(!on||!it.dup))it.sel=on;});impRender();}
@@ -3495,6 +3506,13 @@ function impRender(){
     h+='<div class="imp-note">Sorted by AI \u2014 check the dates and amounts before importing.'+(IMP.aiNote?'<div class="imp-warn" style="margin-top:8px">'+htmlEsc(IMP.aiNote)+'</div>':'')+'</div>';
   }
   if(IMP.mode==='table'&&IMP.pasted)h+='<button class="imp-link" style="margin-top:10px" onclick="impReadPaste(\'notes\')">Read as notes instead</button>';
+  if(items.some(function(it){return it.noCo;})){
+    var coOpts=coNames().slice();
+    items.forEach(function(it){var c=it.rec.company;if(c&&!it.noCo&&coOpts.indexOf(c)<0)coOpts.push(c);});
+    if(IMP.defCo&&coOpts.indexOf(IMP.defCo)<0)coOpts.push(IMP.defCo);
+    h+='<div class="imp-sec">Rows without a company</div><select class="std-input" onchange="impSetDefCo(this.value)"><option value="">Leave blank</option>'
+      +coOpts.map(function(c){return '<option value="'+htmlEsc(c)+'"'+(c===IMP.defCo?' selected':'')+'>'+htmlEsc(c)+'</option>';}).join('')+'</select>';
+  }
   if(hasExp){
     h+='<div class="imp-sec">Expenses not marked as reimbursed</div><select class="std-input" onchange="impSetReimb(this.value)">'
       +[['company','Use each company\u2019s settings'],['yes','Reimbursed'],['no','Not reimbursed']].map(function(o){return '<option value="'+o[0]+'"'+(IMP.reimb===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>';
@@ -3508,7 +3526,10 @@ function impRender(){
     +(items.length?'<span><button class="imp-link" onclick="impSetAll(true)">All</button> <button class="imp-link" onclick="impSetAll(false)">None</button></span>':'')+'</div>';
   if(!items.length)h+='<div class="imp-note">No amounts found. '+(IMP.mode==='table'?'Check the Amount column is matched above.':'Try \u201cSort out with AI\u201d.')+'</div>';
   var SHOW=300;
-  items.slice(0,SHOW).forEach(function(it,i){
+  // Rows that need fixing first, so they're easy to find in a long import.
+  var order=items.map(function(it,i){return i;}).sort(function(a,b){return (items[b].errs.length?1:0)-(items[a].errs.length?1:0)||a-b;});
+  order.slice(0,SHOW).forEach(function(i){
+    var it=items[i];
     var r=it.rec,top=it.kind==='income'?(r.company||'No company')+(r.incomeType&&r.incomeType!=='Delivery'?' \u00b7 '+r.incomeType:''):'';
     var sub=[r.jobRef,r.registration,r.startPostcode&&r.endPostcode?r.startPostcode+' \u2192 '+r.endPostcode:'',r.miles?r.miles+' mi':'',r.description].filter(Boolean).map(htmlEsc).join(' \u00b7 ');
     h+='<div class="imp-row'+(it.sel?'':' off')+'"><input type="checkbox" aria-label="Import this row"'+(it.sel?' checked':'')+(it.errs.length?' disabled':'')+' onchange="impToggle('+i+',this.checked)">'
