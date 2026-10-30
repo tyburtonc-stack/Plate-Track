@@ -37,8 +37,9 @@ async function openApp(seed, opts = {}) {
     if (sessionStorage.getItem('seeded')) return;
     sessionStorage.setItem('seeded', '1');
     localStorage.setItem('pt_onboarded', '1');
-    if (db) localStorage.setItem('pt9', db);
-  }, seed ? JSON.stringify(seed) : null);
+    if (db.seed) localStorage.setItem('pt9', db.seed);
+    Object.keys(db.storage || {}).forEach(k => localStorage.setItem(k, db.storage[k]));
+  }, { seed: seed ? JSON.stringify(seed) : null, storage: opts.storage || {} });
   page.on('dialog', d => d.dismiss());
   if (opts.route) await page.route('https://sedrloixvoqbhbywrrvr.supabase.co/**', opts.route);
   await page.goto(base + (opts.hash || ''));
