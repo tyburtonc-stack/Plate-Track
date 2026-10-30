@@ -1,5 +1,5 @@
 // CACHE_NAME is stamped with a content hash by build.js, so every deploy installs a fresh cache.
-const CACHE_NAME = 'platetrack-362a865610';
+const CACHE_NAME = 'platetrack-2d1942e96c';
 const URLS_TO_CACHE = [
   '/Plate-Track/',
   '/Plate-Track/pt.css',
