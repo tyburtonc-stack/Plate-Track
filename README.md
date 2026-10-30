@@ -45,8 +45,17 @@ PlateTrack is a Progressive Web App (PWA) that helps gig economy trade plate dri
 - Offline-first: all data persisted in localStorage, synced when online
 - Receipt images stored in Supabase Storage (with local base64 fallback)
 
+### Import
+- Add income and expenses from Excel (`.xlsx`), CSV, cells pasted from a spreadsheet, or notes
+- Finds the heading row, matches columns to PlateTrack fields (changeable), and reads UK dates, £ amounts and Excel date/time cells
+- Review screen before anything is saved: rows already in PlateTrack are unticked, rows missing a date or amount are flagged
+- Expense categories worked out from the text (e.g. "Shell diesel" → Fuel); reimbursed from the text, a Reimbursed column or company settings
+- "Sort out with AI" turns messy notes into rows via the AI worker (signed-in users)
+- Recent imports can be removed again from the Import screen; this deletes only the entries that import added, on the device and in the cloud (the list syncs via `users.job_meta`)
+- `.xlsx` is read in the browser (unzipped with `DecompressionStream`), with no library and no network needed
+
 ### Other
-- CSV export of income and expenses
+- CSV export of income and expenses (imports back in unchanged)
 - Dark / Light / Gold / Purple / Blue themes
 - Installable PWA (iOS & Android home screen)
 - Free tier: 10 income + 10 expense entries; Pro unlocks unlimited
