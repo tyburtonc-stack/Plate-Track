@@ -1,0 +1,53 @@
+/* PlateTrack v2 — job-first layout. Added to the v2 build only (see build.js). */
+.v2-home{padding:calc(env(safe-area-inset-top) + 72px) 16px 120px}
+.v2-home-hdr{padding:0 0 14px}
+.v2-home-hi{font-size:24px;font-weight:800;color:var(--text)}
+.v2-home-week{font-size:13px;color:var(--text3);margin-top:2px}
+
+.v2-new-job{background:var(--card);border:1px solid var(--border);border-radius:var(--r-xl);padding:16px;margin-bottom:8px}
+.v2-new-job-title{font-size:13px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.v2-new-job-row{display:flex;gap:10px}
+.v2-new-job-row .v2-big-btn{margin:0}
+.v2-new-job-row .v2-primary{flex:2}
+.v2-new-job-row .v2-big-btn:not(.v2-primary){flex:1}
+
+.v2-big-btn{display:block;width:100%;padding:15px 12px;margin:0 0 10px;border-radius:var(--r-md);border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:15px;font-weight:700;cursor:pointer}
+.v2-big-btn.v2-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.v2-link-btn{display:block;width:100%;background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;padding:10px 0 0;cursor:pointer}
+.v2-more{padding:6px 0 16px}
+
+.v2-section{font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 8px}
+.v2-job-card{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;margin-bottom:8px;cursor:pointer;color:var(--text);font:inherit}
+.v2-job-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.v2-job-ref{font-size:15px;font-weight:800}
+.v2-muted{color:var(--text4);font-weight:600;font-size:13px}
+.v2-job-mid{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--text3);margin-top:4px}
+.v2-job-bot{display:flex;align-items:baseline;gap:10px;margin-top:8px}
+.v2-job-gross{font-size:17px;font-weight:800}
+.v2-job-exp{font-size:12px;color:var(--text4);flex:1}
+.v2-job-net{font-size:13px;font-weight:700;color:var(--success)}
+
+/* New job chooser */
+.v2-chooser{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:flex-end;justify-content:center}
+.v2-chooser-card{background:var(--bg2);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:22px 20px calc(24px + env(safe-area-inset-bottom))}
+.v2-chooser-title{font-size:20px;font-weight:800;color:var(--text)}
+.v2-chooser-sub{font-size:13px;color:var(--text3);margin:4px 0 16px}
+
+/* Job page: the old job sheet, made full screen */
+.v2-jobpage{align-items:stretch!important;background:var(--bg)!important}
+.v2-jobpage>div{max-width:none!important;max-height:none!important;height:100%;border-radius:0!important;box-shadow:none!important;background:var(--bg)!important;padding-top:env(safe-area-inset-top)}
+.v2-jobpage>div>div:last-child{padding-bottom:calc(16px + env(safe-area-inset-bottom))!important}
+.v2-jobpage .jd-close{font-size:26px!important}
+.v2-jobpage>div>div:first-child{flex-direction:row-reverse;justify-content:flex-end!important;gap:12px}
+.v2-job-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.v2-act{display:flex;align-items:center;gap:8px;padding:13px 12px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;font-weight:700;cursor:pointer}
+.v2-act-ic{width:26px;height:26px;border-radius:var(--r-full);display:inline-flex;align-items:center;justify-content:center;font-size:15px;background:var(--bg2)}
+.v2-act-scan{background:var(--accent);border-color:var(--accent);color:#fff}
+.v2-act-exp{color:var(--danger);background:var(--danger-bg);border-color:var(--danger-border)}
+.v2-act-travel{color:var(--orange);background:var(--orange-bg);border-color:var(--orange-border)}
+.v2-act-inc{color:var(--success);background:var(--success-bg);border-color:var(--success-border)}
+.v2-ref-needed{grid-column:1/-1}
+.v2-ref-title{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:8px}
+.v2-ref-row{display:flex;gap:8px}
+.v2-ref-input{flex:1}
+.v2-ref-save{padding:0 18px;border-radius:var(--r-md);border:none;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}

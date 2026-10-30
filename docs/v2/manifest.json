@@ -1,0 +1,18 @@
+{
+  "name": "PlateTrack v2",
+  "short_name": "PlateTrack v2",
+  "description": "Income and expense tracker for UK trade plate drivers",
+  "start_url": "/Plate-Track/v2/",
+  "scope": "/Plate-Track/v2/",
+  "display": "standalone",
+  "theme_color": "#1A1A2E",
+  "background_color": "#1A1A2E",
+  "icons": [
+    {
+      "src": "/Plate-Track/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

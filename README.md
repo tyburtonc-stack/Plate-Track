@@ -308,6 +308,14 @@ npm test        # build, then run the browser tests in test/ (headless Chromium 
 
 Always commit the rebuilt `docs/` alongside changes to `index.html`.
 
+### v2: job-first layout (in progress)
+`npm run build` also builds a second version of the app into `docs/v2/`, served at `/Plate-Track/v2/`. It is `index.html` plus `v2/jobfirst.js` and `v2/jobfirst.css`, which change only the layout: Jobs is the home tab, **+** starts a new job (scan the job sheet or type it in), saving a job opens its job page, and the job page has Scan receipt / Add expense / Add travel / Add pay at the top. The old Home dashboard is the Overview tab.
+
+- The current app at `/Plate-Track/` is built exactly as before; v2 never changes `index.html`.
+- Both versions use the same records (`pt9` and the Supabase account), so either can be used on the same data.
+- To drop v2, delete `v2/` and the `v2Html` step in `build.js`. To make v2 the main app, move its changes into `index.html`.
+- `test/v2.test.js` covers the v2 flow.
+
 ### Supabase security
 `supabase/rls.sql` turns on Row Level Security so each signed-in user can only read and change their own `users`, `income` and `expenses` rows and their own files in the `Receipts` bucket. Run it once in the Supabase SQL editor; it is safe to re-run.
 
