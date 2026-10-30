@@ -75,66 +75,89 @@
   window.v2OpenNewJob=openNewJob;
 
   // ── Scanning jobs and route legs ──
-  function legPrompt(){
+  function legPrompt(n){
     var coList=COMPANIES.map(function(c){return c.name;}).join(', ');
-    return 'Today\'s date is '+today()+'. This is a job or route for a UK trade plate driver: a screenshot from a job app, a job sheet or a delivery confirmation. '
-      +'A route has one total price and several legs (tasks); a route screenshot shows one leg in detail, e.g. "Task 2 of 3". A single job is one leg. '
-      +'Return ONLY valid JSON, no markdown: {"amount":total_price_for_the_whole_job_or_route_in_GBP_or_null,"job_ref":"alphanumeric job or booking reference such as J-0739-08CF (NOT the vehicle registration plate) or null",'
-      +'"company":"identify company from branding or job number format, must be exactly one of ['+coList+'] or null","task_number":number_or_null,"task_count":number_or_null,'
-      +'"leg":{"registration":"UK plate of the vehicle moved on this leg, no spaces, or null","from_address":"collection address or null","from_postcode":"collection postcode or null","from_date":"YYYY-MM-DD or null","from_time":"HH:MM start of the collection window or null",'
-      +'"to_address":"delivery address or null","to_postcode":"delivery postcode or null","to_date":"YYYY-MM-DD or null","to_time":"HH:MM start of the delivery window or null","miles":number_or_null}}. '
-      +'Dates without a year are the next such date on or after today\'s date, unless clearly in the past. Postcodes uppercase UK format e.g. LU1 2AB. miles is this leg\'s distance as a plain number (e.g. 43 for "43 mi"); do not use the whole route distance.';
+    return 'Today\'s date is '+today()+'. '+(n>1?'These '+n+' screenshots are':'This screenshot is')+' one job or route for a UK trade plate driver, from a job app, a job sheet or a delivery confirmation. '
+      +'A route has one total price and several legs (tasks), one car per leg. Two layouts are common: '
+      +'(a) a route card showing one task in detail ("Task 2 of 3") with a map whose label (e.g. "194 mi, 4h 46m") is THAT task\'s distance; '
+      +'(b) a "Route Details" page split by day ("Day 1 of 3") listing each Task with its plate, collection address and window, "N miles driving" and the delivery address and window, '
+      +'plus travel between tasks (Walk, Train, Taxi) and "Carryover" when the driver keeps the car overnight. A single job is one leg. '
+      +(n>1?'Screenshots can overlap or repeat a task: list every task ONCE, combining what each screenshot shows. ':'')
+      +'Return ONLY valid JSON, no markdown: {"amount":total_price_for_the_whole_job_or_route_in_GBP_or_null,'
+      +'"job_ref":"job or booking reference such as J-B091-6FDF (NOT a vehicle registration plate) or null",'
+      +'"company":"identify company from branding or reference format, must be exactly one of ['+coList+'] or null",'
+      +'"legs":[{"task_number":number_or_null,"registration":"UK plate moved on this leg, no spaces; null if hidden or shown as NOREG",'
+      +'"from_address":"collection address or null","from_postcode":"collection postcode or null","from_date":"YYYY-MM-DD or null","from_time":"HH:MM start of the collection window or null",'
+      +'"to_address":"delivery address or null","to_postcode":"delivery postcode or null","to_date":"YYYY-MM-DD or null","to_time":"HH:MM start of the delivery window or null",'
+      +'"miles":this_leg_driving_miles_as_number_or_null}]}. '
+      +'Dates without a year are the next such date on or after today\'s date, unless clearly in the past. Postcodes uppercase UK format e.g. LU1 2AB. '
+      +'miles: the map label on a route card, or on Route Details the "miles driving" for that task (add the parts together when a carryover splits it over two days). Never use the whole route\'s total miles for one leg.';
   }
   function cleanLeg(l){
     l=l||{};
     var up=function(v){return v?String(v).toUpperCase().trim():'';};
-    return {reg:up(l.registration).replace(/\s+/g,''),fromAddr:l.from_address||'',fromPc:up(l.from_postcode),fromDate:l.from_date||'',fromTime:l.from_time||'',
+    var reg=up(l.registration).replace(/\s+/g,'');
+    if(reg==='NOREG'||reg==='NULL')reg='';
+    return {reg:reg,fromAddr:l.from_address||'',fromPc:up(l.from_postcode),fromDate:l.from_date||'',fromTime:l.from_time||'',
       toAddr:l.to_address||'',toPc:up(l.to_postcode),toDate:l.to_date||'',toTime:l.to_time||'',miles:l.miles!=null&&!isNaN(l.miles)?String(parseFloat(l.miles)):''};
   }
-  // Reads each image in turn; done(results) gets [{data, image}] for the ones that could be read.
+  var SCAN_BATCH=6; // screenshots per AI request (the worker takes up to 8 MB)
+  function readImage(file,cb){
+    compressImage(file,1200,0.75,function(blob){
+      var reader=new FileReader();
+      reader.onload=function(ev){cb(ev.target.result);};
+      reader.onerror=function(){cb(null);};
+      reader.readAsDataURL(blob);
+    });
+  }
+  // Reads all the screenshots together in one AI request (or one per SCAN_BATCH), so a route spread
+  // over several screenshots is read as a whole. done(result) gets {data, legs, image} or null.
   function scanImages(files,done){
-    var out=[],i=0;
-    var next=function(){
-      if(i>=files.length){done(out);return;}
-      var file=files[i++];
-      if(files.length>1)showToast('Reading screenshot '+i+' of '+files.length+'…');
-      compressImage(file,1200,0.75,function(blob){
-        var reader=new FileReader();
-        reader.onload=function(ev){
-          var dataUrl=ev.target.result;
-          aiFetch({max_tokens:700,messages:[{role:'user',content:[
-            {type:'image',source:{type:'base64',media_type:'image/jpeg',data:dataUrl.split(',')[1]}},
-            {type:'text',text:legPrompt()}]}]})
+    var urls=new Array(files.length),left=files.length;
+    files.forEach(function(f,i){readImage(f,function(u){urls[i]=u;if(--left===0)send();});});
+    var send=function(){
+      urls=urls.filter(Boolean);
+      if(!urls.length){done(null);return;}
+      var batches=[];
+      for(var i=0;i<urls.length;i+=SCAN_BATCH)batches.push(urls.slice(i,i+SCAN_BATCH));
+      Promise.all(batches.map(function(b){
+        var content=b.map(function(u){return {type:'image',source:{type:'base64',media_type:'image/jpeg',data:u.split(',')[1]}};});
+        content.push({type:'text',text:legPrompt(b.length)});
+        return aiFetch({max_tokens:4000,messages:[{role:'user',content:content}]})
           .then(function(r){return r.json();})
           .then(function(d){
-            if(aiErrorText(d)){showToast('Scan failed: '+aiErrorText(d));done(out);return;}
+            if(aiErrorText(d)){showToast('Scan failed: '+aiErrorText(d));return null;}
             var txt=d.content&&d.content[0]?(d.content[0].text||''):'';
-            var m=txt.match(/\{[\s\S]*\}/),data=null;
-            if(m)try{data=JSON.parse(m[0]);}catch(e){}
-            if(data)out.push({data:data,image:dataUrl});
-            next();
+            var m=txt.match(/\{[\s\S]*\}/);
+            if(m)try{return JSON.parse(m[0]);}catch(e){}
+            return null;
           })
-          .catch(function(){showToast('Could not read screenshot '+i);next();});
-        };
-        reader.readAsDataURL(blob);
+          .catch(function(){return null;});
+      })).then(function(parts){
+        parts=parts.filter(Boolean);
+        if(!parts.length){done(null);return;}
+        var data={},legs=[];
+        parts.forEach(function(p){
+          ['amount','job_ref','company'].forEach(function(k){if(data[k]==null&&p[k]!=null&&p[k]!=='')data[k]=p[k];});
+          var pl=Array.isArray(p.legs)?p.legs:(p.leg?[p.leg]:[]);
+          pl.slice().sort(function(a,b){return (a.task_number||0)-(b.task_number||0);}).forEach(function(x){
+            var l=cleanLeg(x);
+            if(l.fromPc||l.toPc||l.reg||l.fromAddr||l.toAddr)legs=mergeLegs(legs,[l]);
+          });
+        });
+        done({data:data,legs:legs,image:urls[0]});
       });
     };
-    next();
-  }
-  function legsFromScans(results){
-    var legs=[];
-    results.slice().sort(function(a,b){return (a.data.task_number||0)-(b.data.task_number||0);}).forEach(function(r){
-      var l=cleanLeg(r.data.leg);
-      if(l.fromPc||l.toPc||l.reg||l.fromAddr||l.toAddr)legs=mergeLegs(legs,[l]);
-    });
-    return legs;
   }
   // Adds legs, replacing one already there for the same car from the same place (a re-scan).
   function mergeLegs(have,add){
     have=(have||[]).slice();
     add.forEach(function(l){
       var at=-1;
-      for(var i=0;i<have.length;i++){if(have[i].reg&&have[i].reg===l.reg&&have[i].fromPc===l.fromPc){at=i;break;}}
+      for(var i=0;i<have.length;i++){
+        var h=have[i];
+        if(h.fromPc===l.fromPc&&(h.reg&&h.reg===l.reg||!h.reg&&!l.reg&&h.toPc===l.toPc)){at=i;break;}
+      }
       if(at>=0)have[at]=l;else have.push(l);
     });
     return sortLegs(have);
@@ -159,14 +182,15 @@
     var fimgEl=document.getElementById('f_img');
     if(fimgEl&&window.DataTransfer){try{var dt=new DataTransfer();dt.items.add(files[0]);fimgEl.files=dt.files;}catch(e){}}
     var st=document.getElementById('ocr-status');if(st)st.textContent='Scanning…';
-    scanImages(files,function(results){
+    if(files.length>1)showToast('Reading '+files.length+' screenshots…');
+    scanImages(files,function(res){
       if(token!==V2.scanToken)return; // form was closed meanwhile
       var st2=document.getElementById('ocr-status');if(st2)st2.textContent='';
-      if(!results.length){showToast('Scan complete — fill in fields manually');return;}
-      window._incomeImgData=results[0].image;
-      var legs=legsFromScans(results);
+      if(!res){showToast('Scan complete — fill in fields manually');return;}
+      window._incomeImgData=res.image;
+      var legs=res.legs;
       V2.pendingLegs=legs.length?legs:null;
-      var pick=function(k){for(var i=0;i<results.length;i++){var v=results[i].data[k];if(v!=null&&v!=='')return v;}return null;};
+      var pick=function(k){var v=res.data[k];return v!=null&&v!==''?v:null;};
       var setIf=function(id,v,force){var el=document.getElementById(id);if(el&&v!=null&&v!==''&&(force||!el.value)){el.value=v;return 1;}return 0;};
       var filled=0,amt=pick('amount'),co=pick('company');
       if(amt!=null&&!isNaN(amt)){filled+=setIf('f3',parseFloat(amt).toFixed(2));updateSaveBtn();}
@@ -222,23 +246,20 @@
     var ref=isSingleton?'':jobRef,id=String(first.id||fallbackId||'');
     var actions=document.createElement('div');
     actions.className='v2-job-actions';
-    if(!ref){
-      actions.innerHTML='<div class="v2-ref-needed">'
-        +'<div class="v2-ref-title">Add a job reference to link expenses to this job</div>'
+    actions.innerHTML='<button class="v2-act v2-act-scan" data-act="scan"><span class="v2-act-ic">&#x1F9FE;</span>Scan receipt</button>'
+      +'<button class="v2-act v2-act-exp" data-act="exp"><span class="v2-act-ic">&#x2212;</span>Add expense</button>'
+      +'<button class="v2-act v2-act-travel" data-act="travel"><span class="v2-act-ic">&#x1F686;</span>Add travel</button>'
+      +'<button class="v2-act v2-act-inc" data-act="inc"><span class="v2-act-ic">&#x2B;</span>Add pay</button>'
+      +(!ref||isTempRef(ref)?'<div class="v2-ref-needed">'
+        +'<div class="v2-ref-title">'+(ref?'Job ref '+htmlEsc(ref)+' is temporary. Add the company\'s ref when you have it':'No job ref yet. Add the company\'s ref when you have it')+'</div>'
         +'<div class="v2-ref-row"><input class="std-input v2-ref-input" placeholder="e.g. J-1234-AB56" autocomplete="off">'
-        +'<button class="v2-ref-save">Save</button></div></div>';
-    } else {
-      actions.innerHTML='<button class="v2-act v2-act-scan" data-act="scan"><span class="v2-act-ic">&#x1F9FE;</span>Scan receipt</button>'
-        +'<button class="v2-act v2-act-exp" data-act="exp"><span class="v2-act-ic">&#x2212;</span>Add expense</button>'
-        +'<button class="v2-act v2-act-travel" data-act="travel"><span class="v2-act-ic">&#x1F686;</span>Add travel</button>'
-        +'<button class="v2-act v2-act-inc" data-act="inc"><span class="v2-act-ic">&#x2B;</span>Add pay</button>';
-    }
+        +'<button class="v2-ref-save">Save</button></div></div>':'');
     var hdr=panel.firstElementChild;
     hdr.insertAdjacentElement('afterend',actions);
     var key=ref||('__'+id);
     var legsEl=document.createElement('div');
     legsEl.className='v2-legs';
-    legsEl.innerHTML=legsHTML(key,!!ref);
+    legsEl.innerHTML=legsHTML(key);
     var scroller=actions.nextElementSibling;
     if(scroller)scroller.insertBefore(legsEl,scroller.firstChild);
     legsEl.addEventListener('click',function(e){
@@ -248,10 +269,10 @@
       var ctx={key:key,ref:ref,id:id,first:first};
       if(what==='add')openAddLeg(ctx);
       else if(what==='edit')openLegEditor(ctx,n);
-      else if(what==='travel'||what==='hotel'||what==='hotel-in'){
-        var a=legs[n],z=legs[n+1]||{};
-        var date=what==='travel'?(z.fromDate||a.toDate):what==='hotel'?a.toDate:a.fromDate;
-        addExpenseToJob(first,ref,id,what==='travel'?'travel':'hotel',{date:date||''});
+      else if(/^(travel|hotel)/.test(what)){
+        var a=legs[n]||{},z=legs[n+1]||{};
+        var date={'travel':z.fromDate||a.toDate,'travel-start':a.fromDate,'travel-home':a.toDate,'hotel':a.toDate,'hotel-in':a.fromDate}[what];
+        addExpenseToJob(first,ref,id,what.indexOf('travel')===0?'travel':'hotel',{date:date||''});
       }
     });
     // The old add buttons now live at the top
@@ -273,16 +294,30 @@
       if(e.target.closest('.v2-ref-save')){
         var v=actions.querySelector('.v2-ref-input').value.trim();
         if(!v){showToast('Type the job reference first');return;}
-        entries.forEach(function(x){x.jobRef=v;});
-        var oldKey='__'+id;
-        if(DB.jobs[oldKey]){var moved=DB.jobs[oldKey],jm=jobMeta(v);jm.legs=mergeLegs(jm.legs,moved.legs||[]);delete DB.jobs[oldKey];}
-        saveDB();render(CTAB);
+        renameJob(ref,id,v);
         showToast('Job reference saved');
         openJobDetail(v,id);
       }
     });
   };
   function closeV2JobPage(){var o=document.getElementById('v2JobPage');if(o)o.remove();}
+
+  // A job without a ref gets a temporary one (PT-XXXXX) the first time an expense is added, because
+  // expenses link to jobs by ref. Saving the real ref later moves the job's income, expenses and legs to it.
+  function isTempRef(r){return /^PT-[A-Z0-9]{5}$/.test(r||'');}
+  function tempRef(){var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',r;do{r='PT-';for(var i=0;i<5;i++)r+=c.charAt(Math.floor(Math.random()*c.length));}while(DB.income.some(function(x){return x.jobRef===r;}));return r;}
+  function renameJob(oldRef,id,newRef){
+    var oldKey=oldRef||('__'+id);
+    DB.income.forEach(function(x){if(oldRef?x.jobRef===oldRef:String(x.id)===String(id))x.jobRef=newRef;});
+    if(oldRef)DB.expenses.forEach(function(x){if(x.jobRef===oldRef)x.jobRef=newRef;});
+    if(DB.jobs[oldKey]&&oldKey!==newRef){
+      var moved=DB.jobs[oldKey],had=DB.jobs[newRef];
+      DB.jobs[newRef]=Object.assign({},moved,had||{});
+      DB.jobs[newRef].legs=mergeLegs(had&&had.legs,moved.legs||[]);
+      delete DB.jobs[oldKey];
+    }
+    saveDB();render(CTAB);
+  }
 
   function addPayToJob(first,ref,id){
     closeV2JobPage();
@@ -292,6 +327,7 @@
     if(document.getElementById('overlay').className.indexOf('open')<0){V2.returnTo=null;openJobDetail(ref,id);}
   }
   function addExpenseToJob(first,ref,id,kind,extra){
+    if(!ref){ref=tempRef();renameJob('',id,ref);}
     closeV2JobPage();
     V2.returnTo={ref:ref,id:id};
     var co=first.company||'';
@@ -312,17 +348,18 @@
 
   // ── Legs on the job page ──
   function fmtWhen(d,t){if(!d&&!t)return '';return (d?new Date(d+'T12:00').toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'}):'')+(t?(d?', ':'')+t:'');}
-  function legsHTML(key,hasRef){
+  function legsHTML(key){
     var legs=(DB.jobs[key]&&DB.jobs[key].legs)||[];
     var h='<div class="v2-legs-hdr"><span>Legs'+(legs.length?' ('+legs.length+(legsMiles(legs)?' &middot; '+legsMiles(legs)+' mi':'')+')':'')+'</span>'
       +'<button class="v2-leg-add" data-leg="add">+ Add leg</button></div>';
     if(!legs.length)return h+'<div class="v2-legs-empty">One car? You don\'t need legs. For a route with several cars, add a leg for each one.</div>';
+    h+='<div class="v2-gap v2-gap-ends"><div class="v2-gap-row"><span>&#x1F6B6; Getting there'+(legs[0].fromPc?' &rarr; '+htmlEsc(legs[0].fromPc):'')+'</span><button data-leg="travel-start" data-n="0">Add travel</button></div></div>';
     legs.forEach(function(l,n){
       var sleeps=l.fromDate&&l.toDate&&l.toDate>l.fromDate;
       h+='<div class="v2-leg" role="button" tabindex="0" data-leg="edit" data-n="'+n+'">'
         +'<div class="v2-leg-top"><span class="v2-leg-n">Leg '+(n+1)+'</span>'+(l.reg?'<span class="v2-leg-reg">'+htmlEsc(l.reg)+'</span>':'')+(l.miles?'<span class="v2-leg-mi">'+htmlEsc(l.miles)+' mi</span>':'')+'</div>'
         +'<div class="v2-leg-stop"><span class="v2-dot"></span><div><div class="v2-leg-addr">'+htmlEsc(l.fromAddr||l.fromPc||'Collection')+(l.fromAddr&&l.fromPc&&l.fromAddr.indexOf(l.fromPc)<0?', '+htmlEsc(l.fromPc):'')+'</div><div class="v2-leg-when">'+fmtWhen(l.fromDate,l.fromTime)+'</div></div></div>'
-        +(sleeps?'<div class="v2-gap-row v2-leg-night"><span>&#x1F319; Overnight with this car</span>'+(hasRef?'<button data-leg="hotel-in" data-n="'+n+'">Add hotel</button>':'')+'</div>':'')
+        +(sleeps?'<div class="v2-gap-row v2-leg-night"><span>&#x1F319; Carryover: car kept overnight</span><button class="v2-quiet" data-leg="hotel-in" data-n="'+n+'">Add hotel</button></div>':'')
         +'<div class="v2-leg-stop"><span class="v2-dot v2-dot-end"></span><div><div class="v2-leg-addr">'+htmlEsc(l.toAddr||l.toPc||'Delivery')+(l.toAddr&&l.toPc&&l.toAddr.indexOf(l.toPc)<0?', '+htmlEsc(l.toPc):'')+'</div><div class="v2-leg-when">'+fmtWhen(l.toDate,l.toTime)+'</div></div></div>'
         +'</div>';
       var z=legs[n+1];
@@ -331,12 +368,14 @@
         var moving=l.toPc&&z.fromPc&&l.toPc!==z.fromPc;
         if(overnight||moving){
           h+='<div class="v2-gap">';
-          if(moving)h+='<div class="v2-gap-row"><span>&#x1F686; '+htmlEsc(l.toPc)+' &rarr; '+htmlEsc(z.fromPc)+'</span>'+(hasRef?'<button data-leg="travel" data-n="'+n+'">Add travel</button>':'')+'</div>';
-          if(overnight)h+='<div class="v2-gap-row"><span>&#x1F319; Overnight</span>'+(hasRef?'<button data-leg="hotel" data-n="'+n+'">Add hotel</button>':'')+'</div>';
+          if(moving)h+='<div class="v2-gap-row"><span>&#x1F686; '+htmlEsc(l.toPc)+' &rarr; '+htmlEsc(z.fromPc)+'</span><button data-leg="travel" data-n="'+n+'">Add travel</button></div>';
+          if(overnight)h+='<div class="v2-gap-row"><span>&#x1F319; Night away</span><button data-leg="hotel" data-n="'+n+'">Add hotel</button></div>';
           h+='</div>';
         }
       }
     });
+    var last=legs[legs.length-1];
+    h+='<div class="v2-gap v2-gap-ends"><div class="v2-gap-row"><span>&#x1F3E0; Getting home'+(last.toPc?' from '+htmlEsc(last.toPc):'')+'</span><button data-leg="travel-home" data-n="'+(legs.length-1)+'">Add travel</button></div></div>';
     return h;
   }
   // Keeps the job's own miles in step with its legs, unless it was typed in separately.
@@ -360,9 +399,9 @@
     var files=Array.prototype.slice.call(e.target.files||[]),ctx=V2.legCtx;
     e.target.value='';
     if(!files.length||!ctx)return;
-    showToast('Reading leg'+(files.length>1?'s':'')+'…');
-    scanImages(files,function(results){
-      var legs=legsFromScans(results);
+    showToast('Reading '+(files.length>1?files.length+' screenshots':'leg')+'…');
+    scanImages(files,function(res){
+      var legs=res?res.legs:[];
       if(!legs.length){showToast('No legs found — add them manually');return;}
       saveLegs(ctx,mergeLegs((DB.jobs[ctx.key]&&DB.jobs[ctx.key].legs)||[],legs));
       showToast(legs.length+' leg'+(legs.length>1?'s':'')+' added');

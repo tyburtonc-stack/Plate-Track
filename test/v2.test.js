@@ -70,14 +70,22 @@ test('v2 job page: Add travel is linked to the job and comes back to the job pag
   await close();
 });
 
-test('v2 job page asks for a job ref before expenses can be linked', async () => {
+test('v2 job without a ref: expenses get a temporary ref, and the real ref moves everything over', async () => {
   const { page, errors, close } = await openV2({ income: [income(7)], expenses: [] });
   await page.click('#pg0 .v2-job-card');
-  assert.equal(await page.locator('#v2JobPage .v2-act').count(), 0);
+  assert.equal(await page.locator('#v2JobPage .v2-act').count(), 4, 'expense buttons work without a ref');
+  await page.click('#v2JobPage [data-act="travel"]');
+  const temp = await page.inputValue('#f4c');
+  assert.match(temp, /^PT-[A-Z0-9]{5}$/);
+  await page.fill('#f3', '9.80');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.match(await page.textContent('#v2JobPage .v2-ref-needed'), /temporary/);
   await page.fill('#v2JobPage .v2-ref-input', 'J-4444-DDDD');
   await page.click('#v2JobPage .v2-ref-save');
-  await page.waitForSelector('#v2JobPage .v2-act');
-  assert.equal(await page.evaluate(() => DB.income[0].jobRef), 'J-4444-DDDD');
+  await page.waitForFunction(() => DB.income[0].jobRef === 'J-4444-DDDD');
+  assert.equal(await page.evaluate(() => DB.expenses[0].jobRef), 'J-4444-DDDD');
+  assert.equal(await page.locator('#v2JobPage .v2-ref-needed').count(), 0);
   assert.deepEqual(errors, []);
   await close();
 });
@@ -88,13 +96,15 @@ const ROUTE = [
   { task_number: 2, leg: { registration: 'DY26BZS', from_address: 'Bri-Stor Systems Ltd, Hixon, Stafford', from_postcode: 'ST18 0PS', from_date: '2026-11-03', from_time: '11:30', to_address: 'Environment Agency, Great Yarmouth', to_postcode: 'NR31 9JA', to_date: '2026-11-04', to_time: '10:15', miles: 194 } },
   { task_number: 3, leg: { registration: 'YM74LMY', from_address: '7 Catton Chase, Norwich', from_postcode: 'NR6 7AS', from_date: '2026-11-04', from_time: '12:00', to_address: 'Hudson Kapel Fleet Solutions, Worcester', to_postcode: 'WR5 2PR', to_date: '2026-11-05', to_time: '09:00', miles: 189 } },
 ];
-// Replaces the AI call: each scan returns the next leg of ROUTE, in the order given.
+// Replaces the AI call: one request for all the screenshots, answering with the legs of ROUTE in the
+// given order. Records how many images each request carried.
 async function fakeScans(page, order) {
   await page.evaluate(({ route, order }) => {
-    let i = 0;
-    window.aiFetch = () => {
-      const leg = route[order[i++ % order.length]];
-      const data = Object.assign({ amount: 320.67, job_ref: null, company: 'BCA', task_count: 3 }, leg);
+    window._aiCalls = [];
+    window.aiFetch = body => {
+      window._aiCalls.push(body.messages[0].content.filter(c => c.type === 'image').length);
+      const legs = order.map(i => Object.assign({ task_number: route[i].task_number }, route[i].leg));
+      const data = { amount: 320.67, job_ref: null, company: 'BCA', legs };
       return Promise.resolve(new Response(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(data) }] })));
     };
   }, { route: ROUTE, order });
@@ -103,7 +113,7 @@ const jpg = name => ({ name, mimeType: 'image/jpeg', buffer: Buffer.from('/9j/4A
 
 test('v2 Scan job reads several route screenshots into one job with its legs', async () => {
   const { page, errors, close } = await openV2({ income: [], expenses: [] });
-  await fakeScans(page, [2, 0, 1]); // picked out of order: legs still come out as Task 1, 2, 3
+  await fakeScans(page, [2, 0, 1, 0]); // out of order, with a repeat: legs still come out once each as Task 1, 2, 3
   await page.setInputFiles('#v2-job-library', [jpg('t3.jpg'), jpg('t1.jpg'), jpg('t2.jpg')]);
   await page.waitForFunction(() => document.getElementById('f3').value === '320.67');
   assert.equal(await page.inputValue('#f1'), '2026-11-03');
@@ -111,14 +121,17 @@ test('v2 Scan job reads several route screenshots into one job with its legs', a
   assert.equal(await page.inputValue('#f_sp'), 'CV6 5SL');
   assert.equal(await page.inputValue('#f_ep'), 'WR5 2PR');
   assert.equal(await page.inputValue('#f5'), '426');
+  assert.deepEqual(await page.evaluate(() => window._aiCalls), [3], 'all three screenshots go in one request');
   await page.evaluate(() => doSave());
   await page.waitForSelector('#v2JobPage .v2-leg');
   assert.equal(await page.locator('#v2JobPage .v2-leg').count(), 3);
   const regs = await page.locator('#v2JobPage .v2-leg-reg').allTextContents();
   assert.deepEqual(regs, ['LC68ZZS', 'DY26BZS', 'YM74LMY']);
   const gaps = await page.locator('#v2JobPage .v2-gap').allTextContents();
-  assert.match(gaps[0], /ST18 0RB → ST18 0PS/);
-  assert.match(gaps[1], /NR31 9JA → NR6 7AS/);
+  assert.match(gaps[0], /Getting there → CV6 5SL/);
+  assert.match(gaps[1], /ST18 0RB → ST18 0PS/);
+  assert.match(gaps[2], /NR31 9JA → NR6 7AS/);
+  assert.match(gaps[3], /Getting home from WR5 2PR/);
   assert.equal(await page.locator('#v2JobPage .v2-leg-night').count(), 2, 'legs 2 and 3 run overnight');
   // No job ref on the screenshots: the legs are kept, and move to the ref once it is typed in
   const id = await page.evaluate(() => String(DB.income[0].id));
