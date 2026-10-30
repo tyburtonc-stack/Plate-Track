@@ -78,3 +78,6 @@
 .v2-lf-row{display:flex;gap:8px}
 .v2-lf-group{font-size:13px;font-weight:800;color:var(--text2);margin:6px 0 8px}
 .v2-big-btn.v2-danger{color:var(--danger);background:var(--danger-bg);border-color:var(--danger-border)}
+.v2-gap-row button.v2-quiet{background:none;border-color:var(--border);color:var(--text3)}
+.v2-gap-ends{margin-top:0}
+.v2-job-actions .v2-ref-needed{margin-top:4px}
