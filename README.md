@@ -314,6 +314,7 @@ Always commit the rebuilt `docs/` alongside changes to `index.html`.
 - The current app at `/Plate-Track/` is built exactly as before; v2 never changes `index.html`.
 - Both versions use the same records (`pt9` and the Supabase account), so either can be used on the same data.
 - To drop v2, delete `v2/` and the `v2Html` step in `build.js`. To make v2 the main app, move its changes into `index.html`.
+- **Legs:** a job or route can have several legs (one per car), each with registration, collection, delivery, times and miles. Pick a screenshot of each leg when scanning a new job or under **+ Add leg**, or type them in. The job page shows travel needed between legs and nights away, each with an Add travel / Add hotel button. Legs are stored in `DB.jobs[ref].legs` (synced via `users.job_meta`); the current app ignores them.
 - `test/v2.test.js` covers the v2 flow.
 
 ### Supabase security

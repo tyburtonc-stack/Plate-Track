@@ -82,12 +82,86 @@ test('v2 job page asks for a job ref before expenses can be linked', async () =>
   await close();
 });
 
-test('v2 Scan job opens the job form and reads the photo', async () => {
+// The three legs of the route in the example screenshots (Task 1, 2 and 3 of 3, £320.67).
+const ROUTE = [
+  { task_number: 1, leg: { registration: 'LC68ZZS', from_address: 'SMITH STREET TEC, Midland Road, Coventry', from_postcode: 'CV6 5SL', from_date: '2026-11-03', from_time: '09:00', to_address: 'Openreach c/o Bri-Stor, Stafford', to_postcode: 'ST18 0RB', to_date: '2026-11-03', to_time: '11:00', miles: 43 } },
+  { task_number: 2, leg: { registration: 'DY26BZS', from_address: 'Bri-Stor Systems Ltd, Hixon, Stafford', from_postcode: 'ST18 0PS', from_date: '2026-11-03', from_time: '11:30', to_address: 'Environment Agency, Great Yarmouth', to_postcode: 'NR31 9JA', to_date: '2026-11-04', to_time: '10:15', miles: 194 } },
+  { task_number: 3, leg: { registration: 'YM74LMY', from_address: '7 Catton Chase, Norwich', from_postcode: 'NR6 7AS', from_date: '2026-11-04', from_time: '12:00', to_address: 'Hudson Kapel Fleet Solutions, Worcester', to_postcode: 'WR5 2PR', to_date: '2026-11-05', to_time: '09:00', miles: 189 } },
+];
+// Replaces the AI call: each scan returns the next leg of ROUTE, in the order given.
+async function fakeScans(page, order) {
+  await page.evaluate(({ route, order }) => {
+    let i = 0;
+    window.aiFetch = () => {
+      const leg = route[order[i++ % order.length]];
+      const data = Object.assign({ amount: 320.67, job_ref: null, company: 'BCA', task_count: 3 }, leg);
+      return Promise.resolve(new Response(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(data) }] })));
+    };
+  }, { route: ROUTE, order });
+}
+const jpg = name => ({ name, mimeType: 'image/jpeg', buffer: Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64') });
+
+test('v2 Scan job reads several route screenshots into one job with its legs', async () => {
   const { page, errors, close } = await openV2({ income: [], expenses: [] });
-  await page.evaluate(() => { window.ocrIncomeReceipt = f => { window._scannedName = f.name; }; });
-  await page.setInputFiles('#v2-job-camera', { name: 'job.jpg', mimeType: 'image/jpeg', buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) });
-  await page.waitForFunction(() => window._scannedName === 'job.jpg');
-  assert.match(await page.getAttribute('#overlay', 'class'), /open/);
+  await fakeScans(page, [2, 0, 1]); // picked out of order: legs still come out as Task 1, 2, 3
+  await page.setInputFiles('#v2-job-library', [jpg('t3.jpg'), jpg('t1.jpg'), jpg('t2.jpg')]);
+  await page.waitForFunction(() => document.getElementById('f3').value === '320.67');
+  assert.equal(await page.inputValue('#f1'), '2026-11-03');
+  assert.equal(await page.inputValue('#f_reg'), 'LC68ZZS');
+  assert.equal(await page.inputValue('#f_sp'), 'CV6 5SL');
+  assert.equal(await page.inputValue('#f_ep'), 'WR5 2PR');
+  assert.equal(await page.inputValue('#f5'), '426');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage .v2-leg');
+  assert.equal(await page.locator('#v2JobPage .v2-leg').count(), 3);
+  const regs = await page.locator('#v2JobPage .v2-leg-reg').allTextContents();
+  assert.deepEqual(regs, ['LC68ZZS', 'DY26BZS', 'YM74LMY']);
+  const gaps = await page.locator('#v2JobPage .v2-gap').allTextContents();
+  assert.match(gaps[0], /ST18 0RB → ST18 0PS/);
+  assert.match(gaps[1], /NR31 9JA → NR6 7AS/);
+  assert.equal(await page.locator('#v2JobPage .v2-leg-night').count(), 2, 'legs 2 and 3 run overnight');
+  // No job ref on the screenshots: the legs are kept, and move to the ref once it is typed in
+  const id = await page.evaluate(() => String(DB.income[0].id));
+  assert.equal(await page.evaluate(i => DB.jobs['__' + i].legs.length, id), 3);
+  await page.fill('#v2JobPage .v2-ref-input', 'J-9999-ROUTE');
+  await page.click('#v2JobPage .v2-ref-save');
+  await page.waitForSelector('#v2JobPage .v2-act');
+  assert.equal(await page.evaluate(() => DB.jobs['J-9999-ROUTE'].legs.length), 3);
+  assert.equal(await page.evaluate(i => DB.jobs['__' + i], id), undefined);
+  assert.match(await page.textContent('#pg0 .v2-job-card'), /3 legs/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 legs: add a leg by hand, its miles count toward the job, travel between legs is linked', async () => {
+  const { page, errors, close } = await openV2({ income: [income(1, { jobRef: 'J-6666-LEGS', date: '2026-11-03' })], expenses: [] });
+  await page.click('#pg0 .v2-job-card');
+  const addLeg = async (vals) => {
+    await page.click('#v2JobPage [data-leg="add"]');
+    await page.click('#v2Chooser [data-act="manual"]');
+    for (const [k, v] of Object.entries(vals)) await page.fill(`#v2Chooser [data-f="${k}"]`, v);
+    await page.click('#v2Chooser [data-act="save"]');
+    await page.waitForSelector('#v2JobPage');
+  };
+  await addLeg({ reg: 'lc68 zzs', fromPc: 'cv6 5sl', toPc: 'ST18 0RB', toDate: '2026-11-03', miles: '43' });
+  await addLeg({ reg: 'DY26BZS', fromPc: 'ST18 0PS', fromDate: '2026-11-03', toPc: 'NR31 9JA', miles: '194' });
+  assert.equal(await page.locator('#v2JobPage .v2-leg').count(), 2);
+  assert.equal(await page.evaluate(() => DB.jobs['J-6666-LEGS'].legs[0].reg), 'LC68ZZS');
+  assert.equal(await page.evaluate(() => DB.income[0].miles), '237');
+
+  await page.click('#v2JobPage [data-leg="travel"]');
+  assert.equal(await page.inputValue('#f_cat'), 'Travel (Reimbursed)');
+  assert.equal(await page.inputValue('#f4c'), 'J-6666-LEGS');
+  assert.equal(await page.inputValue('#f1'), '2026-11-03');
+  await page.evaluate(() => closeSheet());
+  await page.waitForSelector('#v2JobPage');
+
+  // Delete a leg: miles follow
+  await page.click('#v2JobPage .v2-leg >> nth=1');
+  await page.click('#v2Chooser [data-act="del"]');
+  await page.waitForSelector('#v2JobPage');
+  assert.equal(await page.locator('#v2JobPage .v2-leg').count(), 1);
+  assert.equal(await page.evaluate(() => DB.income[0].miles), '43');
   assert.deepEqual(errors, []);
   await close();
 });
