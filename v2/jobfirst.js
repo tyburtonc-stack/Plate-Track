@@ -9,24 +9,15 @@
   var V2={returnTo:null,pendingLegs:null,scanToken:0};
   window.V2=V2;
 
-  // ── Tabs: 0 = Jobs (new home), 1 = Overview (the old Home dashboard) ──
-  var _v1Dash=rDash;
-  // The old dashboard writes into #pg0; borrow that id for #pg1 while it renders.
-  function renderOldDashIntoPg1(){
-    var pg0=document.getElementById('pg0'),pg1=document.getElementById('pg1');
-    if(!pg0||!pg1)return;
-    pg0.id='pg0-v2tmp';pg1.id='pg0';
-    try{_v1Dash();}finally{pg1.id='pg1';pg0.id='pg0';}
-  }
-  rDash=function(){rJobsHome();};
-  rJobsOverview=function(){renderOldDashIntoPg1();};
+  // ── Tabs: 0 = Overview (the old Home dashboard, left as it was), 1 = Jobs (the job list) ──
+  rJobsOverview=function(){rJobsHome();};
 
   var JOBS_ICON='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>';
   var HOME_ICON='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
   function relabelTabs(){
     var t0=document.getElementById('tab0'),t1=document.getElementById('tab1');
-    if(t0){t0.querySelector('.tb-icon').innerHTML=JOBS_ICON;t0.querySelector('.tb-label').textContent='Jobs';}
-    if(t1){t1.querySelector('.tb-icon').innerHTML=HOME_ICON;t1.querySelector('.tb-label').textContent='Overview';}
+    if(t0){t0.querySelector('.tb-icon').innerHTML=HOME_ICON;t0.querySelector('.tb-label').textContent='Overview';}
+    if(t1){t1.querySelector('.tb-icon').innerHTML=JOBS_ICON;t1.querySelector('.tb-label').textContent='Jobs';}
     var fab=document.getElementById('fabBtn');
     if(fab)fab.setAttribute('aria-label','New job');
   }
@@ -515,7 +506,7 @@
   }
   var SHOW_ALL=false;
   function rJobsHome(){
-    var pg=document.getElementById('pg0');if(!pg)return;
+    var pg=document.getElementById('pg1');if(!pg)return;
     var jobs=buildJobs(),ws=weekStart();
     var open=jobs.filter(function(j){return j.status==='active';});
     var rest=jobs.filter(function(j){return j.status!=='active';});

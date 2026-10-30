@@ -309,7 +309,7 @@ npm test        # build, then run the browser tests in test/ (headless Chromium 
 Always commit the rebuilt `docs/` alongside changes to `index.html`.
 
 ### v2: job-first layout (in progress)
-`npm run build` also builds a second version of the app into `docs/v2/`, served at `/Plate-Track/v2/`. It is `index.html` plus `v2/jobfirst.js` and `v2/jobfirst.css`, which change only the layout: Jobs is the home tab, **+** starts a new job (scan the job sheet or type it in), saving a job opens its job page, and the job page has Scan receipt / Add expense / Add travel / Add pay at the top. The old Home dashboard is the Overview tab.
+`npm run build` also builds a second version of the app into `docs/v2/`, served at `/Plate-Track/v2/`. It is `index.html` plus `v2/jobfirst.js` and `v2/jobfirst.css`, which change only the layout: Overview (the old Home dashboard) is the first tab and Jobs the second, **+** starts a new job (scan the job sheet or type it in), saving a job opens its job page, and the job page has Scan receipt / Add expense / Add travel / Add pay at the top.
 
 - The current app at `/Plate-Track/` is built exactly as before; v2 never changes `index.html`.
 - Both versions use the same records (`pt9` and the Supabase account), so either can be used on the same data.
