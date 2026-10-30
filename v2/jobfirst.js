@@ -149,7 +149,7 @@
         var h=have[i];
         if(h.fromPc===l.fromPc&&(h.reg&&h.reg===l.reg||!h.reg&&!l.reg&&h.toPc===l.toPc)){at=i;break;}
       }
-      if(at>=0)have[at]=l;else have.push(l);
+      if(at>=0)have[at]=have[at].status==='aborted'?Object.assign({},l,{status:'aborted',abortCode:have[at].abortCode||'',abortReason:have[at].abortReason||''}):l;else have.push(l);
     });
     return sortLegs(have);
   }
@@ -162,7 +162,7 @@
   }
   function legsMiles(legs){
     var t=0,any=false;
-    (legs||[]).forEach(function(l){var m=parseFloat(l.miles);if(!isNaN(m)){t+=m;any=true;}});
+    (legs||[]).forEach(function(l){if(l.status==='aborted')return;var m=parseFloat(l.miles);if(!isNaN(m)){t+=m;any=true;}});
     return any?String(Math.round(t*10)/10):'';
   }
 
@@ -260,8 +260,9 @@
       var ctx={key:key,ref:ref,id:id,first:first};
       if(what==='add')openAddLeg(ctx);
       else if(what==='edit')openLegEditor(ctx,n);
+      else if(what==='abort-fee')addPayToJob(first,ref,id);
       else if(/^(travel|hotel)/.test(what)){
-        var a=legs[n]||{},z=legs[n+1]||{};
+        var mAttr=b.getAttribute('data-m'),a=legs[n]||{},z=(mAttr!=null?legs[parseInt(mAttr,10)]:legs[n+1])||{};
         var date={'travel':z.fromDate||a.toDate,'travel-start':a.fromDate,'travel-home':a.toDate,'hotel':a.toDate,'hotel-in':a.fromDate}[what];
         addExpenseToJob(first,ref,id,what.indexOf('travel')===0?'travel':'hotel',{date:date||''});
       }
@@ -311,6 +312,7 @@
   }
 
   function addPayToJob(first,ref,id){
+    if(!ref){ref=tempRef();renameJob('',id,ref);}
     closeV2JobPage();
     V2.returnTo={ref:ref,id:id};
     window._incomePrefill={company:first.company||'',jobRef:ref};
@@ -341,32 +343,38 @@
   function fmtWhen(d,t){if(!d&&!t)return '';return (d?new Date(d+'T12:00').toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'}):'')+(t?(d?', ':'')+t:'');}
   function legsHTML(key){
     var legs=(DB.jobs[key]&&DB.jobs[key].legs)||[];
-    var h='<div class="v2-legs-hdr"><span>Legs'+(legs.length?' ('+legs.length+(legsMiles(legs)?' &middot; '+legsMiles(legs)+' mi':'')+')':'')+'</span>'
+    var act=[];legs.forEach(function(l,i){if(l.status!=='aborted')act.push(i);});
+    var nAb=legs.length-act.length;
+    var h='<div class="v2-legs-hdr"><span>Legs'+(legs.length?' ('+act.length+(legsMiles(legs)?' &middot; '+legsMiles(legs)+' mi':'')+(nAb?' &middot; '+nAb+' aborted':'')+')':'')+'</span>'
       +'<button class="v2-leg-add" data-leg="add">+ Add leg</button></div>';
     if(!legs.length)return h+'<div class="v2-legs-empty">One car? You don\'t need legs. For a route with several cars, add a leg for each one.</div>';
-    h+='<div class="v2-gap v2-gap-ends"><div class="v2-gap-row"><span>&#x1F6B6; Getting there'+(legs[0].fromPc?' &rarr; '+htmlEsc(legs[0].fromPc):'')+'</span><button data-leg="travel-start" data-n="0">Add travel</button></div></div>';
+    var first=act.length?legs[act[0]]:null,last=act.length?legs[act[act.length-1]]:null;
+    if(first)h+='<div class="v2-gap v2-gap-ends"><div class="v2-gap-row"><span>&#x1F6B6; Getting there'+(first.fromPc?' &rarr; '+htmlEsc(first.fromPc):'')+'</span><button data-leg="travel-start" data-n="'+act[0]+'">Add travel</button></div></div>';
     legs.forEach(function(l,n){
-      var sleeps=l.fromDate&&l.toDate&&l.toDate>l.fromDate;
-      h+='<div class="v2-leg" role="button" tabindex="0" data-leg="edit" data-n="'+n+'">'
-        +'<div class="v2-leg-top"><span class="v2-leg-n">Leg '+(n+1)+'</span>'+(l.reg?'<span class="v2-leg-reg">'+htmlEsc(l.reg)+'</span>':'')+(l.miles?'<span class="v2-leg-mi">'+htmlEsc(l.miles)+' mi</span>':'')+'</div>'
+      var ab=l.status==='aborted';
+      var sleeps=!ab&&l.fromDate&&l.toDate&&l.toDate>l.fromDate;
+      h+='<div class="v2-leg'+(ab?' v2-leg-aborted':'')+'" role="button" tabindex="0" data-leg="edit" data-n="'+n+'">'
+        +'<div class="v2-leg-top"><span class="v2-leg-n">Leg '+(n+1)+'</span>'+(l.reg?'<span class="v2-leg-reg">'+htmlEsc(l.reg)+'</span>':'')+(ab?'<span class="v2-leg-badge">&#x2715; Aborted</span>':'')+(l.miles?'<span class="v2-leg-mi">'+htmlEsc(l.miles)+' mi</span>':'')+'</div>'
         +'<div class="v2-leg-stop"><span class="v2-dot"></span><div><div class="v2-leg-addr">'+htmlEsc(l.fromAddr||l.fromPc||'Collection')+(l.fromAddr&&l.fromPc&&l.fromAddr.indexOf(l.fromPc)<0?', '+htmlEsc(l.fromPc):'')+'</div><div class="v2-leg-when">'+fmtWhen(l.fromDate,l.fromTime)+'</div></div></div>'
         +(sleeps?'<div class="v2-gap-row v2-leg-night"><span>&#x1F319; Carryover: car kept overnight</span><button class="v2-quiet" data-leg="hotel-in" data-n="'+n+'">Add hotel</button></div>':'')
         +'<div class="v2-leg-stop"><span class="v2-dot v2-dot-end"></span><div><div class="v2-leg-addr">'+htmlEsc(l.toAddr||l.toPc||'Delivery')+(l.toAddr&&l.toPc&&l.toAddr.indexOf(l.toPc)<0?', '+htmlEsc(l.toPc):'')+'</div><div class="v2-leg-when">'+fmtWhen(l.toDate,l.toTime)+'</div></div></div>'
+        +(ab?'<div class="v2-leg-abort-info">'+((l.abortCode||l.abortReason)?(l.abortCode?'Code '+htmlEsc(l.abortCode):'')+(l.abortCode&&l.abortReason?' &mdash; ':'')+htmlEsc(l.abortReason||''):'No code or reason added')
+          +'<button data-leg="abort-fee" data-n="'+n+'">Add abort fee</button></div>':'')
         +'</div>';
-      var z=legs[n+1];
+      var ai=act.indexOf(n),z=ai>=0&&ai<act.length-1?legs[act[ai+1]]:null;
       if(z){
         var overnight=l.toDate&&z.fromDate&&z.fromDate>l.toDate;
         var moving=l.toPc&&z.fromPc&&l.toPc!==z.fromPc;
         if(overnight||moving){
+          var m=act[ai+1];
           h+='<div class="v2-gap">';
-          if(moving)h+='<div class="v2-gap-row"><span>&#x1F686; '+htmlEsc(l.toPc)+' &rarr; '+htmlEsc(z.fromPc)+'</span><button data-leg="travel" data-n="'+n+'">Add travel</button></div>';
-          if(overnight)h+='<div class="v2-gap-row"><span>&#x1F319; Night away</span><button data-leg="hotel" data-n="'+n+'">Add hotel</button></div>';
+          if(moving)h+='<div class="v2-gap-row"><span>&#x1F686; '+htmlEsc(l.toPc)+' &rarr; '+htmlEsc(z.fromPc)+'</span><button data-leg="travel" data-n="'+n+'" data-m="'+m+'">Add travel</button></div>';
+          if(overnight)h+='<div class="v2-gap-row"><span>&#x1F319; Night away</span><button data-leg="hotel" data-n="'+n+'" data-m="'+m+'">Add hotel</button></div>';
           h+='</div>';
         }
       }
     });
-    var last=legs[legs.length-1];
-    h+='<div class="v2-gap v2-gap-ends"><div class="v2-gap-row"><span>&#x1F3E0; Getting home'+(last.toPc?' from '+htmlEsc(last.toPc):'')+'</span><button data-leg="travel-home" data-n="'+(legs.length-1)+'">Add travel</button></div></div>';
+    if(last)h+='<div class="v2-gap v2-gap-ends"><div class="v2-gap-row"><span>&#x1F3E0; Getting home'+(last.toPc?' from '+htmlEsc(last.toPc):'')+'</span><button data-leg="travel-home" data-n="'+act[act.length-1]+'">Add travel</button></div></div>';
     return h;
   }
   // Keeps the job's own miles in step with its legs, unless it was typed in separately.
@@ -432,7 +440,7 @@
     closeV2Chooser();
     var legs=((DB.jobs[ctx.key]&&DB.jobs[ctx.key].legs)||[]).slice();
     var prev=legs[legs.length-1]||{};
-    var l=n>=0?legs[n]:{fromDate:prev.toDate||ctx.first.date||today()};
+    var l=n>=0?legs[n]:{fromDate:prev.toDate||ctx.first.date||today()},isAb=l.status==='aborted';
     var field=function(f){
       return '<label class="v2-lf"><span>'+f[1]+'</span><input class="std-input" data-f="'+f[0]+'" type="'+f[2]+'" placeholder="'+f[3]+'" value="'+htmlEsc(l[f[0]]||'')+'"'+(f[2]==='number'?' inputmode="decimal"':'')+(f[0]==='reg'||/Pc$/.test(f[0])?' style="text-transform:uppercase"':'')+'></label>';
     };
@@ -445,17 +453,25 @@
       +row(['reg','miles'])
       +'<div class="v2-lf-group">Collection</div>'+field(byKey.fromAddr)+row(['fromPc','fromDate','fromTime'])
       +'<div class="v2-lf-group">Delivery</div>'+field(byKey.toAddr)+row(['toPc','toDate','toTime'])
+      +(n>=0?'<div class="v2-lf-group">'+(isAb?'&#x2715; This leg is aborted':'Abort or cancel this leg')+'</div>'
+        +'<div class="v2-lf-row"><label class="v2-lf"><span>Abort code</span><input class="std-input" data-f="abortCode" placeholder="e.g. CXL12345" value="'+htmlEsc(l.abortCode||'')+'"></label></div>'
+        +'<label class="v2-lf"><span>Reason</span><input class="std-input" data-f="abortReason" placeholder="e.g. Vehicle not at site" value="'+htmlEsc(l.abortReason||'')+'"></label>'
+        +(isAb?'<button class="v2-big-btn" data-act="reinstate">&#x21BA; Reinstate leg</button>'
+               :'<button class="v2-big-btn v2-danger" data-act="abort">&#x2715; Abort this leg</button>'):'')
       +'<button class="v2-big-btn v2-primary" data-act="save">Save leg</button>'
-      +(n>=0?'<button class="v2-big-btn v2-danger" data-act="del">Delete leg</button>':'')
+      +(n>=0?'<button class="v2-link-btn v2-del" data-act="del">Delete leg</button>':'')
       +'<button class="v2-link-btn" data-act="close">Cancel</button>'
       +'</div>';
     ov.addEventListener('click',function(e){
       if(e.target===ov){closeV2Chooser();return;}
       var b=e.target.closest('[data-act]');if(!b)return;
       var act=b.getAttribute('data-act');
-      if(act==='save'){
+      if(act==='save'||act==='abort'||act==='reinstate'){
         var v={};
         ov.querySelectorAll('[data-f]').forEach(function(inp){v[inp.getAttribute('data-f')]=inp.value.trim();});
+        if(act==='abort'||(act==='save'&&isAb))v.status='aborted';
+        if(act==='reinstate'){delete v.abortCode;delete v.abortReason;}
+        if(act==='abort')showToast('Leg aborted. The rest of the job carries on');
         v.reg=v.reg.toUpperCase().replace(/\s+/g,'');v.fromPc=v.fromPc.toUpperCase();v.toPc=v.toPc.toUpperCase();
         if(!v.reg&&!v.fromPc&&!v.toPc&&!v.fromAddr&&!v.toAddr){showToast('Add a registration or an address');return;}
         if(n>=0)legs[n]=v;else legs.push(v);
@@ -488,7 +504,7 @@
       j.exp+=a;j.expCount++;
       if(!isReimbursedCat(e.category))j.deduct+=a;
     });
-    list.forEach(function(j){var jm=DB.jobs&&DB.jobs[j.key];j.status=jm&&jm.status||'';j.legs=jm&&jm.legs?jm.legs.length:0;});
+    list.forEach(function(j){var jm=DB.jobs&&DB.jobs[j.key];j.status=jm&&jm.status||'';var lg=jm&&jm.legs||[];j.abortedLegs=lg.filter(function(l){return l.status==='aborted';}).length;j.legs=lg.length-j.abortedLegs;});
     list.sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:(Number(b.id)-Number(a.id));});
     return list;
   }
@@ -498,7 +514,7 @@
     var route=(j.sp||j.ep)?htmlEsc(j.sp||'?')+' &rarr; '+htmlEsc(j.ep||'?'):'';
     return '<button class="v2-job-card" data-ref="'+htmlEsc(j.key)+'" data-id="'+htmlEsc(j.id)+'">'
       +'<div class="v2-job-top">'+cobadge(j.company)+(j.ref?'<span class="v2-job-ref">'+htmlEsc(j.ref)+'</span>':'<span class="v2-job-ref v2-muted">No job ref</span>')+jobStatusChip(j.ref)+'</div>'
-      +'<div class="v2-job-mid"><span>'+fdateShort(j.date)+'</span>'+(route?'<span>'+route+'</span>':'')+(j.legs>1?'<span>'+j.legs+' legs</span>':(j.reg?'<span>'+htmlEsc(j.reg)+'</span>':''))+'</div>'
+      +'<div class="v2-job-mid"><span>'+fdateShort(j.date)+'</span>'+(route?'<span>'+route+'</span>':'')+(j.legs>1||j.abortedLegs?'<span>'+j.legs+' leg'+(j.legs===1?'':'s')+'</span>':(j.reg?'<span>'+htmlEsc(j.reg)+'</span>':''))+(j.abortedLegs?'<span class="v2-job-ab">'+j.abortedLegs+' aborted</span>':'')+'</div>'
       +'<div class="v2-job-bot"><span class="v2-job-gross">'+money(j.gross)+'</span>'
       +'<span class="v2-job-exp">'+(j.expCount?j.expCount+' expense'+(j.expCount>1?'s':'')+' &middot; '+money(j.exp):'No expenses')+'</span>'
       +'<span class="v2-job-net">Net '+money(net)+'</span></div>'

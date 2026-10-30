@@ -81,3 +81,13 @@
 .v2-gap-row button.v2-quiet{background:none;border-color:var(--border);color:var(--text3)}
 .v2-gap-ends{margin-top:0}
 .v2-job-actions .v2-ref-needed{margin-top:4px}
+
+/* Aborted legs */
+.v2-leg-aborted{border-color:var(--danger-border);background:var(--danger-bg)}
+.v2-leg-aborted .v2-leg-stop{opacity:.6}
+.v2-leg-aborted .v2-leg-addr{text-decoration:line-through}
+.v2-leg-badge{font-size:11px;font-weight:800;color:var(--danger);background:var(--bg2);border:1px solid var(--danger-border);border-radius:var(--r-full);padding:2px 8px}
+.v2-leg-abort-info{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--danger-border);font-size:12px;font-weight:600;color:var(--danger)}
+.v2-leg-abort-info button{background:var(--bg2);border:1px solid var(--danger-border);color:var(--danger);border-radius:var(--r-full);padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0}
+.v2-link-btn.v2-del{color:var(--danger)}
+.v2-job-ab{color:var(--danger);font-weight:700}
