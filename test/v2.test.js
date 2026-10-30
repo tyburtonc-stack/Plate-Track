@@ -182,6 +182,48 @@ test('v2 legs: add a leg by hand, its miles count toward the job, travel between
   await close();
 });
 
+test('v2 legs: abort one leg, the others carry on, and it can be reinstated', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'J-7777-ABRT', date: '2026-11-03' })],
+    expenses: [],
+    jobs: { 'J-7777-ABRT': { status: 'active', legs: [
+      { reg: 'LC68ZZS', fromPc: 'CV6 5SL', toPc: 'ST18 0RB', fromDate: '2026-11-03', toDate: '2026-11-03', miles: '43' },
+      { reg: 'DY26BZS', fromPc: 'ST18 0PS', toPc: 'NR31 9JA', fromDate: '2026-11-03', toDate: '2026-11-03', miles: '194' },
+      { reg: 'YM74LMY', fromPc: 'NR6 7AS', toPc: 'WR5 2PR', fromDate: '2026-11-03', toDate: '2026-11-03', miles: '189' },
+    ] } },
+  });
+  await page.click('#pg1 .v2-job-card');
+  assert.match(await page.textContent('#v2JobPage .v2-legs-hdr'), /3 · 426 mi/);
+  await page.click('#v2JobPage .v2-leg >> nth=1');
+  await page.fill('#v2Chooser [data-f="abortCode"]', 'CXL999');
+  await page.fill('#v2Chooser [data-f="abortReason"]', 'Car not ready');
+  await page.click('#v2Chooser [data-act="abort"]');
+  await page.waitForSelector('#v2JobPage .v2-leg-aborted');
+  assert.match(await page.textContent('#v2JobPage .v2-legs-hdr'), /2 · 232 mi · 1 aborted/);
+  assert.equal(await page.evaluate(() => DB.income[0].miles), '232');
+  assert.match(await page.textContent('#v2JobPage .v2-leg-aborted'), /CXL999 — Car not ready/);
+  assert.equal(await page.locator('#v2JobPage .v2-leg').count(), 3, 'aborted leg stays on the page');
+  // Travel is worked out between the two legs still running (leg 1 to leg 3)
+  const gaps = await page.locator('#v2JobPage .v2-gap').allTextContents();
+  assert.ok(gaps.some(g => /ST18 0RB → NR6 7AS/.test(g)), gaps.join('|'));
+  assert.ok(!gaps.some(g => /NR31 9JA/.test(g)), 'nothing planned from the aborted leg');
+  // The job itself is still active and an abort fee can be logged against it
+  assert.equal(await page.evaluate(() => DB.jobs['J-7777-ABRT'].status), 'active');
+  await page.click('#v2JobPage [data-leg="abort-fee"]');
+  assert.equal(await page.inputValue('#f4'), 'J-7777-ABRT');
+  await page.evaluate(() => closeSheet());
+  await page.waitForSelector('#v2JobPage');
+
+  // Reinstate
+  await page.click('#v2JobPage .v2-leg-aborted');
+  await page.click('#v2Chooser [data-act="reinstate"]');
+  await page.waitForSelector('#v2JobPage .v2-leg');
+  assert.equal(await page.locator('#v2JobPage .v2-leg-aborted').count(), 0);
+  assert.match(await page.textContent('#v2JobPage .v2-legs-hdr'), /3 · 426 mi/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
 test('the current app at /Plate-Track/ is unchanged by v2', async () => {
   const { page, errors, close } = await openApp({ income: [income(1, { jobRef: 'J-5555-EEEE' })], expenses: [] });
   assert.equal(await page.textContent('#tab0 .tb-label'), 'Home');
