@@ -178,7 +178,6 @@
       if(token!==V2.scanToken)return; // form was closed meanwhile
       var st2=document.getElementById('ocr-status');if(st2)st2.textContent='';
       if(!res){showToast('Scan complete — fill in fields manually');return;}
-      window._incomeImgData=res.image;
       var legs=res.legs;
       V2.pendingLegs=legs.length?legs:null;
       var pick=function(k){var v=res.data[k];return v!=null&&v!==''?v:null;};
@@ -204,7 +203,12 @@
   doSave=function(){
     var newJob=ETYP==='income'&&!EID&&!V2.returnTo,pending=V2.pendingLegs;
     var topBefore=DB.income.length?DB.income[0].id:null,lenBefore=DB.income.length;
+    // Job screenshots are only needed to read the details. Kept in the job record they filled up the
+    // phone's storage (they are never uploaded), so v2 doesn't save them.
+    if(ETYP==='income')window._incomeImgData=null;
+    var editing=ETYP==='income'&&EID?findIncome(EID):null,oldRef=editing?(editing.jobRef||''):null,editId=EID;
     _v1DoSave.apply(this,arguments);
+    if(editing){var now=findIncome(editId);if(now&&(now.jobRef||'')!==oldRef)jobRefChanged(oldRef,now.jobRef||'',editId);}
     if(newJob&&DB.income.length>lenBefore&&DB.income[0].id!==topBefore){
       var it=DB.income[0];
       if(pending){var jm=jobMeta(it.jobRef||('__'+it.id));jm.legs=mergeLegs(jm.legs,pending);saveDB();}
@@ -216,13 +220,16 @@
     _v1CloseSheet.apply(this,arguments);
     V2.pendingLegs=null;V2.scanToken++;
     var back=V2.returnTo;V2.returnTo=null;
-    if(back)setTimeout(function(){openJobDetail(back.ref,back.id);},60);
+    if(back)setTimeout(function(){openJobDetail(back.ref,back.id);},60); // openJobDetail follows a ref changed in the form
+
   };
 
   // ── Job page: full screen, with the add buttons at the top ──
   var _v1OpenJobDetail=openJobDetail;
   openJobDetail=function(jobRef,fallbackId){
     closeV2JobPage();
+    var ent0=fallbackId?findIncome(fallbackId):null;
+    if(ent0&&(!jobRef||jobRef.indexOf('__')===0||!DB.income.some(function(i){return i.jobRef===jobRef;})))jobRef=ent0.jobRef||('__'+ent0.id);
     var before=document.body.lastElementChild;
     _v1OpenJobDetail(jobRef,fallbackId);
     var ov=document.body.lastElementChild;
@@ -253,6 +260,11 @@
     legsEl.innerHTML=legsHTML(key);
     var scroller=actions.nextElementSibling;
     if(scroller)scroller.insertBefore(legsEl,scroller.firstChild);
+    var totalsEl=document.createElement('div');
+    totalsEl.className='v2-totals';
+    totalsEl.innerHTML=totalsHTML(entries,ref,key);
+    if(scroller)scroller.insertBefore(totalsEl,scroller.firstChild);
+    totalsEl.addEventListener('click',function(e){if(e.target.closest('[data-nudge]'))openNudgeList(ref);});
     legsEl.addEventListener('click',function(e){
       var b=e.target.closest('[data-leg]');if(!b)return;
       var what=b.getAttribute('data-leg'),n=parseInt(b.getAttribute('data-n'),10);
@@ -273,7 +285,13 @@
     closeBtn.innerHTML='&#x2039;';closeBtn.setAttribute('aria-label','Back to jobs');
     // Opening a form from the job page comes back here afterwards
     var editBtn=ov.querySelector('.jd-edit');
-    if(editBtn)editBtn.addEventListener('click',function(){V2.returnTo={ref:jobRef,id:id};},true);
+    if(editBtn){
+      editBtn.addEventListener('click',function(){V2.returnTo={ref:jobRef,id:id};},true);
+      var copyBtn=document.createElement('button');
+      copyBtn.className='v2-copy-job';copyBtn.textContent='\u2398 Copy job';
+      copyBtn.addEventListener('click',function(){copyJob(first,key);});
+      editBtn.insertAdjacentElement('afterend',copyBtn);
+    }
 
     actions.addEventListener('click',function(e){
       var b=e.target.closest('[data-act]');
@@ -293,6 +311,21 @@
     });
   };
   function closeV2JobPage(){var o=document.getElementById('v2JobPage');if(o)o.remove();}
+  function findIncome(id){for(var i=0;i<DB.income.length;i++){if(String(DB.income[i].id)===String(id))return DB.income[i];}return null;}
+  // The job form changed an entry's ref: its legs and status go with it once no other entry keeps the old
+  // ref, and a temporary ref's expenses follow too.
+  function jobRefChanged(oldRef,newRef,id){
+    var oldKey=oldRef||('__'+id),newKey=newRef||('__'+id);
+    if(oldRef&&DB.income.some(function(x){return x.jobRef===oldRef;}))return;
+    if(isTempRef(oldRef)&&newRef)DB.expenses.forEach(function(x){if(x.jobRef===oldRef)x.jobRef=newRef;});
+    if(DB.jobs[oldKey]&&oldKey!==newKey){
+      var moved=DB.jobs[oldKey],had=DB.jobs[newKey];
+      DB.jobs[newKey]=Object.assign({},moved,had||{});
+      DB.jobs[newKey].legs=mergeLegs(had&&had.legs,moved.legs||[]);
+      delete DB.jobs[oldKey];
+    }
+    saveDB();render(CTAB);
+  }
 
   // A job without a ref gets a temporary one (PT-XXXXX) the first time an expense is added, because
   // expenses link to jobs by ref. Saving the real ref later moves the job's income, expenses and legs to it.
@@ -338,6 +371,130 @@
     openSheet('expense','');
     if(document.getElementById('overlay').className.indexOf('open')<0){V2.returnTo=null;openJobDetail(ref,id);}
   }
+
+  // ── Job page totals ──
+  function jobExpenses(ref){return ref?DB.expenses.filter(function(e){return e.jobRef===ref;}):[];}
+  function totalsHTML(entries,ref,key){
+    var gross=0;entries.forEach(function(x){gross+=parseFloat(x.amount||0);});
+    var reimb=0,deduct=0;
+    jobExpenses(ref).forEach(function(e){var a=parseFloat(e.amount||0);if(isReimbursedCat(e.category))reimb+=a;else deduct+=a;});
+    var legs=(DB.jobs[key]&&DB.jobs[key].legs)||[];
+    var miles=legsMiles(legs)||(entries[0]&&entries[0].miles)||'';
+    var noRc=nudgeList(ref).length;
+    var tile=function(label,val,cls,sub){return '<div class="v2-tile'+(cls?' '+cls:'')+'"><div class="v2-tile-l">'+label+'</div><div class="v2-tile-v">'+val+'</div>'+(sub?'<div class="v2-tile-s">'+sub+'</div>':'')+'</div>';};
+    return '<div class="v2-tiles">'
+      +tile('Pay',money(gross))
+      +tile('Expenses',money(deduct),deduct?'v2-tile-orange':'',reimb?money(reimb)+' reimbursed':'')
+      +tile('Net',money(gross-deduct),'v2-tile-green')
+      +tile('Miles',miles?htmlEsc(String(miles)):'&mdash;','',miles&&gross?money(gross/parseFloat(miles))+'/mi':'')
+      +'</div>'
+      +(noRc?'<button class="v2-nudge v2-nudge-sm" data-nudge="1">&#x1F9FE; '+noRc+' expense'+(noRc>1?'s':'')+' on this job '+(noRc>1?'have':'has')+' no receipt photo</button>':'');
+  }
+
+  // ── Copy a job: same company, pay, type, route and legs; new date, no ref, no expenses ──
+  function copyJob(src,key){
+    var nid=newid(),copy=Object.assign({},src,{id:nid,date:today(),jobRef:'',receiptImage:''});
+    DB.income.unshift(copy);
+    var legs=(DB.jobs[key]&&DB.jobs[key].legs)||[];
+    if(legs.length){
+      jobMeta('__'+nid).legs=legs.map(function(l){var c=Object.assign({},l,{fromDate:'',toDate:''});delete c.status;delete c.abortCode;delete c.abortReason;return c;});
+    }
+    saveDB();render(CTAB);
+    closeV2JobPage();
+    showToast('\u2398 Job copied: check the date and pay');
+    V2.returnTo={ref:'__'+nid,id:String(nid)};
+    openSheet('income',String(nid));
+  }
+
+  // ── Delete a whole job (swipe left on the Jobs list) ──
+  function deleteJob(key,id){
+    var ent=findIncome(id);if(!ent)return;
+    var ref=key.indexOf('__')===0?'':key;
+    var rows=ref?DB.income.filter(function(x){return x.jobRef===ref;}):[ent];
+    var nExp=jobExpenses(ref).length;
+    swipeConfirm('Delete '+(ref?'job '+htmlEsc(ref):'this job')+'?'+(rows.length>1?'<br>'+rows.length+' pay entries go with it.':'')
+      +(nExp?'<br>Its '+nExp+' expense'+(nExp>1?'s stay':' stays')+' in your Expenses list.':''),function(){
+      var ids=rows.map(function(x){return String(x.id);});
+      DB.income=DB.income.filter(function(x){return ids.indexOf(String(x.id))<0;});
+      delete DB.jobs[key];
+      clearTimeout(window._syncT);
+      try{localStorage.setItem('pt9',JSON.stringify(DB));}catch(e){}
+      try{sessionStorage.setItem('pt9',JSON.stringify(DB));}catch(e){}
+      render(CTAB);showToast('Job deleted');
+      if(SUPA_USER&&SUPA_SESSION){
+        var left=ids.length;
+        ids.forEach(function(rid){supaDeleteRow('income',rid,function(){if(--left===0)supaPushAll(function(){updateSyncBar();});});});
+      } else if(SUPA_USER){ids.forEach(function(rid){addPendingDelete('income',rid);});}
+    },'Delete job','Cancel');
+  }
+  // Swipe a job card left to show Delete. Vertical scrolling is left to the browser (touch-action: pan-y).
+  var SW={el:null,x0:0,y0:0,dx:0,on:false,moved:false};
+  function swipeClose(except){document.querySelectorAll('.v2-swipe.open').forEach(function(w){if(w!==except){w.classList.remove('open');w.querySelector('.v2-job-card').style.transform='';}});}
+  document.addEventListener('pointerdown',function(e){
+    var card=e.target.closest&&e.target.closest('.v2-swipe .v2-job-card');
+    if(!card){if(!(e.target.closest&&e.target.closest('.v2-swipe-del')))swipeClose();return;}
+    SW={el:card,x0:e.clientX,y0:e.clientY,dx:0,on:false,moved:false,open:card.parentNode.classList.contains('open')};
+  });
+  document.addEventListener('pointermove',function(e){
+    if(!SW.el)return;
+    var dx=e.clientX-SW.x0,dy=e.clientY-SW.y0;
+    if(!SW.on){if(Math.abs(dx)>8&&Math.abs(dx)>Math.abs(dy)){SW.on=true;SW.moved=true;swipeClose(SW.el.parentNode);}else if(Math.abs(dy)>8){SW.el=null;return;}else return;}
+    var x=Math.max(-96,Math.min(0,dx+(SW.open?-88:0)));
+    SW.dx=x;SW.el.parentNode.classList.add('swiping');SW.el.style.transition='none';SW.el.style.transform='translateX('+x+'px)';
+  });
+  document.addEventListener('pointerup',function(){
+    if(!SW.el)return;
+    var el=SW.el,w=el.parentNode;SW.el=null;w.classList.remove('swiping');
+    el.style.transition='';
+    if(!SW.on)return;
+    var open=SW.dx<-44;
+    w.classList.toggle('open',open);el.style.transform=open?'translateX(-88px)':'';
+  });
+  document.addEventListener('pointercancel',function(){if(SW.el){SW.el.style.transform='';SW.el=null;}});
+
+  // ── Missing receipt nudge: expenses of £10 or more this tax year with no photo ──
+  var NUDGE_MIN=10;
+  function nudgeDismissed(){try{return JSON.parse(localStorage.getItem('pt_nudge_dismissed')||'[]');}catch(e){return [];}}
+  function nudgeList(ref){
+    var ty=tyear(today()),off=nudgeDismissed();
+    return DB.expenses.filter(function(e){
+      return parseFloat(e.amount||0)>=NUDGE_MIN&&!e.receiptImage&&tyear(e.date)===ty&&off.indexOf(String(e.id))<0&&(ref===undefined||e.jobRef===ref&&ref);
+    }).sort(function(a,b){return a.date<b.date?1:-1;});
+  }
+  function openNudgeList(ref){
+    closeV2Chooser();
+    var list=nudgeList(ref);
+    if(!list.length){showToast('All receipts are in');return;}
+    var ov=document.createElement('div');
+    ov.className='v2-chooser';ov.id='v2Chooser';
+    ov.innerHTML='<div class="v2-chooser-card v2-leg-editor" role="dialog" aria-label="Missing receipts">'
+      +'<div class="v2-chooser-title">Missing receipts</div>'
+      +'<div class="v2-chooser-sub">Expenses of &pound;'+NUDGE_MIN+' or more this tax year with no photo. HMRC can ask to see receipts for up to 5 years after the tax return deadline.</div>'
+      +list.map(function(e){
+        return '<div class="v2-nudge-row"><div><div class="v2-nudge-cat">'+htmlEsc(e.category||'Expense')+' &middot; '+money(e.amount)+'</div>'
+          +'<div class="v2-nudge-sub">'+fdateShort(e.date)+(e.jobRef?' &middot; '+htmlEsc(e.jobRef):'')+(e.description?' &middot; '+htmlEsc(e.description):'')+'</div></div>'
+          +'<div class="v2-nudge-btns"><button data-photo="'+htmlEsc(String(e.id))+'">Add photo</button><button class="v2-quiet" data-skip="'+htmlEsc(String(e.id))+'">No receipt</button></div></div>';
+      }).join('')
+      +'<button class="v2-link-btn" data-act="close">Close</button></div>';
+    ov.addEventListener('click',function(e){
+      if(e.target===ov||e.target.closest('[data-act="close"]')){closeV2Chooser();return;}
+      var ph=e.target.closest('[data-photo]'),sk=e.target.closest('[data-skip]');
+      if(ph){
+        closeV2Chooser();
+        var eid=ph.getAttribute('data-photo');
+        openSheet('expense',eid);
+        setTimeout(function(){var f=document.getElementById('f_img');if(f)f.click();},250);
+      } else if(sk){
+        var off=nudgeDismissed();off.push(sk.getAttribute('data-skip'));
+        try{localStorage.setItem('pt_nudge_dismissed',JSON.stringify(off));}catch(er){}
+        sk.closest('.v2-nudge-row').remove();
+        render(CTAB);
+        if(!ov.querySelector('.v2-nudge-row'))closeV2Chooser();
+      }
+    });
+    document.body.appendChild(ov);
+  }
+  V2.openNudgeList=openNudgeList;
 
   // ── Legs on the job page ──
   function fmtWhen(d,t){if(!d&&!t)return '';return (d?new Date(d+'T12:00').toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'}):'')+(t?(d?', ':'')+t:'');}
@@ -490,7 +647,7 @@
     var map={},list=[];
     DB.income.forEach(function(x){
       var k=jobKey(x);
-      if(!map[k]){map[k]={key:k,ref:x.jobRef||'',id:String(x.id),company:x.company,date:x.date,gross:0,exp:0,deduct:0,expCount:0,sp:'',ep:'',reg:''};list.push(map[k]);}
+      if(!map[k]){map[k]={key:k,ref:x.jobRef||'',id:String(x.id),company:x.company,date:x.date,gross:0,exp:0,deduct:0,reimb:0,expCount:0,sp:'',ep:'',reg:''};list.push(map[k]);}
       var j=map[k];
       j.gross+=parseFloat(x.amount||0);
       if(x.date>j.date)j.date=x.date;
@@ -502,37 +659,36 @@
       if(!e.jobRef||!map[e.jobRef])return;
       var j=map[e.jobRef],a=parseFloat(e.amount||0);
       j.exp+=a;j.expCount++;
-      if(!isReimbursedCat(e.category))j.deduct+=a;
+      if(isReimbursedCat(e.category))j.reimb+=a;else j.deduct+=a;
     });
     list.forEach(function(j){var jm=DB.jobs&&DB.jobs[j.key];j.status=jm&&jm.status||'';var lg=jm&&jm.legs||[];j.abortedLegs=lg.filter(function(l){return l.status==='aborted';}).length;j.legs=lg.length-j.abortedLegs;});
     list.sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:(Number(b.id)-Number(a.id));});
     return list;
   }
-  function weekStart(){var d=new Date();var day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function jobCardHTML(j){
     var net=j.gross-j.deduct;
     var route=(j.sp||j.ep)?htmlEsc(j.sp||'?')+' &rarr; '+htmlEsc(j.ep||'?'):'';
-    return '<button class="v2-job-card" data-ref="'+htmlEsc(j.key)+'" data-id="'+htmlEsc(j.id)+'">'
+    return '<div class="v2-swipe"><button class="v2-swipe-del" data-del-ref="'+htmlEsc(j.key)+'" data-del-id="'+htmlEsc(j.id)+'" aria-label="Delete job">Delete</button>'
+      +'<button class="v2-job-card" data-ref="'+htmlEsc(j.key)+'" data-id="'+htmlEsc(j.id)+'">'
       +'<div class="v2-job-top">'+cobadge(j.company)+(j.ref?'<span class="v2-job-ref">'+htmlEsc(j.ref)+'</span>':'<span class="v2-job-ref v2-muted">No job ref</span>')+jobStatusChip(j.ref)+'</div>'
       +'<div class="v2-job-mid"><span>'+fdateShort(j.date)+'</span>'+(route?'<span>'+route+'</span>':'')+(j.legs>1||j.abortedLegs?'<span>'+j.legs+' leg'+(j.legs===1?'':'s')+'</span>':(j.reg?'<span>'+htmlEsc(j.reg)+'</span>':''))+(j.abortedLegs?'<span class="v2-job-ab">'+j.abortedLegs+' aborted</span>':'')+'</div>'
       +'<div class="v2-job-bot"><span class="v2-job-gross">'+money(j.gross)+'</span>'
-      +'<span class="v2-job-exp">'+(j.expCount?j.expCount+' expense'+(j.expCount>1?'s':'')+' &middot; '+money(j.exp):'No expenses')+'</span>'
+      +'<span class="v2-job-exp">'+(j.expCount?'':'No expenses')+'</span>'
       +'<span class="v2-job-net">Net '+money(net)+'</span></div>'
-      +'</button>';
+      +(j.expCount?'<div class="v2-pills">'+(j.deduct?'<span class="v2-pill v2-pill-exp">&#x1F9FE; '+money(j.deduct)+' exp.</span>':'')+(j.reimb?'<span class="v2-pill v2-pill-reimb">&#x2B50; '+money(j.reimb)+' reimb.</span>':'')+'</div>':'')
+      +'</button></div>';
   }
   var SHOW_ALL=false;
   function rJobsHome(){
     var pg=document.getElementById('pg1');if(!pg)return;
-    var jobs=buildJobs(),ws=weekStart();
+    var jobs=buildJobs();
     var open=jobs.filter(function(j){return j.status==='active';});
     var rest=jobs.filter(function(j){return j.status!=='active';});
-    var wk=jobs.filter(function(j){return j.date>=ws;});
-    var wkNet=wk.reduce(function(s,j){return s+j.gross-j.deduct;},0);
     var shown=SHOW_ALL?rest:rest.slice(0,25);
-    var name=(typeof getUserName==='function'&&getUserName())||'';
+    var noRc=nudgeList().length;
     pg.innerHTML='<div class="v2-home">'
-      +'<div class="v2-home-hdr"><div><div class="v2-home-hi">'+(name?'Hi '+htmlEsc(name.split(' ')[0]):'PlateTrack')+'</div>'
-      +'<div class="v2-home-week">This week: '+wk.length+' job'+(wk.length===1?'':'s')+' &middot; '+money(wkNet)+' net</div></div></div>'
+      +'<div class="tab-hdr v2-jobs-hdr"><span class="tab-hdr-title">Jobs</span></div>'
+      +(noRc?'<button class="v2-nudge" onclick="V2.openNudgeList()">&#x1F9FE; '+noRc+' expense'+(noRc>1?'s':'')+' over &pound;'+NUDGE_MIN+' '+(noRc>1?'have':'has')+' no receipt photo<span>Add &rsaquo;</span></button>':'')
       +'<div class="v2-new-job">'
       +'<div class="v2-new-job-title">Start a job</div>'
       +'<div class="v2-new-job-row">'
@@ -551,8 +707,13 @@
   }
   V2.showAll=function(){SHOW_ALL=true;rJobsHome();};
   document.addEventListener('click',function(e){
+    var d=e.target.closest&&e.target.closest('.v2-swipe-del');
+    if(d){deleteJob(d.getAttribute('data-del-ref'),d.getAttribute('data-del-id'));return;}
     var c=e.target.closest&&e.target.closest('.v2-job-card');
-    if(c)openJobDetail(c.getAttribute('data-ref'),c.getAttribute('data-id'));
+    if(!c)return;
+    if(SW.moved){SW.moved=false;return;} // end of a swipe, not a tap
+    if(c.parentNode.classList.contains('open')){swipeClose();return;}
+    openJobDetail(c.getAttribute('data-ref'),c.getAttribute('data-id'));
   });
 
   relabelTabs();

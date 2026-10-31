@@ -315,6 +315,9 @@ Always commit the rebuilt `docs/` alongside changes to `index.html`.
 - Both versions use the same records (`pt9` and the Supabase account), so either can be used on the same data.
 - To drop v2, delete `v2/` and the `v2Html` step in `build.js`. To make v2 the main app, move its changes into `index.html`.
 - **Legs:** a job or route can have several legs (one per car), each with registration, collection, delivery, times and miles. Pick screenshots when scanning a new job or under **+ Add leg** (route cards or Engineius Route Details pages; all sent in one AI request, up to 6 per request), or type them in. The job page shows getting there, travel between legs, carryovers and getting home, each with an Add travel / Add hotel button. A single leg can be aborted (code and reason optional) while the rest of the job carries on: it's struck through, left out of miles and travel, and offers Add abort fee; Reinstate undoes it. A job without a ref gets a temporary `PT-XXXXX` ref when its first expense is added; saving the real ref moves the job's income, expenses and legs to it. Legs are stored in `DB.jobs[ref].legs` (synced via `users.job_meta`); the current app ignores them.
+- **Jobs list:** each job shows orange expense and green reimbursed pills; swipe a job left to delete it (its pay entries, legs and status go; its expenses stay). A banner lists this tax year's expenses of £10 or more with no receipt photo (Add photo, or No receipt to dismiss on that device).
+- **Job page:** Pay / Expenses / Net / Miles at the top, and **Copy job** (same company, pay, route and legs; today's date, no ref, no expenses).
+- v2 reads job screenshots but doesn't store them in the job record (they were never uploaded and filled up the phone's storage).
 - `test/v2.test.js` covers the v2 flow.
 
 ### Supabase security

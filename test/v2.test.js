@@ -25,7 +25,9 @@ test('v2 opens on the Overview dashboard, with the job list on the second tab', 
   const text = await card.textContent();
   assert.match(text, /J-1111-AAAA/);
   assert.match(text, /£100\.00/);
-  assert.match(text, /1 expense · £15\.00/);
+  assert.match(text, /£15\.00 exp\./);
+  assert.equal(await page.locator('#pg1 .v2-pill-exp').count(), 1, 'orange expense pill');
+  assert.doesNotMatch(await page.textContent('#pg1'), /Hi |This week/, 'no greeting on the Jobs page');
   assert.match(text, /Net £85\.00/);
   assert.equal(await page.getAttribute('#pg1', 'id'), 'pg1');
   assert.deepEqual(errors, []);
@@ -220,6 +222,126 @@ test('v2 legs: abort one leg, the others carry on, and it can be reinstated', as
   await page.waitForSelector('#v2JobPage .v2-leg');
   assert.equal(await page.locator('#v2JobPage .v2-leg-aborted').count(), 0);
   assert.match(await page.textContent('#v2JobPage .v2-legs-hdr'), /3 · 426 mi/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+const exp = (id, extra) => Object.assign({ id, date: '2026-10-20', category: 'Fuel (Not Reimbursed)', amount: '12', company: 'BCA', jobRef: '', receipt: '', description: '', receiptImage: '' }, extra);
+
+test('v2 job page shows pay, expenses, net and miles at the top', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'J-8888-TOTS', amount: '200', miles: '100' })],
+    expenses: [exp('e1', { jobRef: 'J-8888-TOTS', amount: '30' }), exp('e2', { jobRef: 'J-8888-TOTS', category: 'Travel (Reimbursed)', amount: '18.40', receiptImage: 'supabase:x/e2.jpg' })],
+  }, { now: '2026-10-25T12:00:00' });
+  await page.click('#pg1 .v2-job-card');
+  const tiles = await page.locator('#v2JobPage .v2-tile').allTextContents();
+  assert.match(tiles[0], /Pay£200\.00/);
+  assert.match(tiles[1], /Expenses£30\.00£18\.40 reimbursed/);
+  assert.match(tiles[2], /Net£170\.00/);
+  assert.match(tiles[3], /Miles100£2\.00\/mi/);
+  assert.match(await page.textContent('#v2JobPage .v2-nudge-sm'), /1 expense on this job has no receipt photo/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 copy job: new entry dated today with no ref, legs copied without dates or aborts', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'J-9000-COPY', amount: '150', startPostcode: 'CV6 5SL', endPostcode: 'WR5 2PR' })],
+    expenses: [exp('e1', { jobRef: 'J-9000-COPY' })],
+    jobs: { 'J-9000-COPY': { status: 'complete', legs: [
+      { reg: 'AA11AAA', fromPc: 'CV6 5SL', toPc: 'ST18 0RB', fromDate: '2026-10-20', toDate: '2026-10-20', fromTime: '09:00', miles: '43' },
+      { reg: 'BB22BBB', fromPc: 'ST18 0PS', toPc: 'WR5 2PR', fromDate: '2026-10-20', toDate: '2026-10-21', status: 'aborted', abortCode: 'X', miles: '80' }] } },
+  }, { now: '2026-10-28T12:00:00' });
+  await page.click('#pg1 .v2-job-card');
+  await page.click('#v2JobPage .v2-copy-job');
+  await page.waitForSelector('#overlay.open');
+  assert.equal(await page.inputValue('#f1'), '2026-10-28');
+  assert.equal(await page.inputValue('#f3'), '150');
+  assert.equal(await page.inputValue('#f4'), '');
+  await page.fill('#f4', 'J-9001-NEXT');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.match(await page.textContent('#v2JobPage'), /J-9001-NEXT/);
+  const copy = await page.evaluate(() => ({ n: DB.income.length, legs: DB.jobs['J-9001-NEXT'] && DB.jobs['J-9001-NEXT'].legs, orphan: Object.keys(DB.jobs).filter(k => k.indexOf('__') === 0), exp: DB.expenses.filter(e => e.jobRef === 'J-9001-NEXT').length }));
+  assert.equal(copy.n, 2);
+  assert.equal(copy.legs.length, 2, 'legs moved to the ref typed in the form');
+  assert.deepEqual(copy.orphan, []);
+  assert.equal(copy.legs[0].fromDate, '');
+  assert.equal(copy.legs[0].fromTime, '09:00');
+  assert.equal(copy.legs[1].status, undefined);
+  assert.equal(copy.exp, 0, 'expenses are not copied');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 swipe a job left to delete it; its expenses stay', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'J-1234-GONE' }), income(2, { jobRef: 'J-1234-GONE', incomeType: 'Waiting Time', amount: '10' }), income(3, { jobRef: 'J-5678-KEEP', date: '2026-10-19' })],
+    expenses: [exp('e1', { jobRef: 'J-1234-GONE' })],
+    jobs: { 'J-1234-GONE': { status: 'active', legs: [{ reg: 'AA11AAA', fromPc: 'CV6 5SL', toPc: 'ST18 0RB' }] } },
+  });
+  const card = page.locator('#pg1 .v2-job-card').first();
+  const box = await card.boundingBox();
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width - 20, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(box.x + box.width - 20 - i * 15, y);
+  await page.mouse.up();
+  await page.waitForSelector('#pg1 .v2-swipe.open');
+  assert.equal(await page.locator('#v2JobPage').count(), 0, 'a swipe does not open the job');
+  await page.click('#pg1 .v2-swipe.open .v2-swipe-del');
+  const msg = await page.textContent('body');
+  assert.match(msg, /Delete job J-1234-GONE\?/);
+  assert.match(msg, /2 pay entries go with it/);
+  assert.match(msg, /Its 1 expense stays in your Expenses list/);
+  await page.click('#sc-yes');
+  await page.waitForFunction(() => DB.income.length === 1);
+  const after = await page.evaluate(() => ({ inc: DB.income.map(x => x.jobRef), exp: DB.expenses.length, meta: DB.jobs['J-1234-GONE'] }));
+  assert.deepEqual(after.inc, ['J-5678-KEEP']);
+  assert.equal(after.exp, 1);
+  assert.equal(after.meta, undefined);
+  assert.equal(await page.locator('#pg1 .v2-job-card').count(), 1);
+  // A plain tap still opens a job
+  await page.click('#pg1 .v2-job-card');
+  await page.waitForSelector('#v2JobPage');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 missing receipt nudge: lists this tax year\'s expenses of £10+ with no photo, and can be dismissed', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'J-2222-RCPT' })],
+    expenses: [
+      exp('big', { jobRef: 'J-2222-RCPT', amount: '25', category: 'Hotel (Not Reimbursed)' }),
+      exp('small', { amount: '4.50' }),
+      exp('photo', { amount: '40', receiptImage: 'supabase:u/photo.jpg' }),
+      exp('old', { amount: '60', date: '2025-12-01' }),
+      exp('big2', { amount: '11', date: '2026-09-01' }),
+    ],
+  }, { now: '2026-10-25T12:00:00' });
+  assert.match(await page.textContent('#pg1 .v2-nudge'), /2 expenses over £10 have no receipt photo/);
+  await page.click('#pg1 .v2-nudge');
+  assert.equal(await page.locator('#v2Chooser .v2-nudge-row').count(), 2);
+  await page.click('#v2Chooser [data-skip="big2"]');
+  assert.equal(await page.locator('#v2Chooser .v2-nudge-row').count(), 1);
+  await page.click('#v2Chooser [data-photo="big"]');
+  await page.waitForSelector('#overlay.open');
+  assert.equal(await page.inputValue('#f3'), '25');
+  await page.evaluate(() => closeSheet());
+  assert.match(await page.textContent('#pg1 .v2-nudge'), /1 expense over £10 has no receipt photo/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 does not keep the job screenshot in the job record', async () => {
+  const { page, errors, close } = await openJobs({ income: [], expenses: [] });
+  await page.click('#fabBtn');
+  await page.click('#v2Chooser [data-act="manual"]');
+  await page.evaluate(() => { window._incomeImgData = 'data:image/jpeg;base64,AAAA'; });
+  await page.fill('#f3', '50');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.equal(await page.evaluate(() => DB.income[0].receiptImage), '');
   assert.deepEqual(errors, []);
   await close();
 });

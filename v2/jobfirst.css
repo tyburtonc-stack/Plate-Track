@@ -1,8 +1,5 @@
 /* PlateTrack v2 — job-first layout. Added to the v2 build only (see build.js). */
-.v2-home{padding:calc(env(safe-area-inset-top) + 72px) 16px 120px}
-.v2-home-hdr{padding:0 0 14px}
-.v2-home-hi{font-size:24px;font-weight:800;color:var(--text)}
-.v2-home-week{font-size:13px;color:var(--text3);margin-top:2px}
+.v2-home{padding:calc(env(safe-area-inset-top) + 64px) 16px 120px}
 
 .v2-new-job{background:var(--card);border:1px solid var(--border);border-radius:var(--r-xl);padding:16px;margin-bottom:8px}
 .v2-new-job-title{font-size:13px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
@@ -91,3 +88,36 @@
 .v2-leg-abort-info button{background:var(--bg2);border:1px solid var(--danger-border);color:var(--danger);border-radius:var(--r-full);padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0}
 .v2-link-btn.v2-del{color:var(--danger)}
 .v2-job-ab{color:var(--danger);font-weight:700}
+
+/* Jobs list: header, receipt nudge, expense pills, swipe to delete */
+.v2-jobs-hdr{padding:0 0 12px}
+.v2-nudge{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;background:var(--orange-bg);border:1px solid var(--orange-border);color:var(--orange);border-radius:var(--r-md);padding:11px 14px;margin-bottom:12px;font-size:13px;font-weight:700;cursor:pointer}
+.v2-nudge span{flex-shrink:0}
+.v2-nudge-sm{margin:10px 0 0;font-size:12px;padding:9px 12px}
+.v2-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.v2-pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:100px}
+.v2-pill-exp{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-border)}
+.v2-pill-reimb{background:var(--success-bg);color:var(--success);border:1px solid var(--success-border)}
+.v2-swipe{position:relative;margin-bottom:8px;border-radius:var(--r-lg);overflow:hidden}
+.v2-swipe .v2-job-card{position:relative;z-index:1;margin-bottom:0;touch-action:pan-y;transition:transform .2s ease;background:var(--bg2)}
+.v2-swipe-del{position:absolute;top:0;right:0;bottom:0;width:88px;border:none;background:var(--danger);color:#fff;font-size:14px;font-weight:800;cursor:pointer;visibility:hidden}
+.v2-swipe.open .v2-swipe-del,.v2-swipe.swiping .v2-swipe-del{visibility:visible}
+
+/* Job page: totals and copy */
+.v2-totals{padding-top:14px}
+.v2-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.v2-tile{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 8px 7px;min-width:0}
+.v2-tile-l{font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.06em}
+.v2-tile-v{font-size:15px;font-weight:800;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v2-tile-s{font-size:10px;color:var(--text4);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v2-tile-orange .v2-tile-v{color:var(--orange)}
+.v2-tile-green .v2-tile-v{color:var(--success)}
+.v2-copy-job{flex:1;padding:13px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--text2);cursor:pointer}
+
+/* Missing receipts list */
+.v2-nudge-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.v2-nudge-cat{font-size:14px;font-weight:700;color:var(--text)}
+.v2-nudge-sub{font-size:12px;color:var(--text3)}
+.v2-nudge-btns{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+.v2-nudge-btns button{background:var(--accent);color:#fff;border:none;border-radius:var(--r-full);padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.v2-nudge-btns button.v2-quiet{background:none;border:1px solid var(--border);color:var(--text3)}
