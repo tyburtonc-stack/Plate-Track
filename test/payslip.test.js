@@ -59,6 +59,24 @@ test('a job logged without its real ref matches only when it is the one job with
   await close();
 });
 
+test('a job using its reg as a stand-in ref matches the payslip line, and ticking off swaps in the payslip ref', async () => {
+  const { page, errors, close } = await openApp({
+    income: [inc('r', { company: 'Engineius', jobRef: 'LC21PDZ', amount: '239.89' }), inc('real', { company: 'Engineius', jobRef: 'YK19ABC', amount: '239.89', date: '2026-10-21' })],
+    expenses: [],
+    jobs: { LC21PDZ: { status: 'active', tempRef: true } },
+  }, { storage: { pt_payslips: JSON.stringify([{ status: 'done', periodFrom: '2026-10-01', periodTo: '2026-10-31', items: [{ ref: 'J-7777-RRRR', amount: 239.89, company: 'Engineius' }] }]) } });
+  // YK19ABC isn't marked as a stand-in, so only LC21PDZ can take the line
+  const r = await match(page, [{ ref: 'J-7777-RRRR', amount: 239.89, company: 'Engineius' }], await page.evaluate(() => DB.income));
+  assert.deepEqual(r.matched, ['J-7777-RRRR 239.89 -> r (adopt ref)']);
+  await page.evaluate(() => psMarkPaid(0));
+  const after = await page.evaluate(() => ({ ref: DB.income.find(x => x.id === 'r').jobRef, meta: DB.jobs['J-7777-RRRR'] }));
+  assert.equal(after.ref, 'J-7777-RRRR');
+  assert.equal(after.meta.paidJob, true);
+  assert.equal(after.meta.tempRef, undefined);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
 test('ticking off paid jobs gives a job on a temporary ref the payslip ref, with its expenses and legs', async () => {
   const { page, errors, close } = await openApp({
     income: [inc('t', { company: 'Engineius', jobRef: 'PT-7KQ2M', amount: '320.67' })],
