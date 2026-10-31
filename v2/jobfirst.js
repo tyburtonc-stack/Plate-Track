@@ -154,9 +154,11 @@
     return sortLegs(have);
   }
   function sortLegs(legs){
+    // By date, then time when both have one; otherwise they keep the order they were added in.
     return legs.map(function(l,i){return {l:l,i:i};}).sort(function(a,b){
-      var ka=(a.l.fromDate||'')+(a.l.fromTime||''),kb=(b.l.fromDate||'')+(b.l.fromTime||'');
-      if(ka&&kb&&ka!==kb)return ka<kb?-1:1;
+      var da=a.l.fromDate||'',db=b.l.fromDate||'',ta=a.l.fromTime||'',tb=b.l.fromTime||'';
+      if(da&&db&&da!==db)return da<db?-1:1;
+      if(da===db&&ta&&tb&&ta!==tb)return ta<tb?-1:1;
       return a.i-b.i;
     }).map(function(x){return x.l;});
   }
@@ -212,6 +214,7 @@
     if(newJob&&DB.income.length>lenBefore&&DB.income[0].id!==topBefore){
       var it=DB.income[0];
       if(pending){var jm=jobMeta(it.jobRef||('__'+it.id));jm.legs=mergeLegs(jm.legs,pending);saveDB();}
+      if(!it.jobRef)useRegRef(it,'');
       setTimeout(function(){openJobDetail(it.jobRef||('__'+it.id),String(it.id));},60);
     }
   };
@@ -249,8 +252,8 @@
       +'<button class="v2-act v2-act-travel" data-act="travel"><span class="v2-act-ic">&#x1F686;</span>Add travel</button>'
       +'<button class="v2-act v2-act-inc" data-act="inc"><span class="v2-act-ic">&#x2B;</span>Add pay</button>'
       +(!ref||isTempRef(ref)?'<div class="v2-ref-needed">'
-        +'<div class="v2-ref-title">'+(ref?'Job ref '+htmlEsc(ref)+' is temporary. Add the company\'s ref when you have it':'No job ref yet. Add the company\'s ref when you have it')+'</div>'
-        +'<div class="v2-ref-row"><input class="std-input v2-ref-input" placeholder="e.g. J-1234-AB56" autocomplete="off">'
+        +'<div class="v2-ref-title">'+(ref?'Using the reg '+htmlEsc(ref)+' as the job ref. Add the company\'s ref when you have it':'No job ref or reg yet. Add the company\'s ref, or the reg')+'</div>'
+        +'<div class="v2-ref-row"><input class="std-input v2-ref-input" placeholder="'+(ref?'e.g. J-1234-AB56':'J-1234-AB56 or LC21PDZ')+'" autocomplete="off">'
         +'<button class="v2-ref-save">Save</button></div></div>':'');
     var hdr=panel.firstElementChild;
     hdr.insertAdjacentElement('afterend',actions);
@@ -304,8 +307,16 @@
       if(e.target.closest('.v2-ref-save')){
         var v=actions.querySelector('.v2-ref-input').value.trim();
         if(!v){showToast('Type the job reference first');return;}
-        renameJob(ref,id,v);
-        showToast('Job reference saved');
+        var plate=v.toUpperCase().replace(/\s+/g,'');
+        if(!ref&&/^([A-Z]{2}[0-9]{2}[A-Z]{3}|[A-Z][0-9]{1,3}[A-Z]{3})$/.test(plate)){
+          // A reg typed on a job with no ref or reg: it's the reg, so it's used the same way
+          if(!first.registration)first.registration=plate;
+          v=useRegRef(first,'')||plate;
+          showToast('Reg saved as the job ref');
+        } else {
+          renameJob(ref,id,v);
+          showToast('Job reference saved');
+        }
         openJobDetail(v,id);
       }
     });
@@ -317,20 +328,44 @@
   function jobRefChanged(oldRef,newRef,id){
     var oldKey=oldRef||('__'+id),newKey=newRef||('__'+id);
     if(oldRef&&DB.income.some(function(x){return x.jobRef===oldRef;}))return;
-    if(isTempRef(oldRef)&&newRef)DB.expenses.forEach(function(x){if(x.jobRef===oldRef)x.jobRef=newRef;});
+    var wasTemp=isTempRef(oldRef);
+    if(wasTemp&&newRef)DB.expenses.forEach(function(x){if(x.jobRef===oldRef)x.jobRef=newRef;});
     if(DB.jobs[oldKey]&&oldKey!==newKey){
       var moved=DB.jobs[oldKey],had=DB.jobs[newKey];
       DB.jobs[newKey]=Object.assign({},moved,had||{});
       DB.jobs[newKey].legs=mergeLegs(had&&had.legs,moved.legs||[]);
       delete DB.jobs[oldKey];
     }
+    if(DB.jobs[newKey])delete DB.jobs[newKey].tempRef;
     saveDB();render(CTAB);
   }
 
-  // A job without a ref gets a temporary one (PT-XXXXX) the first time an expense is added, because
-  // expenses link to jobs by ref. Saving the real ref later moves the job's income, expenses and legs to it.
-  function isTempRef(r){return /^PT-[A-Z0-9]{5}$/.test(r||'');}
-  function tempRef(){var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',r;do{r='PT-';for(var i=0;i<5;i++)r+=c.charAt(Math.floor(Math.random()*c.length));}while(DB.income.some(function(x){return x.jobRef===r;}));return r;}
+  // A job without the company's ref uses its registration as the ref (as Engineius shows routes), because
+  // expenses link to jobs by ref. DB.jobs[ref].tempRef marks it, so the payslip cross-check can still match
+  // it and the job page asks for the company's ref. If another job already uses that reg, the job date is
+  // added (LC21PDZ-0411). Saving the company's ref later moves the job's income, expenses and legs to it.
+  // PT-XXXXX refs from the earlier version are switched to the reg when v2 starts.
+  function isTempRef(r){return !!r&&(/^PT-[A-Z0-9]{5}$/.test(r)||!!(DB.jobs[r]&&DB.jobs[r].tempRef));}
+  function jobReg(entry,key){
+    var legs=(key&&DB.jobs[key]&&DB.jobs[key].legs)||[],reg=entry.registration||'';
+    for(var i=0;!reg&&i<legs.length;i++)reg=legs[i].reg||'';
+    return String(reg).toUpperCase().replace(/[^A-Z0-9]/g,'');
+  }
+  function regRef(entry,key){
+    var reg=jobReg(entry,key);if(!reg)return '';
+    var used=function(r){return DB.income.some(function(x){return x.jobRef===r;})||DB.expenses.some(function(x){return x.jobRef===r;})||!!DB.jobs[r];};
+    if(!used(reg))return reg;
+    var d=(entry.date||today()).slice(5).split('-'),r=reg+'-'+d[1]+d[0],n=2;
+    while(used(r+(n>2?'-'+(n-1):'')))n++;
+    return r+(n>2?'-'+(n-1):'');
+  }
+  // Gives a job without a ref its reg as the ref. Returns the ref, or '' if the job has no reg either.
+  function useRegRef(entry,oldRef){
+    var r=regRef(entry,oldRef||('__'+entry.id));if(!r)return '';
+    renameJob(oldRef||'',String(entry.id),r);
+    jobMeta(r).tempRef=true;saveDB();
+    return r;
+  }
   function renameJob(oldRef,id,newRef){
     var oldKey=oldRef||('__'+id);
     DB.income.forEach(function(x){if(oldRef?x.jobRef===oldRef:String(x.id)===String(id))x.jobRef=newRef;});
@@ -341,11 +376,18 @@
       DB.jobs[newRef].legs=mergeLegs(had&&had.legs,moved.legs||[]);
       delete DB.jobs[oldKey];
     }
+    if(DB.jobs[newRef])delete DB.jobs[newRef].tempRef; // callers giving a reg ref mark it again
     saveDB();render(CTAB);
+  }
+  // Without a ref or a reg there's nothing to link expenses by: ask for one on the job page.
+  function needRef(ref,id){
+    showToast('Add the reg or the company\'s job ref first');
+    openJobDetail(ref||'',id);
+    var i=document.querySelector('#v2JobPage .v2-ref-input');if(i)i.focus();
   }
 
   function addPayToJob(first,ref,id){
-    if(!ref){ref=tempRef();renameJob('',id,ref);}
+    if(!ref){ref=useRegRef(first,'');if(!ref){needRef('',id);return;}}
     closeV2JobPage();
     V2.returnTo={ref:ref,id:id};
     window._incomePrefill={company:first.company||'',jobRef:ref};
@@ -353,7 +395,7 @@
     if(document.getElementById('overlay').className.indexOf('open')<0){V2.returnTo=null;openJobDetail(ref,id);}
   }
   function addExpenseToJob(first,ref,id,kind,extra){
-    if(!ref){ref=tempRef();renameJob('',id,ref);}
+    if(!ref){ref=useRegRef(first,'');if(!ref){needRef('',id);return;}}
     closeV2JobPage();
     V2.returnTo={ref:ref,id:id};
     var co=first.company||'';
@@ -649,6 +691,7 @@
       var k=jobKey(x);
       if(!map[k]){map[k]={key:k,ref:x.jobRef||'',id:String(x.id),company:x.company,date:x.date,gross:0,exp:0,deduct:0,reimb:0,expCount:0,sp:'',ep:'',reg:''};list.push(map[k]);}
       var j=map[k];
+      j.txt=(j.txt||'')+' '+[x.registration,x.startPostcode,x.endPostcode,x.description].filter(Boolean).join(' ');
       j.gross+=parseFloat(x.amount||0);
       if(x.date>j.date)j.date=x.date;
       if(!j.sp&&x.startPostcode)j.sp=x.startPostcode;
@@ -661,7 +704,7 @@
       j.exp+=a;j.expCount++;
       if(isReimbursedCat(e.category))j.reimb+=a;else j.deduct+=a;
     });
-    list.forEach(function(j){var jm=DB.jobs&&DB.jobs[j.key];j.status=jm&&jm.status||'';var lg=jm&&jm.legs||[];j.abortedLegs=lg.filter(function(l){return l.status==='aborted';}).length;j.legs=lg.length-j.abortedLegs;});
+    list.forEach(function(j){var jm=DB.jobs&&DB.jobs[j.key];j.status=jm&&jm.status||'';j.find=jobSearchText(j,jm);var lg=jm&&jm.legs||[];j.abortedLegs=lg.filter(function(l){return l.status==='aborted';}).length;j.legs=lg.length-j.abortedLegs;});
     list.sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:(Number(b.id)-Number(a.id));});
     return list;
   }
@@ -671,17 +714,30 @@
     return '<div class="v2-swipe"><button class="v2-swipe-del" data-del-ref="'+htmlEsc(j.key)+'" data-del-id="'+htmlEsc(j.id)+'" aria-label="Delete job">Delete</button>'
       +'<button class="v2-job-card" data-ref="'+htmlEsc(j.key)+'" data-id="'+htmlEsc(j.id)+'">'
       +'<div class="v2-job-top">'+cobadge(j.company)+(j.ref?'<span class="v2-job-ref">'+htmlEsc(j.ref)+'</span>':'<span class="v2-job-ref v2-muted">No job ref</span>')+jobStatusChip(j.ref)+'</div>'
-      +'<div class="v2-job-mid"><span>'+fdateShort(j.date)+'</span>'+(route?'<span>'+route+'</span>':'')+(j.legs>1||j.abortedLegs?'<span>'+j.legs+' leg'+(j.legs===1?'':'s')+'</span>':(j.reg?'<span>'+htmlEsc(j.reg)+'</span>':''))+(j.abortedLegs?'<span class="v2-job-ab">'+j.abortedLegs+' aborted</span>':'')+'</div>'
+      +'<div class="v2-job-mid"><span>'+fdateShort(j.date)+'</span>'+(route?'<span>'+route+'</span>':'')+(j.legs>1||j.abortedLegs?'<span>'+j.legs+' leg'+(j.legs===1?'':'s')+'</span>':(j.reg&&j.reg.replace(/\s/g,'')!==j.ref?'<span>'+htmlEsc(j.reg)+'</span>':''))+(j.abortedLegs?'<span class="v2-job-ab">'+j.abortedLegs+' aborted</span>':'')+'</div>'
       +'<div class="v2-job-bot"><span class="v2-job-gross">'+money(j.gross)+'</span>'
       +'<span class="v2-job-exp">'+(j.expCount?'':'No expenses')+'</span>'
       +'<span class="v2-job-net">Net '+money(net)+'</span></div>'
       +(j.expCount?'<div class="v2-pills">'+(j.deduct?'<span class="v2-pill v2-pill-exp">&#x1F9FE; '+money(j.deduct)+' exp.</span>':'')+(j.reimb?'<span class="v2-pill v2-pill-reimb">&#x2B50; '+money(j.reimb)+' reimb.</span>':'')+'</div>':'')
       +'</button></div>';
   }
-  var SHOW_ALL=false;
+  var SHOW_ALL=false,SEARCH='';
+  // Everything a job can be found by: refs, regs (with or without spaces), postcodes, places, company.
+  function jobSearchText(j,jm){
+    var parts=[j.ref,j.company,j.reg,j.sp,j.ep];
+    ((jm&&jm.legs)||[]).forEach(function(l){parts.push(l.reg,l.fromPc,l.toPc,l.fromAddr,l.toAddr);});
+    parts.push(j.txt);
+    var t=parts.filter(Boolean).join(' ').toLowerCase();
+    return t+' '+t.replace(/\s+/g,'');
+  }
+  function jobMatches(j,q){
+    if(!q)return true;
+    var words=q.toLowerCase().split(/\s+/).filter(Boolean),flat=q.toLowerCase().replace(/\s+/g,'');
+    return j.find.indexOf(flat)>=0||words.every(function(w){return j.find.indexOf(w)>=0;});
+  }
   function rJobsHome(){
     var pg=document.getElementById('pg1');if(!pg)return;
-    var jobs=buildJobs();
+    var all=buildJobs(),jobs=all.filter(function(j){return jobMatches(j,SEARCH);});
     var open=jobs.filter(function(j){return j.status==='active';});
     var rest=jobs.filter(function(j){return j.status!=='active';});
     var shown=SHOW_ALL?rest:rest.slice(0,25);
@@ -689,6 +745,8 @@
     pg.innerHTML='<div class="v2-home">'
       +'<div class="tab-hdr v2-jobs-hdr"><span class="tab-hdr-title">Jobs</span></div>'
       +(noRc?'<button class="v2-nudge" onclick="V2.openNudgeList()">&#x1F9FE; '+noRc+' expense'+(noRc>1?'s':'')+' over &pound;'+NUDGE_MIN+' '+(noRc>1?'have':'has')+' no receipt photo<span>Add &rsaquo;</span></button>':'')
+      +'<div class="search-bar v2-jobs-search"><div class="search-inner"><span class="search-icon-left">&#x1F50D;</span>'
+      +'<input type="search" id="v2-job-search" class="std-input" placeholder="Search reg, job ref, postcode, place" value="'+htmlEsc(SEARCH)+'" autocomplete="off" style="padding-left:36px"></div></div>'
       +'<div class="v2-new-job">'
       +'<div class="v2-new-job-title">Start a job</div>'
       +'<div class="v2-new-job-row">'
@@ -700,12 +758,22 @@
       +(open.length?'<div class="v2-section">In progress</div>'+open.map(jobCardHTML).join(''):'')
       +(rest.length||!jobs.length?'<div class="v2-section">Recent jobs</div>':'')
       +(jobs.length===0
-        ?'<div class="empty-state"><div class="empty-state-icon">&#x1F697;</div><div class="empty-state-title">No jobs yet</div><div class="empty-state-sub">Scan your first job sheet to get started</div></div>'
+        ?(SEARCH?'<div class="empty-state"><div class="empty-state-title">No jobs match &ldquo;'+htmlEsc(SEARCH)+'&rdquo;</div></div>'
+          :'<div class="empty-state"><div class="empty-state-icon">&#x1F697;</div><div class="empty-state-title">No jobs yet</div><div class="empty-state-sub">Scan your first job sheet to get started</div></div>')
         :shown.map(jobCardHTML).join('')
           +(rest.length>shown.length?'<button class="v2-link-btn v2-more" onclick="V2.showAll()">Show all '+rest.length+' jobs</button>':''))
       +'</div>';
   }
   V2.showAll=function(){SHOW_ALL=true;rJobsHome();};
+  // Typing in the search box redraws the list but keeps the box (and the keyboard) where it is.
+  document.addEventListener('input',function(e){
+    if(e.target.id!=='v2-job-search')return;
+    SEARCH=e.target.value.trim();
+    var pos=e.target.selectionStart;
+    rJobsHome();
+    var box=document.getElementById('v2-job-search');
+    if(box){box.focus();try{box.setSelectionRange(pos,pos);}catch(er){}}
+  });
   document.addEventListener('click',function(e){
     var d=e.target.closest&&e.target.closest('.v2-swipe-del');
     if(d){deleteJob(d.getAttribute('data-del-ref'),d.getAttribute('data-del-id'));return;}
@@ -715,6 +783,18 @@
     if(c.parentNode.classList.contains('open')){swipeClose();return;}
     openJobDetail(c.getAttribute('data-ref'),c.getAttribute('data-id'));
   });
+
+  // Jobs given a random PT-XXXXX ref by the earlier version use their reg instead.
+  (function(){
+    var seen={},changed=0;
+    DB.income.slice().forEach(function(x){
+      var r=x.jobRef;
+      if(!r||seen[r]||!/^PT-[A-Z0-9]{5}$/.test(r))return;
+      seen[r]=1;
+      if(useRegRef(x,r))changed++;
+    });
+    if(changed)saveDB();
+  })();
 
   relabelTabs();
   render(CTAB);

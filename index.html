@@ -3886,7 +3886,7 @@ function psMarkPaid(i){
   saveDB();render(CTAB);
   showToast((n>0?('✓ Marked '+n+' payment line'+(n===1?'':'s')+' as paid'):'Nothing new to tick off')+(adopted?' and added '+adopted+' job ref'+(adopted===1?'':'s')+' from the payslip':''));
 }
-// Gives a job logged without its real ref (none, or a temporary PT- ref) the ref from the payslip:
+// Gives a job logged without its real ref (none, or a stand-in reg / PT- ref) the ref from the payslip:
 // its other pay entries, expenses, legs and status move with it.
 function psAdoptRef(entry,newRef){
   var old=entry.jobRef||'',oldKey=old||('__'+entry.id);
@@ -3898,6 +3898,7 @@ function psAdoptRef(entry,newRef){
     if(!DB.jobs[newRef])DB.jobs[newRef]=DB.jobs[oldKey];
     delete DB.jobs[oldKey];
   }
+  if(DB.jobs&&DB.jobs[newRef])delete DB.jobs[newRef].tempRef;
 }
 var _PS_STOPWORDS={a:1,the:1,and:1,for:1,to:1,of:1,in:1,on:1,at:1,by:1,job:1,delivery:1,pay:1,ltd:1,limited:1};
 function _psNorm(s){return(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();}
@@ -4112,10 +4113,11 @@ function fuzzyMatchPayslip(items,entries){
       s.amountMatch=_psAmtEq(best.amount,it.amount);
     }
   });
-  // PASS 6: a job logged before its ref was known - no ref, or the v2 layout's temporary PT-XXXXX ref.
-  // Matched only when exactly ONE such entry has the same amount (and company, when both give one),
-  // so a common flat price can't pair the wrong job. Ticking off paid jobs then gives it the line's ref.
-  var noRealRef=function(r){return !r||/^PT-[A-Z0-9]{5}$/.test(r);};
+  // PASS 6: a job logged before its ref was known - no ref, or a stand-in the v2 layout gave it (the reg,
+  // marked DB.jobs[ref].tempRef, or an older PT-XXXXX ref). Matched only when exactly ONE such entry has
+  // the same amount (and company, when both give one), so a common flat price can't pair the wrong job.
+  // Ticking off paid jobs then gives it the line's ref.
+  var noRealRef=function(r){return !r||/^PT-[A-Z0-9]{5}$/.test(r)||!!(DB.jobs&&DB.jobs[r]&&DB.jobs[r].tempRef);};
   slots.forEach(function(s){
     if(s.entry||!s.item.ref||_psIsInspection(s.item))return;
     var wantExp=_psIsIntrav(s.item);

@@ -73,22 +73,81 @@ test('v2 job page: Add travel is linked to the job and comes back to the job pag
   await close();
 });
 
-test('v2 job without a ref: expenses get a temporary ref, and the real ref moves everything over', async () => {
-  const { page, errors, close } = await openJobs({ income: [income(7)], expenses: [] });
+test('v2 job without a ref uses its reg as the ref; the company ref replaces it and moves everything', async () => {
+  const { page, errors, close } = await openJobs({ income: [income(7, { registration: 'lc21 pdz' })], expenses: [] });
   await page.click('#pg1 .v2-job-card');
   assert.equal(await page.locator('#v2JobPage .v2-act').count(), 4, 'expense buttons work without a ref');
   await page.click('#v2JobPage [data-act="travel"]');
-  const temp = await page.inputValue('#f4c');
-  assert.match(temp, /^PT-[A-Z0-9]{5}$/);
+  assert.equal(await page.inputValue('#f4c'), 'LC21PDZ');
   await page.fill('#f3', '9.80');
   await page.evaluate(() => doSave());
   await page.waitForSelector('#v2JobPage');
-  assert.match(await page.textContent('#v2JobPage .v2-ref-needed'), /temporary/);
+  assert.match(await page.textContent('#v2JobPage .v2-ref-needed'), /Using the reg LC21PDZ as the job ref/);
+  assert.equal(await page.evaluate(() => DB.jobs.LC21PDZ.tempRef), true);
   await page.fill('#v2JobPage .v2-ref-input', 'J-4444-DDDD');
   await page.click('#v2JobPage .v2-ref-save');
   await page.waitForFunction(() => DB.income[0].jobRef === 'J-4444-DDDD');
   assert.equal(await page.evaluate(() => DB.expenses[0].jobRef), 'J-4444-DDDD');
+  assert.equal(await page.evaluate(() => DB.jobs['J-4444-DDDD'].tempRef), undefined);
   assert.equal(await page.locator('#v2JobPage .v2-ref-needed').count(), 0);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 reg refs: a reg already used by another job gets the date added; no reg means asking for one', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'LC21PDZ', date: '2026-10-01' }), income(2, { registration: 'LC21PDZ', date: '2026-11-04' }), income(3, { date: '2026-10-02' })],
+    expenses: [],
+  });
+  await page.evaluate(() => openJobDetail('__2', '2'));
+  await page.click('#v2JobPage [data-act="exp"]');
+  assert.equal(await page.inputValue('#f4c'), 'LC21PDZ-0411');
+  await page.evaluate(() => closeSheet());
+  await page.waitForSelector('#v2JobPage');
+  // A job with neither a ref nor a reg: the buttons ask for one, and a typed reg is used as the reg
+  await page.evaluate(() => openJobDetail('__3', '3'));
+  assert.match(await page.textContent('#v2JobPage .v2-ref-needed'), /No job ref or reg yet/);
+  await page.click('#v2JobPage [data-act="exp"]');
+  assert.equal(await page.locator('#overlay.open').count(), 0, 'no expense form without a ref or reg');
+  await page.fill('#v2JobPage .v2-ref-input', 'yk19 abc');
+  await page.click('#v2JobPage .v2-ref-save');
+  await page.waitForFunction(() => DB.income.some(x => String(x.id) === '3' && x.jobRef === 'YK19ABC'));
+  const j = await page.evaluate(() => { const x = DB.income.find(i => String(i.id) === '3'); return { reg: x.registration, temp: DB.jobs.YK19ABC.tempRef }; });
+  assert.deepEqual(j, { reg: 'YK19ABC', temp: true });
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 switches older PT- refs to the reg when it starts', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'PT-URL4E', date: '2026-11-04' })],
+    expenses: [{ id: 'e1', date: '2026-11-04', category: 'Hotel (Not Reimbursed)', amount: '64', company: 'BCA', jobRef: 'PT-URL4E', receipt: '', description: '', receiptImage: '' }],
+    jobs: { 'PT-URL4E': { status: 'active', legs: [{ reg: 'LC21PDZ', fromPc: 'LE12 5SH', toPc: 'LS9 0PS' }] } },
+  });
+  const d = await page.evaluate(() => ({ inc: DB.income[0].jobRef, exp: DB.expenses[0].jobRef, legs: DB.jobs.LC21PDZ.legs.length, temp: DB.jobs.LC21PDZ.tempRef, old: DB.jobs['PT-URL4E'] }));
+  assert.deepEqual(d, { inc: 'LC21PDZ', exp: 'LC21PDZ', legs: 1, temp: true, old: undefined });
+  assert.match(await page.textContent('#pg1 .v2-job-card'), /LC21PDZ/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 Jobs search finds jobs by reg (with or without a space), leg reg, ref and postcode', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'J-1000-AAAA', registration: 'AB12CDE', startPostcode: 'LE12 5SH' }), income(2, { jobRef: 'J-2000-BBBB', date: '2026-10-19' })],
+    expenses: [],
+    jobs: { 'J-2000-BBBB': { legs: [{ reg: 'YM74LMY', fromPc: 'NR6 7AS', toPc: 'WR5 2PR', fromAddr: 'Catton Chase, Norwich' }] } },
+  });
+  const count = async q => { await page.fill('#v2-job-search', q); return page.locator('#pg1 .v2-job-card').count(); };
+  assert.equal(await count('ab12 cde'), 1);
+  assert.equal(await count('AB12CDE'), 1);
+  assert.equal(await count('ym74'), 1);
+  assert.equal(await count('J-2000'), 1);
+  assert.equal(await count('le12 5sh'), 1);
+  assert.equal(await count('norwich'), 1);
+  assert.equal(await count('zz99'), 0);
+  assert.match(await page.textContent('#pg1'), /No jobs match/);
+  assert.equal(await count(''), 2);
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'v2-job-search', 'typing keeps the keyboard up');
   assert.deepEqual(errors, []);
   await close();
 });
@@ -136,14 +195,14 @@ test('v2 Scan job reads several route screenshots into one job with its legs', a
   assert.match(gaps[2], /NR31 9JA → NR6 7AS/);
   assert.match(gaps[3], /Getting home from WR5 2PR/);
   assert.equal(await page.locator('#v2JobPage .v2-leg-night').count(), 2, 'legs 2 and 3 run overnight');
-  // No job ref on the screenshots: the legs are kept, and move to the ref once it is typed in
-  const id = await page.evaluate(() => String(DB.income[0].id));
-  assert.equal(await page.evaluate(i => DB.jobs['__' + i].legs.length, id), 3);
+  // No job ref on the screenshots: the job uses leg 1's reg, and the legs move to the company ref once typed in
+  assert.equal(await page.evaluate(() => DB.income[0].jobRef), 'LC68ZZS');
+  assert.equal(await page.evaluate(() => DB.jobs.LC68ZZS.legs.length), 3);
   await page.fill('#v2JobPage .v2-ref-input', 'J-9999-ROUTE');
   await page.click('#v2JobPage .v2-ref-save');
-  await page.waitForSelector('#v2JobPage .v2-act');
+  await page.waitForFunction(() => DB.jobs['J-9999-ROUTE']);
   assert.equal(await page.evaluate(() => DB.jobs['J-9999-ROUTE'].legs.length), 3);
-  assert.equal(await page.evaluate(i => DB.jobs['__' + i], id), undefined);
+  assert.equal(await page.evaluate(() => DB.jobs.LC68ZZS), undefined);
   await page.evaluate(() => document.getElementById('v2JobPage').remove());
   await page.click('#tab1');
   assert.match(await page.textContent('#pg1 .v2-job-card'), /3 legs/);
@@ -342,6 +401,21 @@ test('v2 does not keep the job screenshot in the job record', async () => {
   await page.evaluate(() => doSave());
   await page.waitForSelector('#v2JobPage');
   assert.equal(await page.evaluate(() => DB.income[0].receiptImage), '');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 legs without a time stay in the order added on the same day', async () => {
+  const { page, errors, close } = await openJobs({ income: [income(1, { jobRef: 'J-3000-SORT', date: '2026-11-04' })], expenses: [],
+    jobs: { 'J-3000-SORT': { legs: [
+      { reg: 'AAA1', fromPc: 'LE12 5SH', fromDate: '2026-11-04', fromTime: '08:00' },
+      { reg: 'BBB2', fromPc: 'LS10 1AB', fromDate: '2026-11-04' },
+      { reg: 'CCC3', fromPc: 'B6 7EU', fromDate: '2026-11-03' }] } } });
+  await page.click('#pg1 .v2-job-card');
+  await page.click('#v2JobPage [data-leg="edit"] >> nth=0');
+  await page.click('#v2Chooser [data-act="save"]');
+  await page.waitForSelector('#v2JobPage');
+  assert.deepEqual(await page.locator('#v2JobPage .v2-leg-reg').allTextContents(), ['CCC3', 'AAA1', 'BBB2']);
   assert.deepEqual(errors, []);
   await close();
 });

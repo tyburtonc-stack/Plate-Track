@@ -121,3 +121,5 @@
 .v2-nudge-btns{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
 .v2-nudge-btns button{background:var(--accent);color:#fff;border:none;border-radius:var(--r-full);padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer}
 .v2-nudge-btns button.v2-quiet{background:none;border:1px solid var(--border);color:var(--text3)}
+
+.v2-jobs-search{padding:0 0 12px}
