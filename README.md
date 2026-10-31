@@ -329,6 +329,12 @@ Always commit the rebuilt `docs/` alongside changes to `index.html`.
 ### AI worker
 `platetrack-ai-worker/` is the Cloudflare Worker behind receipt/payslip scanning and the AI assistant. It only serves signed-in users calling from the app's own site, fixes the model (Claude Opus 5.5, effort `medium`, server-side refusal fallback) and output limit server-side, returns only the answer text (Opus 5.5 replies start with thinking blocks), and keeps the Anthropic key as a worker secret. The **Deploy AI worker** GitHub Action deploys it on every change to that folder on `main` (repo secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`). `cd platetrack-ai-worker && npm test` runs its tests.
 
+### Testing phase: invite-only
+`INVITE_ONLY = true` in `index.html` makes sign-up ask for the invited email and the tester terms (`TESTER_TERMS`), and asks accounts made earlier to agree once; the agreement is stored in the account's Supabase user metadata (`tester_terms`). `supabase/invites.sql` is what blocks sign-ups from emails not in `public.tester_invites`; see `supabase/INVITES.md` for how to run it and invite people. `test/invite.test.js` covers the app side.
+
+### Licence
+All rights reserved: see `LICENSE`. This is not open-source software.
+
 Ideas for later live in `BACKLOG.md`.
 
 ### UK Tax Calculations

@@ -33,6 +33,8 @@ async function openApp(seed, opts = {}) {
   if (opts.now) await page.clock.setFixedTime(opts.instant ? new Date(opts.now) : localInstant(opts.now, opts.timezoneId || 'Europe/London'));
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
+  // Tester terms prompt for signed-in accounts: off unless a test asks for it (opts.terms).
+  if (!opts.terms) await page.addInitScript(() => { window.__PT_TEST_NO_TERMS = true; });
   await page.addInitScript(db => {
     if (sessionStorage.getItem('seeded')) return;
     sessionStorage.setItem('seeded', '1');
