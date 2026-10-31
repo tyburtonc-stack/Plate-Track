@@ -37,12 +37,13 @@ async function buildPage(html, outDir) {
   }
 }
 
-// v2 (job-first layout) is the current app plus the files in v2/, served at /Plate-Track/v2/.
+// v2 (job-first layout) is the current app plus the files in v2/ (jobfirst, then mtd), served at /Plate-Track/v2/.
 // The current app's source is not changed, so it keeps working at /Plate-Track/ as before.
 function v2Html(html) {
   const v2Dir = path.join(__dirname, 'v2');
-  const css = fs.readFileSync(path.join(v2Dir, 'jobfirst.css'), 'utf8');
-  const js = fs.readFileSync(path.join(v2Dir, 'jobfirst.js'), 'utf8');
+  const read = names => names.map(n => fs.readFileSync(path.join(v2Dir, n), 'utf8')).join('\n');
+  const css = read(['jobfirst.css', 'mtd.css']);
+  const js = read(['jobfirst.js', 'mtd.js']);
   const out = html
     .replace('<link rel="manifest" href="/Plate-Track/manifest.json">', '<link rel="manifest" href="/Plate-Track/v2/manifest.json">')
     .replace('<meta name="apple-mobile-web-app-title" content="PlateTrack">', '<meta name="apple-mobile-web-app-title" content="PlateTrack v2">')

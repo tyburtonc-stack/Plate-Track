@@ -1,0 +1,49 @@
+/* PlateTrack v2 — Making Tax Digital screen and cards (see mtd.js) */
+.mtd-slot{padding:0 16px 12px}
+.mtd-slot-dash{padding:12px 16px 0}
+.mtd-entry{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;cursor:pointer;color:var(--text);font:inherit}
+.mtd-entry.late{border-color:var(--danger-border);background:var(--danger-bg)}
+.mtd-entry-ic{font-size:22px;flex-shrink:0}
+.mtd-entry b{display:block;font-size:14px;font-weight:800}
+.mtd-entry>span>span{display:block;font-size:12px;color:var(--text3);margin-top:1px}
+.mtd-entry-go{margin-left:auto;font-size:22px;color:var(--text4)}
+.mtd-page{position:fixed;inset:0;z-index:99990;background:var(--bg);overflow-y:auto;padding:env(safe-area-inset-top) 0 calc(24px + env(safe-area-inset-bottom))}
+.mtd-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px 12px;position:sticky;top:0;background:var(--bg);z-index:1;border-bottom:1px solid var(--border)}
+.mtd-back{width:36px;height:36px;border-radius:var(--r-full);border:none;background:var(--bg3);font-size:24px;color:var(--text3);cursor:pointer;line-height:1}
+.mtd-title{font-size:18px;font-weight:800;color:var(--text)}
+.mtd-sub{font-size:12px;color:var(--text3)}
+.mtd-body{padding:14px 16px;max-width:620px;margin:0 auto}
+.mtd-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:12px}
+.mtd-h{font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
+.mtd-big{font-size:17px;font-weight:800;color:var(--text)}
+.mtd-big span{display:block;font-size:13px;font-weight:600;color:var(--text3);margin-top:2px}
+.mtd-yes{color:var(--danger)}
+.mtd-soon{color:var(--orange)}
+.mtd-rules{margin:12px 0 4px}
+.mtd-rule{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:6px;font-size:12px;color:var(--text3);padding:6px 0;border-top:1px solid var(--border)}
+.mtd-rule em{font-style:normal;color:var(--text4)}
+.mtd-rule span:last-child{text-align:right}
+.mtd-rule.over{color:var(--text);font-weight:700}
+.mtd-note{font-size:12px;color:var(--text3);line-height:1.5;margin-top:8px}
+.mtd-foot{margin:10px 2px 0}
+.mtd-years{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;padding-bottom:2px}
+.mtd-years button,.mtd-toggle button{flex-shrink:0;border:1px solid var(--border);background:var(--bg3);color:var(--text3);border-radius:var(--r-full);padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.mtd-years button.on,.mtd-toggle button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.mtd-toggle{display:flex;gap:6px;margin-bottom:10px}
+.mtd-q{border-top:1px solid var(--border);padding:10px 0}
+.mtd-q-top{display:flex;align-items:center;gap:8px}
+.mtd-q-n{font-size:13px;font-weight:800;color:var(--text)}
+.mtd-q-p{font-size:12px;color:var(--text3);flex:1}
+.mtd-st{font-size:11px;font-weight:700;color:var(--text4);background:var(--bg3);border-radius:var(--r-full);padding:2px 8px}
+.mtd-ok{color:var(--success);background:var(--success-bg)}
+.mtd-due{color:var(--orange);background:var(--orange-bg)}
+.mtd-late{color:var(--danger);background:var(--danger-bg)}
+.mtd-q-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;font-size:14px;font-weight:800;color:var(--text)}
+.mtd-q-grid em{display:block;font-style:normal;font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.05em}
+.mtd-q-ytd{font-size:11px;color:var(--text3);margin-top:6px}
+.mtd-q-bot{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;color:var(--text3)}
+.mtd-sent{display:flex;align-items:center;gap:6px;font-weight:700;color:var(--text2)}
+.mtd-cat{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border);font-size:14px;color:var(--text)}
+.mtd-cat em{display:block;font-style:normal;font-size:11px;color:var(--text4)}
+.mtd-cat-tot{font-weight:800}
+.mtd-export{margin-top:4px}
