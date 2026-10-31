@@ -15,7 +15,7 @@ In priority order for (1) keeping drivers' data safe, (2) Making Tax Digital for
 - **Password strength**: raise Supabase's minimum password length from 6 to 8
   (Authentication → Providers → Email).
 
-## 2. MTD-ready records (no HMRC connection yet)
+## 2. MTD-ready records (no HMRC connection yet): done in v2 (`v2/mtd.js`)
 MTD ITSA applies from 6 April 2026 to sole traders with qualifying income (gross turnover, not
 profit) over £50,000, from April 2027 over £30,000 and from April 2028 over £20,000.
 - **MTD eligibility check**: show gross self-employed income for the last full tax year against

@@ -320,6 +320,7 @@ Always commit the rebuilt `docs/` alongside changes to `index.html`.
 - **Jobs list:** each job shows orange expense and green reimbursed pills; swipe a job left to delete it (its pay entries, legs and status go; its expenses stay). A banner lists this tax year's expenses of £10 or more with no receipt photo (Add photo, or No receipt to dismiss on that device).
 - **Job page:** Pay / Expenses / Net / Miles at the top, and **Copy job** (same company, pay, route and legs; today's date, no ref, no expenses).
 - v2 reads job screenshots but doesn't store them in the job record (they were never uploaded and filled up the phone's storage).
+- **Making Tax Digital** (`v2/mtd.js`, Insights card, and on Overview once MTD starts within a year): when MTD applies from logged income (2024/25 over £50k → 6 Apr 2026, 2025/26 over £30k → 6 Apr 2027, 2026/27 over £20k → 6 Apr 2028); each quarter's figures and the cumulative year-to-date totals an update sends (standard or calendar quarters); expenses in HMRC categories (car, van and travel / other; reimbursed left out); deadlines with a countdown and a Sent tick per quarter; CSV for an accountant. Nothing is sent to HMRC. `test/mtd.test.js` covers it.
 - `test/v2.test.js` covers the v2 flow.
 
 ### Supabase security
