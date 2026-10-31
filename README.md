@@ -28,6 +28,8 @@ PlateTrack is a Progressive Web App (PWA) that helps gig economy trade plate dri
 - Upload payslip images for OCR parsing via Claude Vision
 - Match extracted line items against logged income/expenses
 - Reconcile discrepancies across a custom date range
+- A job logged without its real ref (none, or v2's temporary `PT-XXXXX`) matches a payslip line when it's the only job with that company and amount; ticking off paid jobs then gives it the payslip's ref
+- `test/payslip.test.js` covers the matching
 
 ### Analytics & Insights
 - Monthly/weekly profit charts (SVG donut and bar charts)
@@ -150,7 +152,7 @@ Browser (PWA)
 ```
 Receipts/{userId}/{expenseId}.jpg
 ```
-Images are compressed client-side (max 1200px, JPEG 0.82 quality) before upload.
+Images are compressed client-side (max 1200px, JPEG 0.82 quality) before upload. A photo is deleted from the bucket when its expense is deleted or the photo is removed; a delete made offline is retried on the next sync (`pt_pending_receipt_deletes`).
 
 ---
 

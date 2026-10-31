@@ -52,6 +52,4 @@ profit) over £50,000, from April 2027 over £30,000 and from April 2028 over £
 ## Smaller ideas
 - **Missing-receipt reminders** for expenses over a set amount without a photo.
 - **Weekly summary notification**: earnings, expenses and tax to set aside.
-- **Delete receipt photos from storage** when their expense is deleted (they are currently left
-  behind in the Receipts bucket).
 - **Split `index.html` into modules** gradually, now that `npm test` covers the main flows.

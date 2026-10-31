@@ -1665,7 +1665,27 @@ function supaDeleteRow(table,id,cb){
     .then(function(r){if(!r.ok){addPendingDelete(table,id);console.warn('Delete sync failed:',r.status);}if(cb)cb(r.ok);})
     .catch(function(){addPendingDelete(table,id);if(cb)cb(false);});
 }
+// Receipt photos in cloud storage are deleted with their expense, or when the photo is removed.
+// A delete that can't reach the cloud is kept in pt_pending_receipt_deletes and retried on the next sync.
+function getPendingReceiptDeletes(){try{return JSON.parse(localStorage.getItem('pt_pending_receipt_deletes')||'[]');}catch(e){return [];}}
+function setPendingReceiptDeletes(a){try{if(a.length)localStorage.setItem('pt_pending_receipt_deletes',JSON.stringify(a));else localStorage.removeItem('pt_pending_receipt_deletes');}catch(e){}}
+function supaDeleteReceipt(ref){
+  if(!ref||ref.indexOf('supabase:')!==0)return;
+  if(DB.expenses.some(function(e){return e.receiptImage===ref;}))return; // another expense still shows it
+  var path=ref.slice(9);
+  var keep=function(){var a=getPendingReceiptDeletes();if(a.indexOf(path)<0){a.push(path);setPendingReceiptDeletes(a);}};
+  if(!SUPA_USER||!SUPA_SESSION){keep();return;}
+  fetch(SUPA_URL+'/storage/v1/object/Receipts/'+path.split('/').map(encodeURIComponent).join('/'),{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_SESSION.access_token}})
+    .then(function(r){if(!r.ok&&r.status!==400&&r.status!==404)keep();}) // 400/404: already gone
+    .catch(keep);
+}
+function retryPendingReceiptDeletes(){
+  var a=getPendingReceiptDeletes();if(!a.length||!SUPA_USER||!SUPA_SESSION)return;
+  setPendingReceiptDeletes([]);
+  a.forEach(function(p){supaDeleteReceipt('supabase:'+p);});
+}
 function retryPendingDeletes(cb){
+  retryPendingReceiptDeletes();
   var a=getPendingDeletes();if(!a.length)return cb&&cb();
   setPendingDeletes([]);var left=a.length;
   a.forEach(function(d){supaDeleteRow(d.t,d.id,function(){if(--left===0&&cb)cb();});});
@@ -1885,14 +1905,6 @@ function supaGetReceiptUrl(path, cb){
     }
   })
   .catch(function(e){console.warn('Sign URL error:',e);cb(null);});
-}
-
-function supaDeleteReceipt(path){
-  if(!SUPA_USER||!SUPA_SESSION||!path)return;
-  fetch(SUPA_URL+'/storage/v1/object/Receipts/'+path,{
-    method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_SESSION.access_token}
-  }).catch(function(e){console.warn('Receipt delete error:',e);});
 }
 
 // Upload any existing base64 receipts to Storage
@@ -3559,7 +3571,9 @@ function impRemove(bid){
   swipeConfirm('Remove the '+n+' entr'+(n===1?'y':'ies')+' added by <b>'+htmlEsc(b.label)+'</b>?<br><span style="font-weight:400;font-size:13px;color:var(--text3)">Any changes made to them since are removed too.</span>',function(){
     var gone={};l.income.concat(l.expenses).forEach(function(x){gone[String(x.id)]=1;});
     DB.income=DB.income.filter(function(x){return !gone[String(x.id)];});
+    var goneExp=DB.expenses.filter(function(x){return gone[String(x.id)];});
     DB.expenses=DB.expenses.filter(function(x){return !gone[String(x.id)];});
+    goneExp.forEach(function(x){supaDeleteReceipt(x.receiptImage);});
     DB.imports=DB.imports.filter(function(x){return x.id!==bid;});
     clearTimeout(window._syncT);
     try{localStorage.setItem('pt9',JSON.stringify(DB));}catch(e){}
@@ -3860,8 +3874,9 @@ function psMarkPaid(i){
   var inc=DB.income.filter(function(e){return inDateRange(e.date,ps.periodFrom,ps.periodTo)&&(!_psCo||!e.company||_psCoMatch(_psCo,e.company));});
   var exp=DB.expenses.filter(function(e){return inDateRange(e.date,ps.periodFrom,ps.periodTo)&&isReimbursedCat(e.category)&&(!_psCo||!e.company||_psCoMatch(_psCo,e.company));});
   var mr=fuzzyMatchPayslip(ps.items,inc.concat(exp));
-  var n=0;
+  var n=0,adopted=0;
   mr.matched.forEach(function(g){
+    if(g.adoptRef&&g.item.ref){psAdoptRef(g.entry,g.item.ref);adopted++;}
     var ref=g.entry&&g.entry.jobRef;
     if(!ref)return;
     var jm=jobMeta(ref);
@@ -3869,7 +3884,20 @@ function psMarkPaid(i){
     else{if(!jm.paidTravel){jm.paidTravel=true;n++;}}
   });
   saveDB();render(CTAB);
-  showToast(n>0?('✓ Marked '+n+' payment line'+(n===1?'':'s')+' as paid'):'Nothing new to tick off');
+  showToast((n>0?('✓ Marked '+n+' payment line'+(n===1?'':'s')+' as paid'):'Nothing new to tick off')+(adopted?' and added '+adopted+' job ref'+(adopted===1?'':'s')+' from the payslip':''));
+}
+// Gives a job logged without its real ref (none, or a temporary PT- ref) the ref from the payslip:
+// its other pay entries, expenses, legs and status move with it.
+function psAdoptRef(entry,newRef){
+  var old=entry.jobRef||'',oldKey=old||('__'+entry.id);
+  if(old){
+    DB.income.forEach(function(x){if(x.jobRef===old)x.jobRef=newRef;});
+    DB.expenses.forEach(function(x){if(x.jobRef===old)x.jobRef=newRef;});
+  } else entry.jobRef=newRef;
+  if(DB.jobs&&DB.jobs[oldKey]&&oldKey!==newRef){
+    if(!DB.jobs[newRef])DB.jobs[newRef]=DB.jobs[oldKey];
+    delete DB.jobs[oldKey];
+  }
 }
 var _PS_STOPWORDS={a:1,the:1,and:1,for:1,to:1,of:1,in:1,on:1,at:1,by:1,job:1,delivery:1,pay:1,ltd:1,limited:1};
 function _psNorm(s){return(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();}
@@ -4084,9 +4112,23 @@ function fuzzyMatchPayslip(items,entries){
       s.amountMatch=_psAmtEq(best.amount,it.amount);
     }
   });
+  // PASS 6: a job logged before its ref was known - no ref, or the v2 layout's temporary PT-XXXXX ref.
+  // Matched only when exactly ONE such entry has the same amount (and company, when both give one),
+  // so a common flat price can't pair the wrong job. Ticking off paid jobs then gives it the line's ref.
+  var noRealRef=function(r){return !r||/^PT-[A-Z0-9]{5}$/.test(r);};
+  slots.forEach(function(s){
+    if(s.entry||!s.item.ref||_psIsInspection(s.item))return;
+    var wantExp=_psIsIntrav(s.item);
+    var cands=entries.filter(function(e){
+      return !used[e.id]&&wantExp===(e.incomeType===undefined)&&noRealRef(e.jobRef)&&_psAmtEq(e.amount,s.item.amount)
+        &&(!s.item.company||!e.company||_psCoMatch(s.item.company,e.company));
+    });
+    if(cands.length!==1)return;
+    s.entry=cands[0];used[cands[0].id]=true;s.amountMatch=true;s.adoptRef=true;
+  });
   var matched=[],missing=[];
   slots.forEach(function(s){
-    if(s.entry)matched.push({item:s.item,entry:s.entry,amountMatch:s.amountMatch});
+    if(s.entry)matched.push({item:s.item,entry:s.entry,amountMatch:s.amountMatch,adoptRef:!!s.adoptRef});
     else missing.push({item:s.item});
   });
   var extra=entries.filter(function(e){return !used[e.id];});
@@ -4119,7 +4161,8 @@ function buildPayslipGroupHTML(group,type,idx){
     group.forEach(function(g){
       var co=htmlEsc((g.item.company||g.entry.company||'').substr(0,30));
       var _ty=g.item.type?htmlEsc(String(g.item.type).toUpperCase().substr(0,8))+' \u00B7 ':'';
-      var desc=_ty+htmlEsc((g.item.description||g.item.ref||g.item._resolvedRef||'').substr(0,40));
+      var desc=_ty+htmlEsc((g.item.description||g.item.ref||g.item._resolvedRef||'').substr(0,40))
+        +(g.adoptRef?'<div style="font-size:11px;color:var(--text4)">Logged without this ref &middot; '+htmlEsc(g.item.ref)+' is added when you tick off</div>':'');
       html+='<div class="ps-item">'
         +'<div class="ps-item-left">'+(co?'<div class="ps-item-co">'+co+'</div>':'')+'<div class="ps-item-desc">'+desc+'</div></div>'
         +(g.amountMatch
@@ -6012,7 +6055,7 @@ function applyCoExpenseDefaults(coName){
 }
 
 function deleteReceiptImage(expId){
-  for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===String(expId)){DB.expenses[i].receiptImage='';saveDB();pruneLocalReceipts();render(CTAB);showToast('Receipt removed');return;}}
+  for(var i=0;i<DB.expenses.length;i++){if(String(DB.expenses[i].id)===String(expId)){var old=DB.expenses[i].receiptImage;DB.expenses[i].receiptImage='';supaDeleteReceipt(old);saveDB();pruneLocalReceipts();render(CTAB);showToast('Receipt removed');return;}}
 }
 
 function ocrReceipt(file){
@@ -6227,7 +6270,11 @@ function doDelete(){
   swipeConfirm('Delete this '+(_etyp==='income'?'job':'expense')+'?',function(){
     var table=_etyp==='income'?'income':'expenses';
     if(_etyp==='income'){DB.income=DB.income.filter(function(x){return String(x.id)!==_eid;});}
-    else{DB.expenses=DB.expenses.filter(function(x){return String(x.id)!==_eid;});}
+    else{
+      var _gone=DB.expenses.filter(function(x){return String(x.id)===_eid;})[0];
+      DB.expenses=DB.expenses.filter(function(x){return String(x.id)!==_eid;});
+      if(_gone)supaDeleteReceipt(_gone.receiptImage);
+    }
     clearTimeout(window._syncT);
     try{localStorage.setItem('pt9',JSON.stringify(DB));}catch(e){}
     try{sessionStorage.setItem('pt9',JSON.stringify(DB));}catch(e){}
@@ -6735,7 +6782,11 @@ function doSwipeDelete(type,id){
   var sid=String(id);
   var table=type==='income'?'income':'expenses';
   if(type==='income'){DB.income=DB.income.filter(function(x){return String(x.id)!==sid;});}
-  else{DB.expenses=DB.expenses.filter(function(x){return String(x.id)!==sid;});}
+  else{
+    var gone=DB.expenses.filter(function(x){return String(x.id)===sid;})[0];
+    DB.expenses=DB.expenses.filter(function(x){return String(x.id)!==sid;});
+    if(gone)supaDeleteReceipt(gone.receiptImage);
+  }
   clearTimeout(window._syncT);
   try{localStorage.setItem('pt9',JSON.stringify(DB));}catch(e){}
   try{sessionStorage.setItem('pt9',JSON.stringify(DB));}catch(e){}
