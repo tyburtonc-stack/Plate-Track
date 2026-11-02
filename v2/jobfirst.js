@@ -2,7 +2,8 @@
 // build.js adds this file to a copy of index.html and publishes it at /Plate-Track/v2/.
 // It only changes how the app is laid out: the data (DB, pt9, Supabase rows) is exactly the same
 // as the current app, so both versions can be used side by side on the same records.
-// Flow: Jobs home → New job (scan or type) → the job page → add legs, expenses and travel to that job.
+// Flow: Jobs home → New job (scan or type) → the job page → add legs, pay and expenses to that job, and
+// tap any of its pay or expense entries to edit it.
 // Legs (one job or route can have several cars) live in DB.jobs[key].legs, which syncs via users.job_meta;
 // key is the job ref, or '__'+income id for a job without one. The current app ignores them.
 (function(){
@@ -209,8 +210,17 @@
     // phone's storage (they are never uploaded), so v2 doesn't save them.
     if(ETYP==='income')window._incomeImgData=null;
     var editing=ETYP==='income'&&EID?findIncome(EID):null,oldRef=editing?(editing.jobRef||''):null,editId=EID;
+    var wasMain=!!(oldRef&&String(mainEntry(DB.income.filter(function(x){return x.jobRef===oldRef;})).id)===String(editId));
     _v1DoSave.apply(this,arguments);
-    if(editing){var now=findIncome(editId);if(now&&(now.jobRef||'')!==oldRef)jobRefChanged(oldRef,now.jobRef||'',editId);}
+    if(editing){
+      var now=findIncome(editId);
+      if(now&&(now.jobRef||'')!==oldRef){
+        // A new ref on the job itself takes its other pay, expenses and legs with it; on an extra pay
+        // entry it moves just that entry to the other job.
+        if(wasMain&&now.jobRef)renameJob(oldRef,editId,now.jobRef);
+        else jobRefChanged(oldRef,now.jobRef||'',editId);
+      }
+    }
     if(newJob&&DB.income.length>lenBefore&&DB.income[0].id!==topBefore){
       var it=DB.income[0];
       if(pending){var jm=jobMeta(it.jobRef||('__'+it.id));jm.legs=mergeLegs(jm.legs,pending);saveDB();}
@@ -233,24 +243,23 @@
     closeV2JobPage();
     var ent0=fallbackId?findIncome(fallbackId):null;
     if(ent0&&(!jobRef||jobRef.indexOf('__')===0||!DB.income.some(function(i){return i.jobRef===jobRef;})))jobRef=ent0.jobRef||('__'+ent0.id);
-    var before=document.body.lastElementChild;
-    _v1OpenJobDetail(jobRef,fallbackId);
-    var ov=document.body.lastElementChild;
-    if(!ov||ov===before||!ov.querySelector('.jd-close'))return;
-    ov.classList.add('v2-jobpage');ov.id='v2JobPage';
-    var panel=ov.firstElementChild;
     var isSingleton=!jobRef||jobRef.indexOf('__')===0;
     var entries=isSingleton
       ?DB.income.filter(function(i){return String(i.id)===String(fallbackId)||'__'+i.id===jobRef;})
       :DB.income.filter(function(i){return i.jobRef===jobRef;});
-    var first=entries[0]||{};
+    // The job itself, not the latest pay added to it: Edit job, Copy job and the legs all use it
+    var first=mainEntry(entries)||{};
     var ref=isSingleton?'':jobRef,id=String(first.id||fallbackId||'');
+    var before=document.body.lastElementChild;
+    _v1OpenJobDetail(jobRef,id);
+    var ov=document.body.lastElementChild;
+    if(!ov||ov===before||!ov.querySelector('.jd-close'))return;
+    ov.classList.add('v2-jobpage');ov.id='v2JobPage';
+    var panel=ov.firstElementChild;
     var actions=document.createElement('div');
     actions.className='v2-job-actions';
-    actions.innerHTML='<button class="v2-act v2-act-scan" data-act="scan"><span class="v2-act-ic">&#x1F9FE;</span>Scan receipt</button>'
-      +'<button class="v2-act v2-act-exp" data-act="exp"><span class="v2-act-ic">&#x2212;</span>Add expense</button>'
-      +'<button class="v2-act v2-act-travel" data-act="travel"><span class="v2-act-ic">&#x1F686;</span>Add travel</button>'
-      +'<button class="v2-act v2-act-inc" data-act="inc"><span class="v2-act-ic">&#x2B;</span>Add pay</button>'
+    actions.innerHTML='<button class="v2-act v2-act-inc" data-act="inc"><span class="v2-act-ic">&#x2B;</span>Add pay</button>'
+      +'<button class="v2-act v2-act-exp" data-act="exp"><span class="v2-act-ic">&#x2B;</span>Add expense</button>'
       +(!ref||isTempRef(ref)?'<div class="v2-ref-needed">'
         +'<div class="v2-ref-title">'+(ref?'Using the reg '+htmlEsc(ref)+' as the job ref. Add the company\'s ref when you have it':'No job ref or reg yet. Add the company\'s ref, or the reg')+'</div>'
         +'<div class="v2-ref-row"><input class="std-input v2-ref-input" placeholder="'+(ref?'e.g. J-1234-AB56':'J-1234-AB56 or LC21PDZ')+'" autocomplete="off">'
@@ -268,6 +277,21 @@
     totalsEl.innerHTML=totalsHTML(entries,ref,key);
     if(scroller)scroller.insertBefore(totalsEl,scroller.firstChild);
     totalsEl.addEventListener('click',function(e){if(e.target.closest('[data-nudge]'))openNudgeList(ref);});
+    // Pay and expenses listed one entry per row in place of the totals by type: tap one to edit it
+    var v1Sec=function(label){
+      var kids=scroller?scroller.children:[];
+      for(var i=0;i<kids.length;i++){var h=kids[i].firstElementChild;if(h&&h.textContent===label)return kids[i];}
+      return null;
+    };
+    var incSec=v1Sec('Income'),expSec=v1Sec('Expenses');
+    if(incSec){incSec.classList.add('jd-inc');incSec.innerHTML=payRowsHTML(entries,first);}
+    if(expSec){expSec.classList.add('jd-exp');expSec.innerHTML=expenseRowsHTML(ref);}
+    [incSec,expSec].forEach(function(sec){
+      if(sec)sec.addEventListener('click',function(e){
+        var r=e.target.closest('[data-entry]');
+        if(r)openEntry(r.getAttribute('data-entry'),r.getAttribute('data-eid'),jobRef,id);
+      });
+    });
     legsEl.addEventListener('click',function(e){
       var b=e.target.closest('[data-leg]');if(!b)return;
       var what=b.getAttribute('data-leg'),n=parseInt(b.getAttribute('data-n'),10);
@@ -403,15 +427,60 @@
     if(kind==='travel')pre.category=getCoDefault(co,'travel')?'Travel (Reimbursed)':'Travel (Not Reimbursed)';
     if(kind==='hotel')pre.category=getCoDefault(co,'hotel')?'Hotel (Reimbursed)':'Hotel (Not Reimbursed)';
     window._expensePrefill=pre;
-    if(kind==='scan'){
-      // Same as the expense form's camera button, which reads the receipt with AI
-      openSheet('expense','');
-      if(document.getElementById('overlay').className.indexOf('open')<0){V2.returnTo=null;openJobDetail(ref,id);return;}
-      setTimeout(function(){var f=document.getElementById('f_img');if(f)f.click();},250);
-      return;
-    }
     openSheet('expense','');
     if(document.getElementById('overlay').className.indexOf('open')<0){V2.returnTo=null;openJobDetail(ref,id);}
+  }
+  // Opens one of the job's pay or expense entries in its form; saving, cancelling or deleting comes back.
+  function openEntry(type,eid,ref,id){
+    closeV2JobPage();
+    V2.returnTo={ref:ref,id:id};
+    openSheet(type,eid);
+    if(document.getElementById('overlay').className.indexOf('open')<0){V2.returnTo=null;openJobDetail(ref,id);}
+  }
+
+  // ── A job's entries ──
+  // In the order they were added: ids are the time an entry was made, and the DB lists are newest first.
+  function inAddedOrder(list){
+    return list.slice().reverse().sort(function(a,b){var x=Number(a.id),y=Number(b.id);return isFinite(x)&&isFinite(y)?x-y:0;});
+  }
+  // The job's own entry is the first one logged for it; pay added later (waiting time, inspection…) follows.
+  function mainEntry(list){return inAddedOrder(list||[])[0]||null;}
+  function minus(a){return a>0?'&minus;'+money(a):money(-a);}
+  var INC_ICONS={'Delivery':'&#x1F4E6;','Waiting Time':'&#x23F1;&#xFE0F;','Charging Time':'&#x26A1;','Bonus':'&#x1F4B0;','Add Pay':'&#x1F4B7;','Inspection':'&#x1F50D;'};
+  function entryRow(type,eid,icon,title,sub,amt,amtCls){
+    return '<button class="v2-entry" data-entry="'+type+'" data-eid="'+htmlEsc(String(eid))+'">'
+      +'<span class="v2-entry-ic">'+icon+'</span>'
+      +'<span class="v2-entry-txt"><span class="v2-entry-t">'+htmlEsc(title)+'</span>'+(sub?'<span class="v2-entry-s">'+sub+'</span>':'')+'</span>'
+      +'<span class="v2-entry-amt'+(amtCls?' '+amtCls:'')+'">'+amt+'</span><span class="v2-entry-go" aria-hidden="true">&rsaquo;</span></button>';
+  }
+  function payRowsHTML(entries,main){
+    var rows=inAddedOrder(entries).filter(function(x){return x!==main;});
+    if(main&&main.id!=null)rows.unshift(main);
+    var total=0,h='<div class="v2-sec-hdr">Pay</div>';
+    rows.forEach(function(x){
+      var a=parseFloat(x.amount||0);total+=a;
+      var sub=[x===main&&rows.length>1?'The job':'',fdateShort(x.date),x!==main?x.description:''].filter(Boolean).map(htmlEsc).join(' &middot; ');
+      h+=entryRow('income',x.id,INC_ICONS[x.incomeType||'Delivery']||'&#x1F4B0;',x.incomeType||'Delivery',sub,money(a));
+    });
+    return h+'<div class="v2-entry-total"><span>Total pay</span><span>'+money(total)+'</span></div>';
+  }
+  function expenseRowsHTML(ref){
+    var list=inAddedOrder(jobExpenses(ref)).sort(function(a,b){var x=a.date||'',y=b.date||'';return x<y?-1:x>y?1:0;});
+    var h='<div class="v2-sec-hdr">Expenses</div>';
+    if(!list.length)return h+'<div class="v2-entry-none">No expenses on this job yet.</div>';
+    var deduct=0,back=0;
+    list.forEach(function(e){
+      var a=parseFloat(e.amount||0),cat=e.category||'Other',reimb=isReimbursedCat(cat),tt=null;
+      if(reimb)back+=a;else deduct+=a;
+      var mode=isTravelCat(cat)?travelTypeKey(e.description||''):'';
+      TRAVEL_TYPES.forEach(function(t){if(t.key===mode)tt=t;});
+      var title=tt?tt.label:cat.replace(/ \((Not )?Reimbursed\)$/,'');
+      var sub=[fdateShort(e.date),reimb?'Reimbursed':'',e.description&&e.description!==title?e.description:'',e.receiptImage?'🧾 Receipt':''].filter(Boolean).map(htmlEsc).join(' &middot; ');
+      h+=entryRow('expense',e.id,tt?tt.icon:(CAT_ICONS[cat]||'&#x1F4CB;'),title,sub,minus(a),reimb?'v2-reimb':'v2-neg');
+    });
+    // Matches Net: reimbursed expenses are paid back, so they aren't taken off the pay
+    return h+'<div class="v2-entry-total v2-neg"><span>Total expenses</span><span>'+minus(deduct)+'</span></div>'
+      +(back?'<div class="v2-entry-note">Plus '+money(back)+' reimbursed, so not taken off your pay</div>':'');
   }
 
   // ── Job page totals ──
@@ -421,12 +490,13 @@
     var reimb=0,deduct=0;
     jobExpenses(ref).forEach(function(e){var a=parseFloat(e.amount||0);if(isReimbursedCat(e.category))reimb+=a;else deduct+=a;});
     var legs=(DB.jobs[key]&&DB.jobs[key].legs)||[];
-    var miles=legsMiles(legs)||(entries[0]&&entries[0].miles)||'';
+    var main=mainEntry(entries);
+    var miles=legsMiles(legs)||(main&&main.miles)||'';
     var noRc=nudgeList(ref).length;
     var tile=function(label,val,cls,sub){return '<div class="v2-tile'+(cls?' '+cls:'')+'"><div class="v2-tile-l">'+label+'</div><div class="v2-tile-v">'+val+'</div>'+(sub?'<div class="v2-tile-s">'+sub+'</div>':'')+'</div>';};
     return '<div class="v2-tiles">'
       +tile('Pay',money(gross))
-      +tile('Expenses',money(deduct),deduct?'v2-tile-orange':'',reimb?money(reimb)+' reimbursed':'')
+      +tile('Expenses',minus(deduct),deduct?'v2-tile-orange':'',reimb?money(reimb)+' reimbursed':'')
       +tile('Net',money(gross-deduct),'v2-tile-green')
       +tile('Miles',miles?htmlEsc(String(miles)):'&mdash;','',miles&&gross?money(gross/parseFloat(miles))+'/mi':'')
       +'</div>'
@@ -689,8 +759,9 @@
     var map={},list=[];
     DB.income.forEach(function(x){
       var k=jobKey(x);
-      if(!map[k]){map[k]={key:k,ref:x.jobRef||'',id:String(x.id),company:x.company,date:x.date,gross:0,exp:0,deduct:0,reimb:0,expCount:0,sp:'',ep:'',reg:''};list.push(map[k]);}
+      if(!map[k]){map[k]={key:k,ref:x.jobRef||'',id:String(x.id),company:x.company,date:x.date,gross:0,exp:0,deduct:0,reimb:0,expCount:0,sp:'',ep:'',reg:'',rows:[]};list.push(map[k]);}
       var j=map[k];
+      j.rows.push(x);
       j.txt=(j.txt||'')+' '+[x.registration,x.startPostcode,x.endPostcode,x.description].filter(Boolean).join(' ');
       j.gross+=parseFloat(x.amount||0);
       if(x.date>j.date)j.date=x.date;
@@ -704,6 +775,8 @@
       j.exp+=a;j.expCount++;
       if(isReimbursedCat(e.category))j.reimb+=a;else j.deduct+=a;
     });
+    // The card opens the job's own entry, not the latest pay added to it
+    list.forEach(function(j){var m=mainEntry(j.rows);j.id=String(m.id);j.company=m.company;delete j.rows;});
     list.forEach(function(j){var jm=DB.jobs&&DB.jobs[j.key];j.status=jm&&jm.status||'';j.find=jobSearchText(j,jm);var lg=jm&&jm.legs||[];j.abortedLegs=lg.filter(function(l){return l.status==='aborted';}).length;j.legs=lg.length-j.abortedLegs;});
     list.sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:(Number(b.id)-Number(a.id));});
     return list;

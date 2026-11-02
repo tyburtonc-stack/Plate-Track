@@ -43,19 +43,20 @@ test('v2 new job: + opens the chooser, saving a job opens its job page', async (
   await page.evaluate(() => doSave());
   await page.waitForSelector('#v2JobPage');
   assert.match(await page.textContent('#v2JobPage'), /J-2222-BBBB/);
-  assert.equal(await page.locator('#v2JobPage .v2-act').count(), 4);
+  assert.deepEqual(await page.locator('#v2JobPage .v2-act').allTextContents(), ['+Add pay', '+Add expense'], 'no Scan receipt or Add travel button');
   assert.equal(await page.locator('#pg1 .v2-job-card').count(), 1);
   assert.deepEqual(errors, []);
   await close();
 });
 
-test('v2 job page: Add travel is linked to the job and comes back to the job page', async () => {
+test('v2 job page: Add expense is linked to the job and comes back to the job page', async () => {
   const { page, errors, close } = await openJobs({ income: [income(1, { jobRef: 'J-3333-CCCC' })], expenses: [] });
   await page.click('#pg1 .v2-job-card');
-  await page.click('#v2JobPage [data-act="travel"]');
+  await page.click('#v2JobPage [data-act="exp"]');
   assert.equal(await page.locator('#v2JobPage').count(), 0);
-  assert.equal(await page.inputValue('#f_cat'), 'Travel (Reimbursed)');
   assert.equal(await page.inputValue('#f4c'), 'J-3333-CCCC');
+  await page.click('#overlay .cat-chip[data-base="Travel"]');
+  assert.equal(await page.inputValue('#f_cat'), 'Travel (Reimbursed)');
   await page.fill('#f3', '12.50');
   await page.evaluate(() => doSave());
   await page.waitForSelector('#v2JobPage');
@@ -76,9 +77,10 @@ test('v2 job page: Add travel is linked to the job and comes back to the job pag
 test('v2 job without a ref uses its reg as the ref; the company ref replaces it and moves everything', async () => {
   const { page, errors, close } = await openJobs({ income: [income(7, { registration: 'lc21 pdz' })], expenses: [] });
   await page.click('#pg1 .v2-job-card');
-  assert.equal(await page.locator('#v2JobPage .v2-act').count(), 4, 'expense buttons work without a ref');
-  await page.click('#v2JobPage [data-act="travel"]');
+  assert.equal(await page.locator('#v2JobPage .v2-act').count(), 2, 'expense button works without a ref');
+  await page.click('#v2JobPage [data-act="exp"]');
   assert.equal(await page.inputValue('#f4c'), 'LC21PDZ');
+  await page.click('#overlay .cat-chip[data-base="Travel"]');
   await page.fill('#f3', '9.80');
   await page.evaluate(() => doSave());
   await page.waitForSelector('#v2JobPage');
@@ -295,10 +297,122 @@ test('v2 job page shows pay, expenses, net and miles at the top', async () => {
   await page.click('#pg1 .v2-job-card');
   const tiles = await page.locator('#v2JobPage .v2-tile').allTextContents();
   assert.match(tiles[0], /Pay£200\.00/);
-  assert.match(tiles[1], /Expenses£30\.00£18\.40 reimbursed/);
+  assert.match(tiles[1], /Expenses−£30\.00£18\.40 reimbursed/);
   assert.match(tiles[2], /Net£170\.00/);
   assert.match(tiles[3], /Miles100£2\.00\/mi/);
   assert.match(await page.textContent('#v2JobPage .v2-nudge-sm'), /1 expense on this job has no receipt photo/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 job page: after adding pay, Edit Job still opens the job itself, and each pay entry opens its own form', async () => {
+  const { page, errors, close } = await openJobs({ income: [income(1, { jobRef: 'J-1100-EDIT', registration: 'LC21PDZ', startPostcode: 'LU1 2AB' })], expenses: [] });
+  await page.click('#pg1 .v2-job-card');
+  await page.click('#v2JobPage [data-act="inc"]');
+  await page.click('#overlay .cat-chip:text-is("Waiting Time")');
+  await page.fill('#f3', '20');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.equal(await page.evaluate(() => DB.income[0].incomeType), 'Waiting Time', 'newest entry is first in the list');
+
+  // Opened again from the Jobs list: Edit Job is the delivery, not the waiting time added after it
+  await page.click('#v2JobPage .jd-close');
+  assert.equal(await page.getAttribute('#pg1 .v2-job-card', 'data-id'), '1');
+  await page.click('#pg1 .v2-job-card');
+  await page.click('#v2JobPage .jd-edit');
+  assert.equal(await page.inputValue('#f_type'), 'Delivery');
+  assert.equal(await page.inputValue('#f3'), '80');
+  assert.equal(await page.inputValue('#f_reg'), 'LC21PDZ');
+  await page.evaluate(() => closeSheet());
+  await page.waitForSelector('#v2JobPage');
+
+  // One row per pay entry, the job first
+  const rows = page.locator('#v2JobPage .jd-inc .v2-entry');
+  assert.equal(await rows.count(), 2);
+  assert.match(await rows.nth(0).textContent(), /Delivery.*The job.*£80\.00/);
+  assert.match(await rows.nth(1).textContent(), /Waiting Time.*£20\.00/);
+  assert.match(await page.textContent('#v2JobPage .jd-inc .v2-entry-total'), /Total pay£100\.00/);
+  await rows.nth(1).click();
+  assert.equal(await page.locator('#v2JobPage').count(), 0);
+  assert.equal(await page.inputValue('#f_type'), 'Waiting Time');
+  await page.fill('#f3', '25');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.match(await page.textContent('#v2JobPage .jd-inc .v2-entry-total'), /£105\.00/);
+  assert.deepEqual(await page.evaluate(() => DB.income.map(x => x.incomeType + ' ' + x.amount)), ['Waiting Time 25', 'Delivery 80']);
+
+  // Copy job copies the job itself too
+  await page.click('#v2JobPage .v2-copy-job');
+  await page.waitForSelector('#overlay.open');
+  assert.equal(await page.inputValue('#f_type'), 'Delivery');
+  assert.equal(await page.inputValue('#f3'), '80');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 job page: each expense opens its own form and comes back after saving or deleting', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'J-1200-EXPS' })],
+    expenses: [
+      exp(12, { jobRef: 'J-1200-EXPS', category: 'Travel (Reimbursed)', description: 'Train', amount: '12.50', date: '2026-10-21' }),
+      exp(11, { jobRef: 'J-1200-EXPS', amount: '15', receiptImage: 'supabase:u/11.jpg' }),
+    ],
+  });
+  await page.click('#pg1 .v2-job-card');
+  const rows = page.locator('#v2JobPage .jd-exp .v2-entry');
+  assert.equal(await rows.count(), 2);
+  assert.match(await rows.nth(0).textContent(), /Fuel.*Receipt.*−£15\.00/);
+  assert.match(await rows.nth(1).textContent(), /Train.*Reimbursed.*−£12\.50/);
+  assert.match(await page.textContent('#v2JobPage .jd-exp .v2-entry-total'), /Total expenses−£15\.00/, 'same as Net: reimbursed is not taken off');
+  assert.match(await page.textContent('#v2JobPage .jd-exp .v2-entry-note'), /Plus £12\.50 reimbursed/);
+
+  await rows.nth(0).click();
+  assert.equal(await page.inputValue('#f_cat'), 'Fuel (Not Reimbursed)');
+  assert.equal(await page.inputValue('#f3'), '15');
+  await page.fill('#f3', '18');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.equal(await page.evaluate(() => DB.expenses.find(e => String(e.id) === '11').amount), '18');
+  assert.match(await rows.nth(0).textContent(), /−£18\.00/);
+
+  // Deleting from the form also comes back to the job page
+  await rows.nth(1).click();
+  await page.evaluate(() => doDelete());
+  await page.click('#sc-yes');
+  await page.waitForSelector('#v2JobPage');
+  assert.equal(await rows.count(), 1);
+  assert.deepEqual(await page.evaluate(() => DB.expenses.map(e => String(e.id))), ['11']);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 a new ref on the job itself moves its other pay, expenses and legs; on extra pay it moves only that entry', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(2, { jobRef: 'J-1300-OLDR', incomeType: 'Waiting Time', amount: '20' }), income(1, { jobRef: 'J-1300-OLDR' })],
+    expenses: [exp('e1', { jobRef: 'J-1300-OLDR' })],
+    jobs: { 'J-1300-OLDR': { status: 'active', legs: [{ reg: 'AA11AAA', fromPc: 'CV6 5SL', toPc: 'ST18 0RB' }] } },
+  });
+  await page.click('#pg1 .v2-job-card');
+  await page.click('#v2JobPage .jd-edit');
+  assert.equal(await page.inputValue('#f_type'), 'Delivery');
+  await page.fill('#f4', 'J-1300-NEWR');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  const moved = await page.evaluate(() => ({ inc: DB.income.map(x => x.jobRef), exp: DB.expenses[0].jobRef, legs: DB.jobs['J-1300-NEWR'].legs.length, status: DB.jobs['J-1300-NEWR'].status, old: DB.jobs['J-1300-OLDR'] }));
+  assert.deepEqual(moved, { inc: ['J-1300-NEWR', 'J-1300-NEWR'], exp: 'J-1300-NEWR', legs: 1, status: 'active', old: undefined });
+  assert.match(await page.textContent('#v2JobPage'), /J-1300-NEWR/);
+  assert.equal(await page.locator('#v2JobPage .jd-inc .v2-entry').count(), 2);
+  assert.equal(await page.locator('#v2JobPage .jd-exp .v2-entry').count(), 1);
+
+  // An extra pay entry given another ref goes to that job on its own
+  await page.click('#v2JobPage .jd-inc .v2-entry >> nth=1');
+  await page.fill('#f4', 'J-1400-OTHR');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  const split = await page.evaluate(() => ({ inc: DB.income.map(x => x.id + ':' + x.jobRef), exp: DB.expenses[0].jobRef }));
+  assert.deepEqual(split, { inc: ['2:J-1400-OTHR', '1:J-1300-NEWR'], exp: 'J-1300-NEWR' });
+  assert.match(await page.textContent('#v2JobPage'), /J-1300-NEWR/);
+  assert.equal(await page.locator('#v2JobPage .jd-inc .v2-entry').count(), 1);
   assert.deepEqual(errors, []);
   await close();
 });
