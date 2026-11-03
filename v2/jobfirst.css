@@ -139,3 +139,14 @@
 .v2-entry-total.v2-neg span:last-child{color:var(--orange)}
 .v2-entry-none{font-size:13px;color:var(--text4);padding:8px 0}
 .v2-entry-note{font-size:12px;color:var(--text4);padding-top:4px;text-align:right}
+
+/* Carryover: collected one day, delivered on a later day */
+.v2-carry{margin:-6px 0 16px}
+.v2-carry-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;color:var(--text)}
+.v2-carry-toggle input{width:20px;height:20px;flex-shrink:0;accent-color:var(--gold);margin:0}
+.v2-carry-toggle b{display:block;font-size:14px}
+.v2-carry-toggle small{display:block;font-size:12px;color:var(--text4)}
+.v2-carry-del{margin:12px 0 0}
+.v2-carry-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--text3);margin-top:6px}
+.v2-carry-page{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:10px 14px;margin:0 0 10px;font-size:13px}
+.v2-carry-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:100px;background:var(--orange-bg);color:var(--orange);white-space:nowrap}

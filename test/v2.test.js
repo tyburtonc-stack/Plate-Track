@@ -542,3 +542,114 @@ test('the current app at /Plate-Track/ is unchanged by v2', async () => {
   assert.deepEqual(errors, []);
   await close();
 });
+
+test('v2 carryover: a same-day job saves no delivery date and looks as before', async () => {
+  const { page, errors, close } = await openJobs({ income: [], expenses: [] });
+  await page.click('#fabBtn');
+  await page.click('#v2Chooser [data-act="manual"]');
+  assert.equal(await page.isChecked('#f_carry'), false);
+  assert.equal(await page.isVisible('#f_del'), false);
+  await page.fill('#f1', '2026-10-30');
+  await page.fill('#f3', '60');
+  await page.fill('#f4', 'J-SAME-0001');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.equal(await page.evaluate(() => (DB.jobs['J-SAME-0001'] || {}).delivered), undefined);
+  assert.equal(await page.locator('.v2-carry-line').count(), 0);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 carryover: collected Fri 30 Oct, delivered Mon 2 Nov; pay stays on 30 Oct', async () => {
+  const { page, errors, close } = await openJobs({ income: [], expenses: [] });
+  await page.click('#fabBtn');
+  await page.click('#v2Chooser [data-act="manual"]');
+  await page.fill('#f1', '2026-10-30');
+  await page.check('#f_carry');
+  assert.equal(await page.textContent('#f1 >> xpath=../label'), 'Collected');
+  assert.equal(await page.inputValue('#f_del'), '2026-10-31', 'defaults to the next day');
+  await page.fill('#f_del', '2026-11-02');
+  await page.fill('#f3', '120');
+  await page.fill('#f4', 'J-340A-93AB');
+  await page.fill('#f_reg', 'PL21OHN');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.deepEqual(await page.evaluate(() => [DB.income.length, DB.income[0].date, DB.jobs['J-340A-93AB'].delivered]), [1, '2026-10-30', '2026-11-02']);
+  assert.match(await page.textContent('#v2JobPage .v2-carry-line'), /Carryover\s*Collected Fri 30 Oct → Delivered Mon 2 Nov/);
+  assert.match(await page.textContent('#pg1 .v2-job-card'), /Collected Fri 30 Oct → Delivered Mon 2 Nov/);
+
+  await page.click('#v2JobPage [data-act="exp"]');
+  assert.equal(await page.inputValue('#f1'), '2026-10-30', 'expense date works as before');
+  assert.equal(await page.locator('#f_carry').count(), 0, 'no switch on the expense form');
+  await page.evaluate(() => closeSheet());
+  await page.waitForSelector('#v2JobPage');
+
+  await page.click('#v2JobPage [data-act="inc"]');
+  assert.equal(await page.locator('#f_carry').count(), 0, 'extra pay shares the job\'s dates');
+  await page.evaluate(() => closeSheet());
+  await page.waitForSelector('#v2JobPage');
+
+  // CSV export: one Delivered column; pay is still only on the collection date
+  const csv = await page.evaluate(() => {
+    var out = null; window.isPro = () => true;
+    var B = window.Blob; window.Blob = function (parts) { out = parts.join(''); return new B(parts); };
+    generateCSV(); window.Blob = B; return out;
+  });
+  assert.match(csv, /"?Date"?,"?Delivered"?,"?Amount/);
+  assert.match(csv, /2026-10-30,2026-11-02,120\.00/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 carryover: editing loads the switch, delivered before collected is blocked, switching off clears it', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'J-EDIT-0001', date: '2026-10-30' })], expenses: [],
+    jobs: { 'J-EDIT-0001': { delivered: '2026-11-02' } },
+  });
+  await page.click('#pg1 .v2-job-card');
+  await page.click('#v2JobPage .jd-edit');
+  assert.equal(await page.isChecked('#f_carry'), true);
+  assert.equal(await page.inputValue('#f1'), '2026-10-30');
+  assert.equal(await page.inputValue('#f_del'), '2026-11-02');
+
+  await page.fill('#f_del', '2026-10-29');
+  await page.evaluate(() => doSave());
+  assert.equal(await page.isVisible('#f_del'), true, 'form stays open');
+  assert.equal(await page.evaluate(() => DB.jobs['J-EDIT-0001'].delivered), '2026-11-02');
+
+  await page.uncheck('#f_carry');
+  assert.equal(await page.textContent('#f1 >> xpath=../label'), 'Date');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.equal(await page.evaluate(() => DB.jobs['J-EDIT-0001'].delivered), undefined);
+  assert.equal(await page.locator('.v2-carry-line').count(), 0);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('v2 carryover follows the legs: legs ending on a later day show it, and the switch moves the last leg', async () => {
+  const { page, errors, close } = await openJobs({
+    income: [income(1, { jobRef: 'J-LEGS-0002', date: '2026-10-30' })], expenses: [],
+    jobs: { 'J-LEGS-0002': { legs: [
+      { reg: 'AB12CDE', fromPc: 'LU1 2AB', fromDate: '2026-10-30', toPc: 'M1 1AA', toDate: '2026-10-30' },
+      { reg: 'XY34ZZZ', fromPc: 'M1 1AA', fromDate: '2026-10-31', toPc: 'B1 1AA', toDate: '2026-11-01' },
+    ] } },
+  });
+  assert.match(await page.textContent('#pg1 .v2-job-card'), /Delivered Sun 1 Nov/);
+  await page.click('#pg1 .v2-job-card');
+  await page.click('#v2JobPage .jd-edit');
+  assert.equal(await page.inputValue('#f_del'), '2026-11-01', 'switch filled from the legs');
+  await page.fill('#f_del', '2026-11-02');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.deepEqual(await page.evaluate(() => DB.jobs['J-LEGS-0002'].legs.map(l => l.toDate)), ['2026-10-30', '2026-11-02']);
+
+  await page.click('#v2JobPage .jd-edit');
+  await page.uncheck('#f_carry');
+  await page.evaluate(() => doSave());
+  await page.waitForSelector('#v2JobPage');
+  assert.deepEqual(await page.evaluate(() => DB.jobs['J-LEGS-0002'].legs.map(l => l.toDate)), ['2026-10-30', '2026-10-30'], 'no leg ends after the job any more');
+  assert.equal(await page.locator('.v2-carry-line').count(), 0);
+  assert.deepEqual(errors, []);
+  await close();
+});

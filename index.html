@@ -2908,9 +2908,9 @@ function generateCSV(){
   var fi=getIncome(),fe=getExp();
   var dr=(FDFROM||FDTO)?((FDFROM||'Start')+' to '+(FDTO||'Today')):(FYR==='All'?'All Time':FYR);
   // Income sheet
-  var iHdr=['Date','Amount (£)','Company','Income Type','Job Ref','Registration','Start Time','End Time','Miles','Start Postcode','End Postcode','Notes'];
+  var iHdr=['Date','Delivered','Amount (£)','Company','Income Type','Job Ref','Registration','Start Time','End Time','Miles','Start Postcode','End Postcode','Notes'];
   var iRows=fi.slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;}).map(function(r){
-    return [r.date,parseFloat(r.amount||0).toFixed(2),r.company||'',r.incomeType||'Delivery',r.jobRef||'',r.registration||'',r.startTime||'',r.endTime||'',r.miles||'',r.startPostcode||'',r.endPostcode||'',r.description||''].map(csvEsc).join(',');
+    return [r.date,jobDelivered(r.jobRef||('__'+r.id),r.date),parseFloat(r.amount||0).toFixed(2),r.company||'',r.incomeType||'Delivery',r.jobRef||'',r.registration||'',r.startTime||'',r.endTime||'',r.miles||'',r.startPostcode||'',r.endPostcode||'',r.description||''].map(csvEsc).join(',');
   });
   var incomeCSV=[iHdr.map(csvEsc).join(',')].concat(iRows).join('\n');
   // Expenses sheet
@@ -5134,6 +5134,19 @@ function jobMeta(ref){
   if(!DB.jobs[ref])DB.jobs[ref]={status:'',note:'',abortCode:'',abortReason:'',completedAt:'',paidJob:false,paidTravel:false};
   return DB.jobs[ref];
 }
+// Carryover: a job collected one day and delivered on a later day. income.date is the collection day,
+// and the job's pay stays on it. The delivery day is kept with the job (DB.jobs[key].delivered, synced
+// via users.job_meta); when the job's legs have dates, the latest leg delivery date is used, so the two
+// always agree. key is the job ref, or '__'+income id for a job without one. Returns '' for a same-day job.
+function jobDelivered(key,collected){
+  var jm=key&&DB.jobs?DB.jobs[key]:null;if(!jm||!collected)return '';
+  var d='';
+  (jm.legs||[]).forEach(function(l){if(l.status!=='aborted'&&l.toDate&&l.toDate>d)d=l.toDate;});
+  if(!d)d=jm.delivered||'';
+  return d>collected?d:'';
+}
+// 'Fri 30 Oct' from 'YYYY-MM-DD'
+function fdateDay(s){if(!s)return '';var p=s.split('-'),d=new Date(+p[0],+p[1]-1,+p[2]);return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]+' '+d.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];}
 function jobStatusChip(ref){
   var jm=ref?DB.jobs[ref]:null;
   if(!jm||!jm.status)return '';

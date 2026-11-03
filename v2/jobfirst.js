@@ -194,6 +194,8 @@
         filled+=setIf('f_ep',legs[legs.length-1].toPc);
         filled+=setIf('f5',legsMiles(legs));
         var times=legs[0].fromTime;if(times)filled+=setIf('f_start',times);
+        var lastTo='';legs.forEach(function(l){if(l.toDate&&l.toDate>lastTo)lastTo=l.toDate;});
+        filled+=setCarryForm(legs[0].fromDate,lastTo);
       }
       filled+=setIf('f4',pick('job_ref'));
       if(co){document.querySelectorAll('.co-chips .co-chip').forEach(function(b){if(b.textContent.trim()===co){b.click();filled++;}});}
@@ -204,6 +206,7 @@
   // ── After saving: a new job opens its job page; anything added from a job page goes back to it ──
   var _v1DoSave=doSave;
   doSave=function(){
+    var carry=readCarry();if(carry===false)return;
     var newJob=ETYP==='income'&&!EID&&!V2.returnTo,pending=V2.pendingLegs;
     var topBefore=DB.income.length?DB.income[0].id:null,lenBefore=DB.income.length;
     // Job screenshots are only needed to read the details. Kept in the job record they filled up the
@@ -212,6 +215,7 @@
     var editing=ETYP==='income'&&EID?findIncome(EID):null,oldRef=editing?(editing.jobRef||''):null,editId=EID;
     var wasMain=!!(oldRef&&String(mainEntry(DB.income.filter(function(x){return x.jobRef===oldRef;})).id)===String(editId));
     _v1DoSave.apply(this,arguments);
+    var saved=document.getElementById('overlay').className.indexOf('open')<0;
     if(editing){
       var now=findIncome(editId);
       if(now&&(now.jobRef||'')!==oldRef){
@@ -220,10 +224,12 @@
         if(wasMain&&now.jobRef)renameJob(oldRef,editId,now.jobRef);
         else jobRefChanged(oldRef,now.jobRef||'',editId);
       }
+      if(now&&saved&&carry)writeCarry(now.jobRef||('__'+now.id),now.date,carry);
     }
     if(newJob&&DB.income.length>lenBefore&&DB.income[0].id!==topBefore){
       var it=DB.income[0];
       if(pending){var jm=jobMeta(it.jobRef||('__'+it.id));jm.legs=mergeLegs(jm.legs,pending);saveDB();}
+      if(carry)writeCarry(it.jobRef||('__'+it.id),it.date,carry);
       if(!it.jobRef)useRegRef(it,'');
       setTimeout(function(){openJobDetail(it.jobRef||('__'+it.id),String(it.id));},60);
     }
@@ -236,6 +242,67 @@
     if(back)setTimeout(function(){openJobDetail(back.ref,back.id);},60); // openJobDetail follows a ref changed in the form
 
   };
+
+  // ── Carryover: collected one day, delivered on a later day (see jobDelivered in index.html) ──
+  // The switch is on the job's own entry only (new job, Edit job); extra pay added to a job shares its dates.
+  var _v1OpenSheet=openSheet;
+  openSheet=function(type){
+    var r=_v1OpenSheet.apply(this,arguments);
+    if(type==='income')carryField();
+    return r;
+  };
+  function nextDay(d){var p=String(d||today()).split('-'),x=new Date(+p[0],+p[1]-1,+p[2]+1);return x.getFullYear()+'-'+('0'+(x.getMonth()+1)).slice(-2)+'-'+('0'+x.getDate()).slice(-2);}
+  function carryField(){
+    var f1=document.getElementById('f1');
+    if(ETYP!=='income'||!f1||document.getElementById('v2-carry'))return;
+    var rec=EID?findIncome(EID):null,del='';
+    if(rec){
+      var list=rec.jobRef?DB.income.filter(function(x){return x.jobRef===rec.jobRef;}):[rec];
+      if(String(mainEntry(list).id)!==String(rec.id))return;
+      del=jobDelivered(rec.jobRef||('__'+rec.id),rec.date);
+    } else if(V2.returnTo)return;
+    var fld=f1.closest('.field');if(!fld)return;
+    var lab=fld.querySelector('.field-label');
+    var w=document.createElement('div');
+    w.id='v2-carry';w.className='v2-carry';w.setAttribute('data-loaded',del);
+    w.innerHTML='<label class="v2-carry-toggle"><input type="checkbox" id="f_carry"'+(del?' checked':'')+'>'
+      +'<span><b>Carryover</b><small>Collected one day, delivered on a later day</small></span></label>'
+      +'<div class="field v2-carry-del" style="display:none"><label class="field-label">Delivered</label><input type="date" id="f_del" class="std-input" value="'+htmlEsc(del)+'"></div>';
+    fld.insertAdjacentElement('afterend',w);
+    var cb=document.getElementById('f_carry'),di=document.getElementById('f_del'),dw=w.querySelector('.v2-carry-del');
+    var show=function(){if(lab)lab.textContent=cb.checked?'Collected':'Date';dw.style.display=cb.checked?'':'none';};
+    cb.onchange=function(){if(cb.checked){if(!di.value)di.value=nextDay(f1.value);}else di.value='';show();};
+    show();
+  }
+  // Turns the switch on with this delivery date (a scanned job whose legs end on a later day).
+  function setCarryForm(collected,del){
+    var cb=document.getElementById('f_carry'),di=document.getElementById('f_del');
+    if(!cb||!di||!del||!collected||del<=collected)return 0;
+    cb.checked=true;di.value=del;cb.onchange();return 1;
+  }
+  // The switch's values when the job's form is saved: null = not this form or nothing changed,
+  // false = stop (delivery date missing or before the collection date), else {del: '' or 'YYYY-MM-DD'}.
+  function readCarry(){
+    var w=document.getElementById('v2-carry'),cb=document.getElementById('f_carry');
+    if(ETYP!=='income'||!w||!cb)return null;
+    var col=document.getElementById('f1').value,del=cb.checked?document.getElementById('f_del').value:'';
+    if(cb.checked&&!del){alert('Please enter the delivery date, or turn off Carryover.');return false;}
+    if(del&&col&&del<col){alert('The delivery date can\'t be before the collection date.');return false;}
+    if(del&&del===col)del='';
+    return del===(w.getAttribute('data-loaded')||'')?null:{del:del};
+  }
+  function writeCarry(key,collected,carry){
+    var jm=jobMeta(key),del=carry.del;
+    if(del)jm.delivered=del;else delete jm.delivered;
+    // The legs say the same: none ends after the delivery day, and the latest one ends on it.
+    var act=(jm.legs||[]).filter(function(l){return l.status!=='aborted';}),end=del||collected,top=null;
+    act.forEach(function(l){if(l.toDate&&l.toDate>end)l.toDate=end;if(!top||(l.toDate||'')>=(top.toDate||''))top=l;});
+    if(del&&top)top.toDate=del;
+    saveDB();render(CTAB);
+  }
+  function carryLine(collected,del){
+    return '<span class="v2-carry-badge">Carryover</span><span>Collected '+fdateDay(collected)+' &rarr; Delivered '+fdateDay(del)+'</span>';
+  }
 
   // ── Job page: full screen, with the add buttons at the top ──
   var _v1OpenJobDetail=openJobDetail;
@@ -276,6 +343,13 @@
     totalsEl.className='v2-totals';
     totalsEl.innerHTML=totalsHTML(entries,ref,key);
     if(scroller)scroller.insertBefore(totalsEl,scroller.firstChild);
+    var del=jobDelivered(key,first.date);
+    if(del&&scroller){
+      var carryEl=document.createElement('div');
+      carryEl.className='v2-carry-line v2-carry-page';
+      carryEl.innerHTML=carryLine(first.date,del);
+      scroller.insertBefore(carryEl,scroller.firstChild);
+    }
     totalsEl.addEventListener('click',function(e){if(e.target.closest('[data-nudge]'))openNudgeList(ref);});
     // Pay and expenses listed one entry per row in place of the totals by type: tap one to edit it
     var v1Sec=function(label){
@@ -776,7 +850,7 @@
       if(isReimbursedCat(e.category))j.reimb+=a;else j.deduct+=a;
     });
     // The card opens the job's own entry, not the latest pay added to it
-    list.forEach(function(j){var m=mainEntry(j.rows);j.id=String(m.id);j.company=m.company;delete j.rows;});
+    list.forEach(function(j){var m=mainEntry(j.rows);j.id=String(m.id);j.company=m.company;j.collected=m.date;j.delivered=jobDelivered(j.key,m.date);delete j.rows;});
     list.forEach(function(j){var jm=DB.jobs&&DB.jobs[j.key];j.status=jm&&jm.status||'';j.find=jobSearchText(j,jm);var lg=jm&&jm.legs||[];j.abortedLegs=lg.filter(function(l){return l.status==='aborted';}).length;j.legs=lg.length-j.abortedLegs;});
     list.sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:(Number(b.id)-Number(a.id));});
     return list;
@@ -788,6 +862,7 @@
       +'<button class="v2-job-card" data-ref="'+htmlEsc(j.key)+'" data-id="'+htmlEsc(j.id)+'">'
       +'<div class="v2-job-top">'+cobadge(j.company)+(j.ref?'<span class="v2-job-ref">'+htmlEsc(j.ref)+'</span>':'<span class="v2-job-ref v2-muted">No job ref</span>')+jobStatusChip(j.ref)+'</div>'
       +'<div class="v2-job-mid"><span>'+fdateShort(j.date)+'</span>'+(route?'<span>'+route+'</span>':'')+(j.legs>1||j.abortedLegs?'<span>'+j.legs+' leg'+(j.legs===1?'':'s')+'</span>':(j.reg&&j.reg.replace(/\s/g,'')!==j.ref?'<span>'+htmlEsc(j.reg)+'</span>':''))+(j.abortedLegs?'<span class="v2-job-ab">'+j.abortedLegs+' aborted</span>':'')+'</div>'
+      +(j.delivered?'<div class="v2-carry-line">'+carryLine(j.collected,j.delivered)+'</div>':'')
       +'<div class="v2-job-bot"><span class="v2-job-gross">'+money(j.gross)+'</span>'
       +'<span class="v2-job-exp">'+(j.expCount?'':'No expenses')+'</span>'
       +'<span class="v2-job-net">Net '+money(net)+'</span></div>'
