@@ -560,7 +560,7 @@ test('v2 carryover: a same-day job saves no delivery date and looks as before', 
   await close();
 });
 
-test('v2 carryover: collected Fri 30 Oct, delivered Mon 2 Nov; pay stays on 30 Oct; expenses default to 2 Nov', async () => {
+test('v2 carryover: collected Fri 30 Oct, delivered Mon 2 Nov; pay stays on 30 Oct', async () => {
   const { page, errors, close } = await openJobs({ income: [], expenses: [] });
   await page.click('#fabBtn');
   await page.click('#v2Chooser [data-act="manual"]');
@@ -579,7 +579,7 @@ test('v2 carryover: collected Fri 30 Oct, delivered Mon 2 Nov; pay stays on 30 O
   assert.match(await page.textContent('#pg1 .v2-job-card'), /Collected Fri 30 Oct → Delivered Mon 2 Nov/);
 
   await page.click('#v2JobPage [data-act="exp"]');
-  assert.equal(await page.inputValue('#f1'), '2026-11-02', 'toll paid on the delivery day');
+  assert.equal(await page.inputValue('#f1'), '2026-10-30', 'expense date works as before');
   assert.equal(await page.locator('#f_carry').count(), 0, 'no switch on the expense form');
   await page.evaluate(() => closeSheet());
   await page.waitForSelector('#v2JobPage');

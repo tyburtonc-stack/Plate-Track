@@ -497,7 +497,7 @@
     closeV2JobPage();
     V2.returnTo={ref:ref,id:id};
     var co=first.company||'';
-    var pre={company:co,jobRef:ref,date:(extra&&extra.date)||jobDelivered(ref,first.date)||first.date||''};
+    var pre={company:co,jobRef:ref,date:(extra&&extra.date)||first.date||''};
     if(kind==='travel')pre.category=getCoDefault(co,'travel')?'Travel (Reimbursed)':'Travel (Not Reimbursed)';
     if(kind==='hotel')pre.category=getCoDefault(co,'hotel')?'Hotel (Reimbursed)':'Hotel (Not Reimbursed)';
     window._expensePrefill=pre;
