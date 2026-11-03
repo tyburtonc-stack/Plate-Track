@@ -50,6 +50,8 @@ test('removing a receipt photo deletes it from storage; a failed delete is retri
   s.offline = false;
   await page.evaluate(() => retryPendingDeletes());
   await page.waitForFunction(() => localStorage.getItem('pt_pending_receipt_deletes') === null);
+  // The list is cleared before the delete request goes out, so wait for the request itself
+  for (let i = 0; i < 50 && !s.storageDeletes.length; i++) await page.waitForTimeout(20);
   assert.deepEqual(s.storageDeletes, ['Receipts/u1/e1.jpg']);
   assert.equal(await page.evaluate(() => DB.expenses[0].receiptImage), '');
   assert.deepEqual(errors, []);
