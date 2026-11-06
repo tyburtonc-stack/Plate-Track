@@ -3,6 +3,9 @@
 In priority order for (1) keeping drivers' data safe, (2) Making Tax Digital for Income Tax
 (MTD ITSA), and (3) charging for the app. Reviewed October 2026.
 
+Feature plan from the November 2026 competitor review (vehicle check, condition photos, damage
+diagram, job PDF, reminders, calendar, job lifecycle): see `COMPETITOR-REVIEW.md`.
+
 ## 1. Before other people rely on it
 - **Custom email domain** so "Forgot password?" reaches every user: buy a domain, verify it in
   Resend, then Supabase → Authentication → Emails → SMTP (host `smtp.resend.com`, port 465,
