@@ -76,20 +76,18 @@ for (const tz of ZONES) {
       const bars = [...document.querySelectorAll('#pg0 .week-bar-inner')].map(b => b.className.replace('week-bar-inner', '').trim());
       return {
         today: today(), hero: document.querySelector('#pg0 .dash-hero-amount').textContent,
-        gross: chip('Gross').querySelector('.stat-chip-val').textContent,
-        net: chip('Net').querySelector('.stat-chip-val').textContent,
-        weekHdr: document.querySelector('#pg0 .section-hdr span:last-child').textContent,
+        week: chip('This Week').querySelector('.stat-chip-val').textContent,
+        month: chip('This Month').querySelector('.stat-chip-val').textContent,
         pot: chip('Tax Pot').querySelector('.stat-chip-val').textContent, potSub: chip('Tax Pot').querySelector('.stat-chip-sub').textContent,
         deadline: daysToDeadline(), bars,
       };
     });
     assert.equal(r.today, '2026-10-25');
     assert.equal(r.hero, '£45.00');    // 50 - 5 (the reimbursed toll doesn't count)
-    assert.equal(r.gross, '£50.00');   // today's income
-    assert.equal(r.net, '£45.00');     // 50 - 5
-    assert.equal(r.weekHdr, '£115.00 profit'); // Mon 19 - Sun 25: 100 + 50 - 30 - 5
-    assert.equal(r.potSub, 'of £4587.70 26/27'); // 2026/27 profit 30260 - 45 = 30215 -> tax 3529 + Class 4 1058.70; the 5 April £1000 is 2025/26
-    assert.equal(r.pot, '£6.83');      // today's share: 45 x 4587.70 / 30215
+    assert.equal(r.week, '£115.00');   // Mon 19 - Sun 25: 100 + 50 - 30 - 5
+    assert.equal(r.month, '£175.00');  // October: 70 + 100 + 50 - 30 - 5 - 10
+    assert.equal(r.potSub, 'est. 2026/27');
+    assert.equal(r.pot, '£4587.70');   // 2026/27 profit 30260 - 45 = 30215 -> tax 3529 + Class 4 1058.70; the 5 April £1000 is 2025/26
     assert.equal(r.deadline, 98);      // to 31 Jan 2027
     assert.deepEqual(r.bars, ['past', 'future', 'future', 'future', 'future', 'loss', 'today']); // Sat is a £30 loss
     assert.deepEqual(errors, []);
