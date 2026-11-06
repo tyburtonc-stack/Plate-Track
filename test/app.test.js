@@ -177,7 +177,7 @@ test('notes auto-link to jobs by dashed job ref or by plate typed with a space',
   await close();
 });
 
-// Dashboard stat chips read as text, e.g. { 'This Week': '£70.00', ... }
+// Dashboard stat chips read as text, e.g. { Gross: '£100.00', Net: '£70.00', ... }
 async function dashStats(page) {
   return page.evaluate(() => {
     showTab(0);
@@ -188,7 +188,7 @@ async function dashStats(page) {
   });
 }
 
-test('dashboard figures are profit: expenses reduce today, this week and this month', async () => {
+test('dashboard shows today\'s gross, net and tax pot; expenses reduce net', async () => {
   const { page, errors, close } = await openApp({ income: [], expenses: [] });
   await page.evaluate(() => {
     const td = today();
@@ -199,21 +199,22 @@ test('dashboard figures are profit: expenses reduce today, this week and this mo
   });
   let s = await dashStats(page);
   assert.equal(s.hero, '£70.00');
-  assert.equal(s['This Week'], '£70.00');
-  assert.equal(s['This Month'], '£70.00');
+  assert.equal(s.Gross, '£100.00');
+  assert.equal(s.Net, '£70.00');
 
   // adding another expense today must lower every figure straight away
   await page.evaluate(() => { DB.expenses.push({ id: 'e3', date: today(), category: 'Tolls (Not Reimbursed)', amount: '15' }); saveDB(); });
   s = await dashStats(page);
   assert.equal(s.hero, '£55.00');
-  assert.equal(s['This Week'], '£55.00');
-  assert.equal(s['This Month'], '£55.00');
+  assert.equal(s.Gross, '£100.00');
+  assert.equal(s.Net, '£55.00');
 
   // a loss shows as a negative number, not £0
   await page.evaluate(() => { DB.expenses.push({ id: 'e4', date: today(), category: 'Hotel (Not Reimbursed)', amount: '80' }); saveDB(); });
   s = await dashStats(page);
   assert.equal(s.hero, '-£25.00');
-  assert.equal(s['This Week'], '-£25.00');
+  assert.equal(s.Net, '-£25.00');
+  assert.equal(s['Tax Pot'], '£0.00'); // nothing to set aside on a loss day
   assert.deepEqual(errors, []);
   await close();
 });
@@ -228,8 +229,8 @@ test('tax pot covers the current tax year only, and multi-year tax uses each yea
     const t = calcs();
     return { pot: pot.querySelector('.stat-chip-val').textContent, potSub: pot.querySelector('.stat-chip-sub').textContent, tax: t.tax, ni: t.ni };
   });
-  assert.equal(r.pot, '£4531.80');                         // 2026/27 only: 3486 tax + 1045.80 Class 4
-  assert.equal(r.potSub, 'est. 2026/27');
+  assert.equal(r.pot, '£0.00');                            // nothing earned today
+  assert.equal(r.potSub, 'of £4531.80 26/27');             // 2026/27 only: 3486 tax + 1045.80 Class 4
   assert.ok(Math.abs(r.tax - 2 * 3486) < 0.01);             // two separate years, not one £60k year
   assert.ok(Math.abs(r.ni - (1045.8 + 1568.7 + 179.4)) < 0.01); // 2023/24: Class 4 at 9% + Class 2 £3.45 x 52
   await close();

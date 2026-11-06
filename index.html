@@ -4726,6 +4726,10 @@ function rDash(){
   var monthP=profitFor(DB.income.filter(function(i){return i.date&&i.date.substr(0,7)===ym;}),DB.expenses.filter(function(e){return e.date&&e.date.substr(0,7)===ym;}));
   var weekInc=weekP.inc,monthInc=monthP.inc,weekNet=weekP.net,monthNet=monthP.net;
   var potYear=FYR!=='All'?FYR:tyear(td),pot=taxYearEstimate(potYear);
+  // Tax pot for the day (or filtered period): its share of the year's estimate,
+  // at the year's effective rate, so the days add up to the year's pot.
+  var potRate=pot.profit>0?pot.total/pot.profit:0;
+  var dayPot=Math.round(Math.max(0,heroP.net)*potRate*100)/100;
 
   // Jobs - today when no filter, filtered range when filter active
   var jobsListTitle=isFiltered?'Jobs':'Today\'s Jobs';
@@ -4787,9 +4791,9 @@ function rDash(){
     +(compHTML||streakHTML?'<div>'+compHTML+(streakHTML&&!compHTML?streakHTML:'')+'</div>':'')
     +'</div>'
     +'<div class="stat-row">'
-    +'<div class="stat-chip"><div class="stat-chip-label">This Week</div><div class="stat-chip-val '+(weekNet>0?'green':weekNet<0?'red':'text3')+'">'+money(weekNet)+'</div><div class="stat-chip-sub">net profit</div></div>'
-    +'<div class="stat-chip"><div class="stat-chip-label">This Month</div><div class="stat-chip-val '+(monthNet>0?'green':monthNet<0?'red':'text3')+'">'+money(monthNet)+'</div><div class="stat-chip-sub">net profit</div></div>'
-    +'<div class="stat-chip"><div class="stat-chip-label">Tax Pot</div><div class="stat-chip-val red">'+money(pot.total)+'</div><div class="stat-chip-sub">est. '+potYear+'</div></div>'
+    +'<div class="stat-chip"><div class="stat-chip-label">Gross</div><div class="stat-chip-val '+(heroP.inc>0?'green':'text3')+'">'+money(heroP.inc)+'</div><div class="stat-chip-sub">'+(isFiltered?'income':'income today')+'</div></div>'
+    +'<div class="stat-chip"><div class="stat-chip-label">Net</div><div class="stat-chip-val '+(heroP.net>0?'green':heroP.net<0?'red':'text3')+'">'+money(heroP.net)+'</div><div class="stat-chip-sub">after expenses</div></div>'
+    +'<div class="stat-chip"><div class="stat-chip-label">Tax Pot</div><div class="stat-chip-val red">'+money(dayPot)+'</div><div class="stat-chip-sub">of '+money(pot.total)+' '+potYear.replace(/^20/,'')+'</div></div>'
     +'</div>'
     +goalWidgetHTML(todayInc, weekInc, monthInc)
     +'<div class="section"><div class="section-hdr" style="padding-top:4px"><span class="section-title">This Week</span><span style="font-size:12px;color:var(--text4)">'+(weekInc||weekP.exp?money(weekNet)+' profit':'')+'</span></div>'
